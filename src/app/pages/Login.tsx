@@ -1,7 +1,7 @@
 import { useState, FormEvent } from "react";
 import logo from "../../assets/logo.png";
 
-import { useNavigate } from "react-router";
+import { useNavigate, Link } from "react-router";
 import { useAuth } from "../context/AuthContext";
 import { Sprout, Mail, Lock, AlertCircle } from "lucide-react";
 
@@ -129,18 +129,30 @@ export function Login() {
           </div>
 
           {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 rounded-lg font-semibold transition-all"
-            style={{
-              backgroundColor: "var(--accent)",
-              color: "#ffffff",
-              opacity: loading ? 0.7 : 1,
-            }}
-          >
-            {loading ? "Iniciando sesión..." : "Iniciar Sesión"}
-          </button>
+          <div className="space-y-4">
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 rounded-lg font-semibold transition-all"
+              style={{
+                backgroundColor: "var(--accent)",
+                color: "#ffffff",
+                opacity: loading ? 0.7 : 1,
+              }}
+            >
+              {loading ? "Iniciando sesión..." : "Iniciar Sesión"}
+            </button>
+
+            <div className="text-center">
+              <Link
+                to="/forgot-password"
+                className="text-sm hover:underline transition-all"
+                style={{ color: "var(--accent)" }}
+              >
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </div>
+          </div>
         </form>
 
         {/* Demo Credentials */}
