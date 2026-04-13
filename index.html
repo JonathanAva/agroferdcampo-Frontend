@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="./src/assets/logo.png" />
+    <title>Agroferr D'Campo</title>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <!-- Pre-carga de tema: aplica colores ANTES de que React cargue para evitar flash -->
+    <script>
+      (function() {
+        try {
+          // 1. Aplicar modo oscuro/claro inmediatamente
+          var theme = localStorage.getItem('agro-theme');
+          if (theme === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+          }
+
+          // 2. Aplicar colores personalizados si están activos
+          var customActive = localStorage.getItem('agro-custom-active');
+          if (customActive === 'true') {
+            var key = theme === 'dark' ? 'agro-custom-dark' : 'agro-custom-light';
+            var colorsRaw = localStorage.getItem(key);
+            if (colorsRaw) {
+              var colors = JSON.parse(colorsRaw);
+              var map = {
+                bg:'--bg', sidebar:'--sidebar', card:'--card',
+                textMain:'--text-main', textSec:'--text-sec',
+                primary:'--primary', accent:'--accent',
+                border:'--border', shadow:'--shadow',
+                successBg:'--success-bg', successText:'--success-text',
+                warningBg:'--warning-bg', warningText:'--warning-text',
+                errorBg:'--error-bg', errorText:'--error-text',
+                alertOrange:'--alert-orange', errorRed:'--error-red'
+              };
+              var root = document.documentElement;
+              for (var prop in map) {
+                if (colors[prop]) {
+                  root.style.setProperty(map[prop], colors[prop]);
+                }
+              }
+            }
+          }
+        } catch(e) {}
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
