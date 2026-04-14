@@ -2,6 +2,7 @@ import { Outlet } from 'react-router';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { useState } from 'react';
+import { Toaster } from '../ui/sonner';
 
 export function Layout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -21,6 +22,7 @@ export function Layout() {
           <Outlet />
         </main>
       </div>
+      <Toaster />
     </div>
   );
 }

@@ -90,7 +90,7 @@ export function ThemeCustomizer() {
   const [editDark, setEditDark] = useState<ColorPalette>(
     customDarkColors || DEFAULT_DARK_COLORS
   );
-  const [linkedMode, setLinkedMode] = useState(false); // editar por separado por defecto
+  const [linkedMode, setLinkedMode] = useState(true); // modo enlazado por defecto
   const [editingMode, setEditingMode] = useState<'light' | 'dark'>(theme);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveThemeName, setSaveThemeName] = useState('');

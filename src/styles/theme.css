@@ -1,49 +1,96 @@
-
 @layer base {
   :root {
     /* Modo Claro - Serio y Limpio */
-    --bg: #f8fafc;
-    --sidebar: #ffffff;
-    --card: #ffffff;
-    --text-main: #1e293b;
-    --text-sec: #64748b;
-    --primary: #1e293b;
-    --accent: #10b981;
-    --border: #e2e8f0;
-    --shadow: rgba(30, 41, 59, 0.08);
+    --color-bg: #f8fafc;
+    --color-sidebar: #ffffff;
+    --color-card: #ffffff;
+    --color-text-main: #1e293b;
+    --color-text-sec: #64748b;
+    --color-primary: #1e293b;
+    --color-accent: #10b981;
+    --color-border: #e2e8f0;
+    --color-shadow: rgba(30, 41, 59, 0.08);
+    --color-switch-background: #e2e8f0;
+    --color-background: var(--color-bg);
+
+    /* Compatibilidad con variables previas */
+    --bg: var(--color-bg);
+    --sidebar: var(--color-sidebar);
+    --card: var(--color-card);
+    --text-main: var(--color-text-main);
+    --text-sec: var(--color-text-sec);
+    --primary: var(--color-primary);
+    --accent: var(--color-accent);
+    --border: var(--color-border);
+    --shadow: var(--color-shadow);
+    --switch-background: var(--color-switch-background);
 
     /* Estados - Modo Claro */
-    --success-bg: #d1fae5;
-    --success-text: #065f46;
-    --warning-bg: #fef3c7;
-    --warning-text: #92400e;
-    --error-bg: #fee2e2;
-    --error-text: #991b1b;
-    --alert-orange: #f59e0b;
-    --error-red: #ef4444;
+    --color-success-bg: #d1fae5;
+    --color-success-text: #065f46;
+    --color-warning-bg: #fef3c7;
+    --color-warning-text: #92400e;
+    --color-error-bg: #fee2e2;
+    --color-error-text: #991b1b;
+    --color-alert-orange: #f59e0b;
+    --color-error-red: #ef4444;
+    --color-destructive: var(--color-error-red);
+
+    --success-bg: var(--color-success-bg);
+    --success-text: var(--color-success-text);
+    --warning-bg: var(--color-warning-bg);
+    --warning-text: var(--color-warning-text);
+    --error-bg: var(--color-error-bg);
+    --error-text: var(--color-error-text);
+    --alert-orange: var(--color-alert-orange);
+    --error-red: var(--color-error-red);
   }
 
   [data-theme="dark"] {
     /* Modo Oscuro - Navy & Slate con Fade */
-    --bg: #0f172a;
-    --sidebar: #1e293b;
-    --card: #1e293b;
-    --text-main: #f1f5f9;
-    --text-sec: #94a3b8;
-    --primary: #38bdf8;
-    --accent: #34d399;
-    --border: #334155;
-    --shadow: rgba(0, 0, 0, 0.3);
+    --color-bg: #0f172a;
+    --color-sidebar: #1e293b;
+    --color-card: #1e293b;
+    --color-text-main: #f1f5f9;
+    --color-text-sec: #94a3b8;
+    --color-primary: #38bdf8;
+    --color-accent: #34d399;
+    --color-border: #334155;
+    --color-shadow: rgba(0, 0, 0, 0.3);
+    --color-switch-background: #334155;
+    --color-background: var(--color-bg);
+
+    /* Compatibilidad con variables previas */
+    --bg: var(--color-bg);
+    --sidebar: var(--color-sidebar);
+    --card: var(--color-card);
+    --text-main: var(--color-text-main);
+    --text-sec: var(--color-text-sec);
+    --primary: var(--color-primary);
+    --accent: var(--color-accent);
+    --border: var(--color-border);
+    --shadow: var(--color-shadow);
+    --switch-background: var(--color-switch-background);
 
     /* Estados - Modo Oscuro */
-    --success-bg: #064e3b;
-    --success-text: #6ee7b7;
-    --warning-bg: #78350f;
-    --warning-text: #fde68a;
-    --error-bg: #7f1d1d;
-    --error-text: #fca5a5;
-    --alert-orange: #f59e0b;
-    --error-red: #ef4444;
+    --color-success-bg: #064e3b;
+    --color-success-text: #6ee7b7;
+    --color-warning-bg: #78350f;
+    --color-warning-text: #fde68a;
+    --color-error-bg: #7f1d1d;
+    --color-error-text: #fca5a5;
+    --color-alert-orange: #f59e0b;
+    --color-error-red: #ef4444;
+    --color-destructive: var(--color-error-red);
+
+    --success-bg: var(--color-success-bg);
+    --success-text: var(--color-success-text);
+    --warning-bg: var(--color-warning-bg);
+    --warning-text: var(--color-warning-text);
+    --error-bg: var(--color-error-bg);
+    --error-text: var(--color-error-text);
+    --alert-orange: var(--color-alert-orange);
+    --error-red: var(--color-error-red);
   }
 
   * {
@@ -54,8 +101,14 @@
     background-color: var(--bg);
     color: var(--text-main);
     margin: 0;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    transition: background-color 0.4s ease, color 0.3s ease;
+    font-family:
+      "Inter",
+      system-ui,
+      -apple-system,
+      sans-serif;
+    transition:
+      background-color 0.4s ease,
+      color 0.3s ease;
   }
 
   h1 {
@@ -84,8 +137,14 @@
     margin: 0;
   }
 
-  input, textarea, select {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  input,
+  textarea,
+  select {
+    font-family:
+      "Inter",
+      system-ui,
+      -apple-system,
+      sans-serif;
   }
 
   /* Fix for browser autofill background */

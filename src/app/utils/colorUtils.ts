@@ -113,7 +113,14 @@ export const COLOR_LABELS: Record<keyof ColorPalette, string> = {
 export const COLOR_GROUPS = [
   {
     title: "Colores Principales",
-    keys: ["bg", "sidebar", "card", "primary", "accent", "border"] as (keyof ColorPalette)[],
+    keys: [
+      "bg",
+      "sidebar",
+      "card",
+      "primary",
+      "accent",
+      "border",
+    ] as (keyof ColorPalette)[],
   },
   {
     title: "Colores de Texto",
@@ -121,7 +128,16 @@ export const COLOR_GROUPS = [
   },
   {
     title: "Colores de Estados",
-    keys: ["successBg", "successText", "warningBg", "warningText", "errorBg", "errorText", "alertOrange", "errorRed"] as (keyof ColorPalette)[],
+    keys: [
+      "successBg",
+      "successText",
+      "warningBg",
+      "warningText",
+      "errorBg",
+      "errorText",
+      "alertOrange",
+      "errorRed",
+    ] as (keyof ColorPalette)[],
   },
 ];
 
@@ -340,75 +356,102 @@ function randomRange(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function varyColor(hex: string, hueRange = 15, satRange = 15, lightRange = 10): string {
+function varyColor(
+  hex: string,
+  hueRange = 15,
+  satRange = 15,
+  lightRange = 10,
+): string {
   const hsl = hexToHSL(hex);
   const h = (hsl.h + randomRange(-hueRange, hueRange) + 360) % 360;
-  const s = Math.max(10, Math.min(100, hsl.s + randomRange(-satRange, satRange)));
-  const l = Math.max(5, Math.min(95, hsl.l + randomRange(-lightRange, lightRange)));
+  const s = Math.max(
+    10,
+    Math.min(100, hsl.s + randomRange(-satRange, satRange)),
+  );
+  const l = Math.max(
+    5,
+    Math.min(95, hsl.l + randomRange(-lightRange, lightRange)),
+  );
   return hslToHex(h, s, l);
 }
 
 // Paletas temáticas predefinidas con variaciones
-const THEMED_PALETTES: Array<{ name: string; description: string; getAccent: () => string }> = [
+const THEMED_PALETTES: Array<{
+  name: string;
+  description: string;
+  getAccent: () => string;
+}> = [
   {
-    name: 'Naturaleza',
-    description: 'Tonos verdes orgánicos inspirados en la vegetación',
-    getAccent: () => hslToHex(randomRange(100, 155), randomRange(50, 80), randomRange(35, 50)),
+    name: "Naturaleza",
+    description: "Tonos verdes orgánicos inspirados en la vegetación",
+    getAccent: () =>
+      hslToHex(randomRange(100, 155), randomRange(50, 80), randomRange(35, 50)),
   },
   {
-    name: 'Océano',
-    description: 'Azules profundos y tranquilos como el mar',
-    getAccent: () => hslToHex(randomRange(190, 220), randomRange(60, 90), randomRange(40, 55)),
+    name: "Océano",
+    description: "Azules profundos y tranquilos como el mar",
+    getAccent: () =>
+      hslToHex(randomRange(190, 220), randomRange(60, 90), randomRange(40, 55)),
   },
   {
-    name: 'Atardecer',
-    description: 'Cálidos naranjas y rosados como un cielo al ocaso',
-    getAccent: () => hslToHex(randomRange(10, 40), randomRange(70, 95), randomRange(50, 65)),
+    name: "Atardecer",
+    description: "Cálidos naranjas y rosados como un cielo al ocaso",
+    getAccent: () =>
+      hslToHex(randomRange(10, 40), randomRange(70, 95), randomRange(50, 65)),
   },
   {
-    name: 'Bosque',
-    description: 'Verdes oscuros y terrosos para un look rústico',
-    getAccent: () => hslToHex(randomRange(140, 170), randomRange(30, 60), randomRange(30, 45)),
+    name: "Bosque",
+    description: "Verdes oscuros y terrosos para un look rústico",
+    getAccent: () =>
+      hslToHex(randomRange(140, 170), randomRange(30, 60), randomRange(30, 45)),
   },
   {
-    name: 'Corporativo',
-    description: 'Azules serios y profesionales para negocios',
-    getAccent: () => hslToHex(randomRange(210, 240), randomRange(50, 75), randomRange(40, 55)),
+    name: "Corporativo",
+    description: "Azules serios y profesionales para negocios",
+    getAccent: () =>
+      hslToHex(randomRange(210, 240), randomRange(50, 75), randomRange(40, 55)),
   },
   {
-    name: 'Lavanda',
-    description: 'Púrpuras suaves y elegantes con estilo moderno',
-    getAccent: () => hslToHex(randomRange(260, 290), randomRange(40, 70), randomRange(50, 65)),
+    name: "Lavanda",
+    description: "Púrpuras suaves y elegantes con estilo moderno",
+    getAccent: () =>
+      hslToHex(randomRange(260, 290), randomRange(40, 70), randomRange(50, 65)),
   },
   {
-    name: 'Volcán',
-    description: 'Rojos intensos con energía y pasión',
-    getAccent: () => hslToHex(randomRange(0, 15), randomRange(65, 90), randomRange(45, 58)),
+    name: "Volcán",
+    description: "Rojos intensos con energía y pasión",
+    getAccent: () =>
+      hslToHex(randomRange(0, 15), randomRange(65, 90), randomRange(45, 58)),
   },
   {
-    name: 'Otoño',
-    description: 'Marrones cálidos y dorados de hojas secas',
-    getAccent: () => hslToHex(randomRange(25, 45), randomRange(50, 80), randomRange(40, 55)),
+    name: "Otoño",
+    description: "Marrones cálidos y dorados de hojas secas",
+    getAccent: () =>
+      hslToHex(randomRange(25, 45), randomRange(50, 80), randomRange(40, 55)),
   },
   {
-    name: 'Primavera',
-    description: 'Rosas frescos y alegres con vitalidad',
-    getAccent: () => hslToHex(randomRange(320, 350), randomRange(50, 75), randomRange(55, 70)),
+    name: "Primavera",
+    description: "Rosas frescos y alegres con vitalidad",
+    getAccent: () =>
+      hslToHex(randomRange(320, 350), randomRange(50, 75), randomRange(55, 70)),
   },
   {
-    name: 'Tropical',
-    description: 'Turquesas vibrantes y colores de playa',
-    getAccent: () => hslToHex(randomRange(170, 190), randomRange(60, 90), randomRange(40, 55)),
+    name: "Tropical",
+    description: "Turquesas vibrantes y colores de playa",
+    getAccent: () =>
+      hslToHex(randomRange(170, 190), randomRange(60, 90), randomRange(40, 55)),
   },
   {
-    name: 'Medianoche',
-    description: 'Índigos profundos para un look misterioso',
-    getAccent: () => hslToHex(randomRange(230, 260), randomRange(40, 65), randomRange(35, 50)),
+    name: "Medianoche",
+    description: "Índigos profundos para un look misterioso",
+    getAccent: () =>
+      hslToHex(randomRange(230, 260), randomRange(40, 65), randomRange(35, 50)),
   },
   {
-    name: 'Solar',
-    description: 'Amarillos energéticos y luminosos',
-    getAccent: () => hslToHex(randomRange(45, 60), randomRange(70, 95), randomRange(45, 55)),
+    name: "Solar",
+    description: "Amarillos energéticos y luminosos",
+    getAccent: () =>
+      hslToHex(randomRange(45, 60), randomRange(70, 95), randomRange(45, 55)),
   },
 ];
 
@@ -423,30 +466,42 @@ function shuffle<T>(arr: T[]): T[] {
 
 export function suggestPalettes(accentColor: string): PaletteSuggestion[] {
   const hsl = hexToHSL(accentColor);
-  
+
   // 1. Paletas basadas en el color elegido (con variaciones aleatorias leves)
   const colorTheoryPalettes: PaletteSuggestion[] = [
     {
-      name: 'Base Directa',
-      description: 'Paleta construida directamente desde tu color elegido',
+      name: "Base Directa",
+      description: "Paleta construida directamente desde tu color elegido",
       light: buildPalette(accentColor, false),
       dark: buildPalette(accentColor, true),
     },
     {
-      name: 'Complementaria',
-      description: 'Color opuesto en el círculo cromático con variación',
-      light: buildPalette(varyColor(generateComplementary(accentColor), 10, 10, 5), false),
-      dark: buildPalette(varyColor(generateComplementary(accentColor), 10, 10, 5), true),
+      name: "Complementaria",
+      description: "Color opuesto en el círculo cromático con variación",
+      light: buildPalette(
+        varyColor(generateComplementary(accentColor), 10, 10, 5),
+        false,
+      ),
+      dark: buildPalette(
+        varyColor(generateComplementary(accentColor), 10, 10, 5),
+        true,
+      ),
     },
     {
-      name: 'Análoga',
-      description: 'Colores vecinos con toque aleatorio',
-      light: buildPalette(varyColor(generateAnalogous(accentColor)[randomRange(0, 2)], 8, 12, 8), false),
-      dark: buildPalette(varyColor(generateAnalogous(accentColor)[randomRange(0, 2)], 8, 12, 8), true),
+      name: "Análoga",
+      description: "Colores vecinos con toque aleatorio",
+      light: buildPalette(
+        varyColor(generateAnalogous(accentColor)[randomRange(0, 2)], 8, 12, 8),
+        false,
+      ),
+      dark: buildPalette(
+        varyColor(generateAnalogous(accentColor)[randomRange(0, 2)], 8, 12, 8),
+        true,
+      ),
     },
     {
-      name: 'Triádica',
-      description: 'Tres puntos equidistantes en el círculo cromático',
+      name: "Triádica",
+      description: "Tres puntos equidistantes en el círculo cromático",
       light: (() => {
         const triadic = generateTriadic(accentColor);
         const varied = varyColor(triadic[randomRange(1, 2)], 10, 10, 5);
@@ -455,26 +510,44 @@ export function suggestPalettes(accentColor: string): PaletteSuggestion[] {
       dark: (() => {
         const triadic = generateTriadic(accentColor);
         const varied = varyColor(triadic[randomRange(1, 2)], 10, 10, 5);
-        return { ...buildPalette(varied, true), accent: lighten(accentColor, 10) };
+        return {
+          ...buildPalette(varied, true),
+          accent: lighten(accentColor, 10),
+        };
       })(),
     },
     {
-      name: 'Variación Aleatoria',
-      description: 'Tu color con saturación y luminosidad modificadas al azar',
+      name: "Variación Aleatoria",
+      description: "Tu color con saturación y luminosidad modificadas al azar",
       light: buildPalette(varyColor(accentColor, 20, 25, 15), false),
       dark: buildPalette(varyColor(accentColor, 20, 25, 15), true),
     },
     {
-      name: 'Split Complementaria',
-      description: 'Dos colores a los lados del complementario para balance sutil',
-      light: buildPalette(hslToHex((hsl.h + 150 + randomRange(0, 20)) % 360, Math.max(30, hsl.s + randomRange(-10, 10)), hsl.l), false),
-      dark: buildPalette(hslToHex((hsl.h + 210 + randomRange(0, 20)) % 360, Math.max(30, hsl.s + randomRange(-10, 10)), hsl.l), true),
+      name: "Split Complementaria",
+      description:
+        "Dos colores a los lados del complementario para balance sutil",
+      light: buildPalette(
+        hslToHex(
+          (hsl.h + 150 + randomRange(0, 20)) % 360,
+          Math.max(30, hsl.s + randomRange(-10, 10)),
+          hsl.l,
+        ),
+        false,
+      ),
+      dark: buildPalette(
+        hslToHex(
+          (hsl.h + 210 + randomRange(0, 20)) % 360,
+          Math.max(30, hsl.s + randomRange(-10, 10)),
+          hsl.l,
+        ),
+        true,
+      ),
     },
   ];
 
   // 2. Paletas temáticas aleatorias (elegir 3 al azar de las disponibles)
   const shuffledThemes = shuffle(THEMED_PALETTES).slice(0, 3);
-  const themedPalettes: PaletteSuggestion[] = shuffledThemes.map(theme => {
+  const themedPalettes: PaletteSuggestion[] = shuffledThemes.map((theme) => {
     const accent = theme.getAccent();
     return {
       name: theme.name,
@@ -486,11 +559,11 @@ export function suggestPalettes(accentColor: string): PaletteSuggestion[] {
 
   // 3. Mezclar paletas de teoría de color + temáticas y elegir 8
   const allPalettes = shuffle([...colorTheoryPalettes, ...themedPalettes]);
-  
+
   // Siempre incluir "Base Directa" primero, luego las demás mezcladas
   const basePalette = colorTheoryPalettes[0];
-  const rest = allPalettes.filter(p => p.name !== 'Base Directa').slice(0, 7);
-  
+  const rest = allPalettes.filter((p) => p.name !== "Base Directa").slice(0, 7);
+
   return [basePalette, ...rest];
 }
 
