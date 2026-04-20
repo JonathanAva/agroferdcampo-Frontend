@@ -40,7 +40,10 @@ export async function apiRequest<T>(
     if (!response.ok) {
       // NestJS suele enviar el error en data.message
       const errorMsg = data.message || `Error ${response.status}: ${response.statusText}`;
-      throw new Error(errorMsg);
+      const error = new Error(errorMsg) as any;
+      error.status = response.status;
+      error.data = data;
+      throw error;
     }
 
     // Si la respuesta está envuelta en { success: true, data: ... }

@@ -92,9 +92,11 @@ export function Dashboard() {
           Bienvenido de nuevo, {user?.name.split(' ')[0]}
         </h1>
         <p style={{ color: 'var(--text-sec)' }}>
-          {(user?.roleId === 1 || user?.roleId === 2) 
-            ? `Vista consolidada - ${selectedBranch.name}` 
-            : `${selectedBranch.name}`}
+          {selectedBranch 
+            ? ((user?.roleId === 1 || user?.roleId === 2) 
+              ? `Vista consolidada - ${selectedBranch.name}` 
+              : `${selectedBranch.name}`)
+            : 'Cargando sucursal...'}
         </p>
       </div>
 

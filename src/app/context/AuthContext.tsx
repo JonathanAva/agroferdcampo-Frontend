@@ -3,54 +3,65 @@ import { apiRequest } from '../config/api';
 
 interface User {
   id: string;
-  name: string; // Cambiado de fullName para compatibilidad
+  name: string;
   email: string;
-  role: string;
-  roleId: number;
+  role: string | null;
+  roleId?: number;
   phone?: string;
   dui?: string;
-  branch?: string; // Restaurado
+  branch?: string;
 }
 
 interface BackendUser {
   id: number;
   email: string;
   fullName: string;
-  role: string;
-  roleId: number;
-  phone?: string;
   dui?: string;
+  phone?: string;
+}
+
+export interface Branch {
+  id: number;
+  name: string;
+  role: string;
 }
 
 interface LoginResponse {
   accessToken?: string;
-  status?: 'PASSWORD_CHANGE_REQUIRED' | 'MFA_REQUIRED';
+  requireBranchSelection?: boolean;
+  branches?: Branch[];
+  user?: BackendUser;
   message?: string;
-  token?: string; // Token temporal para cambio de password
-  deviceId?: string;
-  trustedUntil?: string;
+  status?: 'PASSWORD_CHANGE_REQUIRED' | 'MFA_REQUIRED';
 }
 
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<LoginResponse>;
+  selectBranch: (userId: number, branchId: number) => Promise<LoginResponse>;
   logout: () => void;
   isAuthenticated: boolean;
   setUser: (user: User | null) => void;
+  availableBranches: Branch[];
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => {
-    return localStorage.getItem('agro-token');
-  });
-
   const [user, setUser] = useState<User | null>(() => {
     const savedToken = localStorage.getItem('agro-token');
     const savedUser = localStorage.getItem('agro-user');
     if (!savedToken || !savedUser) return null;
-    return JSON.parse(savedUser);
+    try {
+      return JSON.parse(savedUser);
+    } catch {
+      return null;
+    }
+  });
+
+  const [availableBranches, setAvailableBranches] = useState<Branch[]>(() => {
+    const savedBranches = localStorage.getItem('agro-available-branches');
+    return savedBranches ? JSON.parse(savedBranches) : [];
   });
 
   // Verificar sesión al montar la app
@@ -61,21 +72,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       try {
         const backendUser = await apiRequest<BackendUser>('/auth/me');
-        const mappedUser: User = {
-          id: backendUser.id.toString(),
-          name: backendUser.fullName,
-          email: backendUser.email,
-          role: backendUser.role,
-          roleId: backendUser.roleId,
-          phone: backendUser.phone,
-          dui: backendUser.dui,
-          branch: 'Todas'
-        };
-        setUser(mappedUser);
-        localStorage.setItem('agro-user', JSON.stringify(mappedUser));
+        // El rol y la sucursal ya no se obtienen de /auth/me directamente de la misma forma,
+        // pero podemos sacarlos del JWT o dejar que el backend los maneje.
+        // Por ahora mantenemos los datos que tenemos en localStorage si verifySession tiene éxito.
       } catch (error) {
         console.error('Sesión inválida o expirada:', error);
-        logout(); // Limpiar todo si el token ya no sirve
+        logout();
       }
     };
 
@@ -84,62 +86,122 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string): Promise<LoginResponse> => {
     try {
-      const deviceId = localStorage.getItem('agro-device-id');
-      console.log('Intentando login para:', email, deviceId ? '(con dispositivo recordado)' : '');
-      
       const data = await apiRequest<LoginResponse>('/auth/login', {
         method: 'POST',
-        headers: deviceId ? { 'X-Device-Id': deviceId } : {},
         body: JSON.stringify({ email, password }),
       });
+      console.log('Datos procesados en AuthContext.login:', data);
 
-      console.log('Respuesta del servidor:', data);
-
-      if (data.accessToken) {
-        setToken(data.accessToken);
-        localStorage.setItem('agro-token', data.accessToken);
-        
-        // Obtener datos del usuario desde /auth/me
-        const backendUser = await apiRequest<BackendUser>('/auth/me', {
-          headers: { Authorization: `Bearer ${data.accessToken}` }
-        });
-        
-        const mappedUser: User = {
-          id: backendUser.id.toString(),
-          name: backendUser.fullName,
-          email: backendUser.email,
-          role: backendUser.role,
-          roleId: backendUser.roleId,
-          phone: backendUser.phone,
-          dui: backendUser.dui,
-          branch: 'Todas'
-        };
-        
-        setUser(mappedUser);
-        localStorage.setItem('agro-user', JSON.stringify(mappedUser));
+      if (data.accessToken && !data.requireBranchSelection) {
+        const primaryBranch = data.branches?.[0];
+        handleAuthSuccess(data.accessToken, data.user!, primaryBranch?.name, primaryBranch?.role);
+      } else if (data.requireBranchSelection) {
+        setAvailableBranches(data.branches || []);
+        localStorage.setItem('agro-available-branches', JSON.stringify(data.branches));
+        // Guardamos el usuario temporalmente para completar el proceso luego
+        if (data.user) {
+          localStorage.setItem('agro-temp-user', JSON.stringify(data.user));
+        }
       }
 
       return data;
     } catch (error: any) {
-      console.error('Error detallado de login:', error.message);
-      throw new Error(error.message || 'Error al iniciar sesión');
+      console.error('Error de login:', error.message);
+      throw error;
     }
+  };
+
+  const selectBranch = async (userId: number, branchId: number): Promise<LoginResponse> => {
+    try {
+      console.log('Seleccionando sucursal:', branchId, 'para usuario:', userId);
+      const data = await apiRequest<LoginResponse>('/auth/select-branch', {
+        method: 'POST',
+        body: JSON.stringify({ userId, branchId }),
+      });
+
+      if (data.accessToken) {
+        // Buscamos el usuario en: 
+        // 1. El estado actual (si es un cambio de sucursal)
+        // 2. El usuario temporal guardado en el paso 1 (si es login nuevo)
+        // 3. El usuario persistido en localStorage (fallback)
+        const tempUserStr = localStorage.getItem('agro-temp-user');
+        const storedUserStr = localStorage.getItem('agro-user');
+        const currentUserData = user || 
+                               (tempUserStr ? JSON.parse(tempUserStr) : null) || 
+                               (storedUserStr ? JSON.parse(storedUserStr) : null);
+        
+        if (currentUserData) {
+          console.log('Datos del usuario encontrados para completar el login:', currentUserData.email);
+          const selectedBranch = availableBranches.find(b => b.id === branchId);
+          handleAuthSuccess(data.accessToken, {
+            id: parseInt(currentUserData.id || currentUserData.sub), // Manejar ambos formatos
+            fullName: currentUserData.name || currentUserData.fullName,
+            email: currentUserData.email,
+            phone: currentUserData.phone,
+            dui: currentUserData.dui
+          }, selectedBranch?.name, selectedBranch?.role);
+          
+          // Limpiar temp user una vez completado el login
+          localStorage.removeItem('agro-temp-user');
+        } else {
+          console.warn('No se encontraron datos de usuario precedentes para completar el login.');
+        }
+      }
+
+      return data;
+    } catch (error: any) {
+      console.error('Error al seleccionar sucursal:', error.message);
+      throw error;
+    }
+  };
+
+  const handleAuthSuccess = (token: string, backendUser: BackendUser, branchName?: string, roleString?: string) => {
+    localStorage.setItem('agro-token', token);
+    
+    // Mapear el rol del backend a roleId (Insensible a mayúsculas)
+    const normalizedRole = roleString?.toUpperCase() || '';
+    const roleMap: Record<string, number> = {
+      'PROPIETARIO': 1,
+      'ADMINISTRADOR': 2,
+      'SUPERVISOR': 3,
+      'CAJERO': 4,
+      'BODEGUERO': 5
+    };
+    
+    const roleId = roleMap[normalizedRole] || undefined;
+
+    const mappedUser: User = {
+      id: backendUser.id.toString(),
+      name: backendUser.fullName,
+      email: backendUser.email,
+      role: roleString || 'ADMIN',
+      roleId: roleId,
+      phone: backendUser.phone,
+      dui: backendUser.dui,
+      branch: branchName || 'Principal'
+    };
+    
+    setUser(mappedUser);
+    localStorage.setItem('agro-user', JSON.stringify(mappedUser));
   };
 
   const logout = () => {
     setUser(null);
-    setToken(null);
+    setAvailableBranches([]);
     localStorage.removeItem('agro-user');
     localStorage.removeItem('agro-token');
+    localStorage.removeItem('agro-available-branches');
   };
 
   return (
     <AuthContext.Provider value={{ 
       user, 
       login, 
+      selectBranch,
       logout, 
       isAuthenticated: !!user,
-      setUser
+      setUser,
+      availableBranches
     }}>
       {children}
     </AuthContext.Provider>

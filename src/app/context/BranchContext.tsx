@@ -1,41 +1,33 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
-
-export interface Branch {
-  id: string;
-  name: string;
-  address: string;
-  phone: string;
-}
+import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { useAuth, Branch } from './AuthContext';
 
 interface BranchContextType {
   branches: Branch[];
-  selectedBranch: Branch;
+  selectedBranch: Branch | null;
   setSelectedBranch: (branch: Branch) => void;
 }
 
 const BranchContext = createContext<BranchContextType | undefined>(undefined);
 
-const BRANCHES: Branch[] = [
-  {
-    id: '1',
-    name: 'Sucursal Centro',
-    address: 'Av. Principal #123, San Salvador',
-    phone: '2222-1234'
-  },
-  {
-    id: '2',
-    name: 'Sucursal Sur',
-    address: 'Blvd. Sur #456, San Salvador',
-    phone: '2222-5678'
-  }
-];
-
 export function BranchProvider({ children }: { children: ReactNode }) {
-  const [selectedBranch, setSelectedBranch] = useState<Branch>(BRANCHES[0]);
+  const { availableBranches, user } = useAuth();
+  const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
+
+  useEffect(() => {
+    if (availableBranches.length > 0) {
+      // Intentar encontrar la sucursal actual basada en el nombre guardado en user
+      const current = availableBranches.find(b => b.name === user?.branch) || availableBranches[0];
+      
+      // Actualizar solo si es diferente para evitar ciclos
+      if (current && (!selectedBranch || current.id !== selectedBranch.id)) {
+        setSelectedBranch(current);
+      }
+    }
+  }, [availableBranches, user?.branch, selectedBranch]);
 
   return (
     <BranchContext.Provider value={{ 
-      branches: BRANCHES, 
+      branches: availableBranches, 
       selectedBranch, 
       setSelectedBranch 
     }}>
