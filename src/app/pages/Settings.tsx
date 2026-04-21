@@ -11,6 +11,7 @@ const SETTINGS_SECTIONS = [
     description: 'Gestionar sucursales, direcciones y datos fiscales',
     icon: Building2,
     adminOnly: false,
+    path: '/settings/branches',
   },
   {
     id: '2',
@@ -18,6 +19,7 @@ const SETTINGS_SECTIONS = [
     description: 'Administrar usuarios, roles y permisos',
     icon: Users,
     adminOnly: false,
+    path: '/users',
   },
   {
     id: '3',
@@ -103,6 +105,7 @@ export function Settings() {
         {SETTINGS_SECTIONS.map((section) => (
           <div
             key={section.id}
+            onClick={() => section.path && navigate(section.path)}
             className="p-6 rounded-2xl border cursor-pointer transition-all hover:-translate-y-1"
             style={{
               backgroundColor: 'var(--card)',
