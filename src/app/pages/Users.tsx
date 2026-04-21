@@ -10,6 +10,8 @@ import {
   Edit,
   Trash2,
   X,
+  MapPin,
+  Check,
 } from "lucide-react";
 import { apiRequest } from "../config/api";
 import { useAuth } from "../context/AuthContext";
@@ -38,6 +40,12 @@ interface User {
   dui: string;
   roleId: number;
   isActive: boolean;
+  branches?: { branch: { id: number; name: string } }[];
+}
+
+interface Branch {
+  id: number;
+  name: string;
 }
 
 const ROLES = [
@@ -51,6 +59,7 @@ const ROLES = [
 export function Users() {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
+  const [availableBranches, setAvailableBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -64,6 +73,7 @@ export function Users() {
     password: "",
     roleId: 4,
     isActive: true,
+    branchIds: [] as number[],
   });
 
   const [formLoading, setFormLoading] = useState(false);
@@ -75,7 +85,17 @@ export function Users() {
 
   useEffect(() => {
     fetchUsers();
+    fetchBranches();
   }, []);
+
+  const fetchBranches = async () => {
+    try {
+      const data = await apiRequest<Branch[]>("/branches");
+      setAvailableBranches(data);
+    } catch (error) {
+      console.error("Error al cargar sucursales", error);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -99,6 +119,7 @@ export function Users() {
         password: "",
         roleId: user.roleId,
         isActive: user.isActive,
+        branchIds: user.branches?.map((b) => b.branch.id) || [],
       });
     } else {
       setEditingUser(null);
@@ -110,6 +131,7 @@ export function Users() {
         password: "",
         roleId: 4,
         isActive: true,
+        branchIds: [],
       });
     }
     setFormError("");
@@ -346,6 +368,12 @@ export function Users() {
                   Rol
                 </th>
                 <th
+                  className="text-left p-4 font-semibold"
+                  style={{ color: "var(--text-main)" }}
+                >
+                  Sucursales
+                </th>
+                <th
                   className="text-right p-4 font-semibold"
                   style={{ color: "var(--text-main)" }}
                 >
@@ -418,6 +446,24 @@ export function Users() {
                     >
                       {ROLES.find((r) => r.id === u.roleId)?.name}
                     </span>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex flex-wrap gap-1">
+                      {u.branches && u.branches.length > 0 ? (
+                        u.branches.map((ub) => (
+                          <Badge
+                            key={ub.branch?.id}
+                            className="text-xs py-1 px-3 h-6 flex items-center bg-[var(--bg)] border border-[var(--border)]"
+                            style={{ color: "var(--text-main)" }}
+                          >
+                            <MapPin size={12} className="mr-1.5 opacity-70" />
+                            {ub.branch?.name}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-xs italic opacity-50">Sin sucursal</span>
+                      )}
+                    </div>
                   </td>
                   <td className="p-4 text-right">
                     <span
@@ -618,6 +664,50 @@ export function Users() {
                       </option>
                     ))}
                   </select>
+                </div>
+              </div>
+
+              {/* Multi-select de Sucursales */}
+              <div className="space-y-2">
+                <label
+                  className="block text-xs font-bold mb-1 uppercase opacity-70"
+                  style={{ color: "var(--text-sec)" }}
+                >
+                  Asignar Sucursales
+                </label>
+                <div 
+                  className="grid grid-cols-2 gap-2 p-3 rounded-lg border max-h-40 overflow-y-auto"
+                  style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)" }}
+                >
+                  {availableBranches.map((branch) => {
+                    const isSelected = formData.branchIds.includes(branch.id);
+                    return (
+                      <button
+                        key={branch.id}
+                        type="button"
+                        onClick={() => {
+                          const newIds = isSelected
+                            ? formData.branchIds.filter((id) => id !== branch.id)
+                            : [...formData.branchIds, branch.id];
+                          setFormData({ ...formData, branchIds: newIds });
+                        }}
+                        className={cn(
+                          "flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all border",
+                          isSelected 
+                            ? "bg-[var(--accent)] border-[var(--accent)] text-white" 
+                            : "bg-[var(--card)] border-[var(--border)] text-[var(--text-main)] hover:border-[var(--accent)]"
+                        )}
+                      >
+                        <span className="truncate">{branch.name}</span>
+                        {isSelected && <Check size={14} />}
+                      </button>
+                    );
+                  })}
+                  {availableBranches.length === 0 && (
+                    <p className="col-span-2 text-center text-xs py-2 opacity-50">
+                      Cargando sucursales...
+                    </p>
+                  )}
                 </div>
               </div>
               {!editingUser && (
