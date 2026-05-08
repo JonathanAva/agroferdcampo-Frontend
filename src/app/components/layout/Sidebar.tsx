@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Package,
   Users,
+  Users2,
   ShoppingCart,
   FileText,
   Settings,
@@ -23,6 +24,7 @@ const navLinks = [
   { path: "/users", icon: Users, label: "Usuarios", roles: [1, 2] },
   { path: "/suppliers", icon: TruckIcon, label: "Proveedores" },
   { path: "/finance", icon: Wallet, label: "Finanzas" },
+  { path: "/rrhh", icon: Users2, label: "Recursos Humanos", roles: [1, 2, 3] },
   { path: "/reports", icon: FileText, label: "Reportes" },
   { path: "/settings", icon: Settings, label: "Configuración" },
 ];
@@ -40,7 +42,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     <>
       {/* Backdrop for mobile */}
       {isOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity"
           onClick={onClose}
         />
@@ -59,7 +61,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         }}
       >
         {/* Close button - Mobile only */}
-        <button 
+        <button
           onClick={onClose}
           className="md:hidden absolute right-4 top-4 p-2 rounded-lg"
           style={{ color: "var(--text-sec)" }}
@@ -81,40 +83,43 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Navigation */}
         <nav className="flex-1 space-y-2 overflow-y-auto">
           {navLinks
-            .filter(link => !link.roles || (user && link.roles.includes(user.roleId)))
+            .filter(
+              (link) =>
+                !link.roles || (user?.roleId !== undefined && link.roles.includes(user.roleId)),
+            )
             .map(({ path, icon: Icon, label }) => {
               const isActive = location.pathname === path;
 
-            return (
-              <Link
-                key={path}
-                to={path}
-                onClick={() => {
-                  if (window.innerWidth < 768) onClose();
-                }}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 font-medium"
-                style={{
-                  backgroundColor: isActive ? "var(--bg)" : "transparent",
-                  color: isActive ? "var(--accent)" : "var(--text-sec)",
-                }}
-                onMouseEnter={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.backgroundColor = "var(--bg)";
-                    e.currentTarget.style.color = "var(--accent)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.backgroundColor = "transparent";
-                    e.currentTarget.style.color = "var(--text-sec)";
-                  }
-                }}
-              >
-                <Icon size={20} />
-                <span>{label}</span>
-              </Link>
-            );
-          })}
+              return (
+                <Link
+                  key={path}
+                  to={path}
+                  onClick={() => {
+                    if (window.innerWidth < 768) onClose();
+                  }}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 font-medium"
+                  style={{
+                    backgroundColor: isActive ? "var(--bg)" : "transparent",
+                    color: isActive ? "var(--accent)" : "var(--text-sec)",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.backgroundColor = "var(--bg)";
+                      e.currentTarget.style.color = "var(--accent)";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.backgroundColor = "transparent";
+                      e.currentTarget.style.color = "var(--text-sec)";
+                    }
+                  }}
+                >
+                  <Icon size={20} />
+                  <span>{label}</span>
+                </Link>
+              );
+            })}
         </nav>
 
         {/* Footer Info */}

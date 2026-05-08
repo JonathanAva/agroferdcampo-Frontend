@@ -15,6 +15,7 @@ import { Reports } from "./pages/Reports";
 import { Settings } from "./pages/Settings";
 import { ThemeCustomizer } from "./pages/ThemeCustomizer";
 import { Branches as BranchesPage } from "./pages/Branches";
+import { HumanResources } from "./pages/HumanResources";
 
 export const router = createBrowserRouter([
   {
@@ -79,6 +80,10 @@ export const router = createBrowserRouter([
       {
         path: "settings/branches",
         element: <BranchesPage />,
+      },
+      {
+        path: "rrhh",
+        element: <HumanResources />,
       },
     ],
   },
