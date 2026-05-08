@@ -8,6 +8,8 @@ import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
+import { Switch } from '../components/ui/switch';
+import { Edit } from 'lucide-react';
 import { cn } from '../components/ui/utils';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -326,16 +328,21 @@ export function Catalog() {
             Ver Inventario
           </Button>
           {canCreate && (
-            <>
-              <Button variant="outline" onClick={() => setIsCatDialogOpen(true)}>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setIsCatDialogOpen(true)} className="gap-2">
                 <Tag size={16} />
                 Nueva Categoría
               </Button>
-              <Button onClick={() => openDialog()} style={{ backgroundColor: 'var(--accent)' }} className="text-white">
+              <Button 
+                onClick={() => openDialog()} 
+                size="lg"
+                className="gap-2 font-bold shadow-md"
+                style={{ backgroundColor: 'var(--color-accent)', color: '#ffffff' }}
+              >
                 <Plus size={16} />
                 Nuevo Producto
               </Button>
-            </>
+            </div>
           )}
         </div>
       </div>
@@ -364,38 +371,27 @@ export function Catalog() {
       <div className="p-4 rounded-2xl border mb-6 shadow-sm"
         style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
         <div className="flex flex-col md:flex-row items-center gap-4">
-          <div className="flex-1 flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all focus-within:border-[var(--accent)]"
+          <div className="flex-1 flex items-center gap-3 px-4 py-1 rounded-xl border transition-all focus-within:ring-2 focus-within:ring-[var(--color-accent)]/20"
             style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}>
-            <Search size={20} style={{ color: 'var(--text-sec)' }} />
-            <input
+            <Search size={20} className="text-muted-foreground" />
+            <Input
               type="text"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               placeholder="Buscar por nombre, código o categoría..."
-              className="flex-1 bg-transparent outline-none"
-              style={{ color: 'var(--text-main)' }}
+              className="border-none bg-transparent shadow-none focus-visible:ring-0"
             />
           </div>
 
           <div className="flex items-center gap-3 bg-[var(--bg)] px-4 py-2 rounded-xl border" style={{ borderColor: 'var(--border)' }}>
-             <Label htmlFor="show-inactive" className="text-sm font-medium cursor-pointer" style={{ color: 'var(--text-sec)' }}>
+             <Label htmlFor="show-inactive" className="text-sm font-medium cursor-pointer text-muted-foreground">
                 Ver inactivos
              </Label>
-             <button
+             <Switch
                 id="show-inactive"
-                onClick={() => setShowInactive(!showInactive)}
-                className={cn(
-                  "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none",
-                  showInactive ? "bg-[var(--accent)]" : "bg-gray-200"
-                )}
-             >
-                <span
-                  className={cn(
-                    "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                    showInactive ? "translate-x-6" : "translate-x-1"
-                  )}
-                />
-             </button>
+                checked={showInactive}
+                onCheckedChange={setShowInactive}
+             />
           </div>
         </div>
       </div>
@@ -440,17 +436,18 @@ export function Catalog() {
                   </span>
                 </TableCell>
                 <TableCell className="p-4 text-center">
-                  <button onClick={() => handleToggleActive(product.id)}>
+                  <div className="flex justify-center">
                     <Badge
-                      className="rounded-full px-3 py-1 font-bold text-[10px] uppercase border-none cursor-pointer hover:opacity-80 transition-opacity"
-                      style={{
-                        backgroundColor: product.isActive ? 'var(--success-bg)' : 'var(--error-bg)',
-                        color: product.isActive ? 'var(--success-text)' : 'var(--error-red)',
-                      }}
+                      onClick={() => handleToggleActive(product.id)}
+                      variant={product.isActive ? "default" : "destructive"}
+                      className={cn(
+                        "cursor-pointer hover:opacity-80 transition-all px-3 py-1 font-bold text-[10px] uppercase",
+                        product.isActive && "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400"
+                      )}
                     >
                       {product.isActive ? 'Activo' : 'Inactivo'}
                     </Badge>
-                  </button>
+                  </div>
                 </TableCell>
                 <TableCell className="p-4">
                   <div className="flex items-center justify-center gap-2">
@@ -575,7 +572,6 @@ export function Catalog() {
                       value={costPrice}
                       onChange={e => setCostPrice(e.target.value)}
                       placeholder="0.00"
-                      style={{ borderColor: 'var(--border)', backgroundColor: 'var(--card)', color: 'var(--text-main)' }}
                     />
                     <p className="text-[10px] opacity-50" style={{ color: 'var(--text-sec)' }}>Lo que te cuesta comprarlo (Opcional)</p>
                   </div>
@@ -586,8 +582,12 @@ export function Catalog() {
                 <button
                   type="button"
                   onClick={() => setTrackStock(v => !v)}
-                  className="flex items-center gap-2 text-sm font-medium transition-colors"
-                  style={{ color: trackStock ? 'var(--accent)' : 'var(--text-sec)' }}
+                  className={cn(
+                    "flex items-center gap-2 text-sm font-bold transition-all px-4 py-2 rounded-xl border",
+                    trackStock 
+                      ? "bg-[var(--color-accent)] border-[var(--color-accent)] text-white shadow-md" 
+                      : "bg-[var(--card)] border-[var(--border)] text-muted-foreground hover:border-[var(--color-accent)]"
+                  )}
                 >
                   {trackStock ? <ToggleRight size={24} /> : <ToggleLeft size={24} />}
                   {trackStock ? 'Rastrear inventario' : 'Sin rastreo de inventario'}
@@ -719,7 +719,7 @@ export function Catalog() {
                 Cancelar
               </Button>
               <Button type="submit" disabled={formLoading}
-                style={{ backgroundColor: 'var(--accent)' }} className="text-white">
+                style={{ backgroundColor: 'var(--color-accent)' }} className="text-white font-bold shadow-lg px-8">
                 {formLoading ? 'Guardando...' : (editingProduct ? 'Guardar Cambios' : 'Crear Producto')}
               </Button>
             </DialogFooter>

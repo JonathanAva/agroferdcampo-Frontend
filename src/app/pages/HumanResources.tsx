@@ -62,6 +62,8 @@ import {
 } from "../components/ui/select";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import { Edit } from "lucide-react";
 
 // --- Interfaces ---
 
@@ -510,17 +512,18 @@ export function HumanResources() {
         </div>
         <div className="flex items-center gap-2">
           {activeTab === "employees" && (
-            <button
+            <Button
               onClick={() => {
                 setSelectedDeptId("");
                 setIsEmployeeModalOpen(true);
               }}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-white shadow-lg transition-all active:scale-95"
-              style={{ backgroundColor: "var(--accent)" }}
+              size="lg"
+              className="gap-2 font-bold shadow-lg transition-all hover:scale-105 active:scale-95"
+              style={{ backgroundColor: "var(--color-accent)", color: "#ffffff" }}
             >
               <UserPlus size={18} />
               Nuevo Empleado
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -679,41 +682,40 @@ export function HumanResources() {
         {/* --- TAB: EMPLEADOS --- */}
         <TabsContent value="employees" className="space-y-6">
           <div className="p-4 rounded-2xl border bg-[var(--card)] border-[var(--border)] shadow-sm">
-            <div className="flex items-center gap-3 px-4 py-2 rounded-xl bg-[var(--bg)] border border-[var(--border)] focus-within:border-[var(--accent)] transition-all">
-              <Search size={20} className="text-[var(--text-sec)]" />
-              <input
+            <div className="flex items-center gap-3 px-4 py-1 rounded-xl bg-[var(--bg)] border border-[var(--border)] focus-within:ring-2 focus-within:ring-[var(--color-accent)]/20 transition-all">
+              <Search size={20} className="text-muted-foreground" />
+              <Input
                 type="text"
                 placeholder="Buscar por nombre, código o DUI..."
-                className="flex-1 bg-transparent border-none outline-none text-[var(--text-main)]"
+                className="border-none bg-transparent shadow-none focus-visible:ring-0 h-9"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
           </div>
 
-          <div className="rounded-2xl border bg-[var(--card)] border-[var(--border)] overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-[var(--bg)] border-b border-[var(--border)]">
-                  <tr>
-                    <th className="p-4 font-bold text-xs uppercase tracking-wider">
+            <div className="rounded-2xl border bg-[var(--card)] border-[var(--border)] overflow-hidden shadow-sm">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="font-bold text-xs uppercase tracking-wider">
                       Empleado
-                    </th>
-                    <th className="p-4 font-bold text-xs uppercase tracking-wider">
+                    </TableHead>
+                    <TableHead className="font-bold text-xs uppercase tracking-wider">
                       Depto / Cargo
-                    </th>
-                    <th className="p-4 font-bold text-xs uppercase tracking-wider">
+                    </TableHead>
+                    <TableHead className="font-bold text-xs uppercase tracking-wider">
                       Contacto
-                    </th>
-                    <th className="p-4 font-bold text-xs uppercase tracking-wider">
+                    </TableHead>
+                    <TableHead className="font-bold text-xs uppercase tracking-wider">
                       Estado
-                    </th>
-                    <th className="p-4 font-bold text-xs uppercase tracking-wider text-right">
+                    </TableHead>
+                    <TableHead className="font-bold text-xs uppercase tracking-wider text-right">
                       Acciones
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border)]">
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {employees
                     .filter(
                       (e) =>
@@ -726,58 +728,53 @@ export function HumanResources() {
                         (e.dui && e.dui.includes(searchTerm)),
                     )
                     .map((emp) => (
-                      <tr
+                      <TableRow
                         key={emp.id}
                         className="hover:bg-[var(--bg)] transition-colors group"
                       >
-                        <td className="p-4">
+                        <TableCell className="p-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-[var(--accent)] text-white flex items-center justify-center font-bold">
+                            <div className="w-10 h-10 rounded-xl bg-[var(--color-accent)]/10 text-[var(--color-accent)] flex items-center justify-center font-bold">
                               {emp.fullName.charAt(0)}
                             </div>
                             <div>
                               <p className="font-bold">{emp.fullName}</p>
-                              <p className="text-xs font-mono text-[var(--text-sec)]">
+                              <p className="text-xs font-mono text-muted-foreground">
                                 {emp.employeeCode}
                               </p>
                             </div>
                           </div>
-                        </td>
-                        <td className="p-4">
+                        </TableCell>
+                        <TableCell className="p-4">
                           <p className="font-medium">
                             {emp.department?.name || "Sin Depto"}
                           </p>
-                          <p className="text-xs text-[var(--text-sec)]">
+                          <p className="text-xs text-muted-foreground">
                             {emp.position?.title || "Sin Cargo"}
                           </p>
-                        </td>
-                        <td className="p-4 text-xs space-y-1">
-                          <div className="flex items-center gap-1.5">
-                            <Phone
-                              size={12}
-                              className="text-[var(--text-sec)]"
-                            />{" "}
+                        </TableCell>
+                        <TableCell className="p-4 text-xs space-y-1">
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <Phone size={12} className="opacity-60" />{" "}
                             {emp.phone || "N/A"}
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <Mail
-                              size={12}
-                              className="text-[var(--text-sec)]"
-                            />{" "}
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <Mail size={12} className="opacity-60" />{" "}
                             {emp.email || "N/A"}
                           </div>
-                        </td>
-                        <td className="p-4">
+                        </TableCell>
+                        <TableCell className="p-4">
                           <DropdownMenu>
-                            <DropdownMenuTrigger className="focus:outline-none">
+                            <DropdownMenuTrigger asChild>
                               <Badge
+                                variant={emp.status === "ACTIVO" ? "default" : "secondary"}
                                 className={cn(
                                   "rounded-full px-3 py-1 font-bold text-[10px] cursor-pointer hover:opacity-80 transition-opacity flex items-center gap-1",
                                   emp.status === "ACTIVO"
-                                    ? "bg-emerald-500/10 text-emerald-500"
+                                    ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400"
                                     : emp.status === "PERMISO"
-                                      ? "bg-amber-500/10 text-amber-500"
-                                      : "bg-red-500/10 text-red-500",
+                                      ? "bg-amber-100 text-amber-700 hover:bg-amber-200 border-amber-200"
+                                      : "bg-red-100 text-red-700 hover:bg-red-200 border-red-200",
                                 )}
                               >
                                 {emp.status}{" "}
@@ -806,40 +803,45 @@ export function HumanResources() {
                               ))}
                             </DropdownMenuContent>
                           </DropdownMenu>
-                        </td>
-                        <td className="p-4 text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button className="p-2 rounded-lg hover:bg-[var(--card)] border border-transparent hover:border-[var(--border)] transition-all focus:outline-none">
-                                <MoreVertical size={18} />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() => {
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setSelectedEmployee(emp)}
+                              className="text-muted-foreground hover:text-[var(--color-accent)]"
+                            >
+                              <Info size={18} />
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <MoreVertical size={18} />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => setSelectedEmployee(emp)}>
+                                  <User size={16} className="mr-2" /> Ver Detalle
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => {
                                   setSelectedEmployee(emp);
-                                  setDetailsTab("datos");
-                                }}
-                              >
-                                Editar Información
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setSelectedEmployee(emp);
-                                  setDetailsTab("expediente");
-                                }}
-                              >
-                                Expediente Digital
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </td>
-                      </tr>
+                                  // logic for edit
+                                }}>
+                                  <Edit size={16} className="mr-2" /> Editar Datos
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-red-600">
+                                  <Trash2 size={16} className="mr-2" /> Eliminar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
-          </div>
         </TabsContent>
 
         {/* --- TAB: ASISTENCIA --- */}

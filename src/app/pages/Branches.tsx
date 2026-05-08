@@ -16,6 +16,9 @@ import { apiRequest } from "../config/api";
 import { useAuth } from "../context/AuthContext";
 import { Switch } from "../components/ui/switch";
 import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { cn } from "../components/ui/utils";
 import { toast } from "sonner";
 import {
@@ -185,14 +188,15 @@ export function Branches() {
           <p style={{ color: "var(--text-sec)" }}>Gestionar locales físicos y datos fiscales</p>
         </div>
         {isAdmin && (
-          <button
+          <Button
             onClick={() => handleOpenModal()}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all hover:scale-105 active:scale-95"
-            style={{ backgroundColor: "var(--accent)", color: "#ffffff", boxShadow: "0 4px 12px var(--shadow)" }}
+            size="lg"
+            className="gap-2 font-bold shadow-lg transition-all hover:scale-105 active:scale-95"
+            style={{ backgroundColor: "var(--color-accent)", color: "#ffffff" }}
           >
             <Plus size={20} />
             Nueva Sucursal
-          </button>
+          </Button>
         )}
       </div>
 
@@ -242,17 +246,16 @@ export function Branches() {
         style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
       >
         <div
-          className="flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all focus-within:border-[var(--accent)]"
+          className="flex items-center gap-3 px-4 py-1 rounded-xl border transition-all focus-within:ring-2 focus-within:ring-[var(--color-accent)]/20"
           style={{ backgroundColor: "var(--bg)", borderColor: "var(--border)" }}
         >
-          <Search size={20} style={{ color: "var(--text-sec)" }} />
-          <input
+          <Search size={20} className="text-muted-foreground" />
+          <Input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Buscar sucursal por nombre o dirección..."
-            className="flex-1 bg-transparent outline-none"
-            style={{ color: "var(--text-main)" }}
+            className="border-none bg-transparent shadow-none focus-visible:ring-0 h-9"
           />
         </div>
       </div>
@@ -263,24 +266,23 @@ export function Branches() {
         style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
       >
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr
-                className="border-b"
-                style={{ backgroundColor: "var(--bg)", borderColor: "var(--border)" }}
+          <Table>
+            <TableHeader>
+              <TableRow
+                className="bg-muted/50"
               >
-                <th className="p-4 font-semibold" style={{ color: "var(--text-main)" }}>Sucursal</th>
-                <th className="p-4 font-semibold" style={{ color: "var(--text-main)" }}>Ubicación</th>
-                <th className="p-4 font-semibold" style={{ color: "var(--text-main)" }}>NIT / Registro</th>
-                <th className="p-4 font-semibold" style={{ color: "var(--text-main)" }}>Contacto</th>
-                <th className="p-4 font-semibold text-center" style={{ color: "var(--text-main)" }}>Estado</th>
-                {isAdmin && <th className="p-4 font-semibold text-center" style={{ color: "var(--text-main)" }}>Acciones</th>}
-              </tr>
-            </thead>
-            <tbody>
+                <TableHead className="font-semibold">Sucursal</TableHead>
+                <TableHead className="font-semibold">Ubicación</TableHead>
+                <TableHead className="font-semibold">NIT / Registro</TableHead>
+                <TableHead className="font-semibold">Contacto</TableHead>
+                <TableHead className="font-semibold text-center">Estado</TableHead>
+                {isAdmin && <TableHead className="font-semibold text-center">Acciones</TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {filteredBranches.map((b) => (
-                <tr key={b.id} className="border-b last:border-b-0 hover:bg-[var(--bg)] transition-colors" style={{ borderColor: "var(--border)" }}>
-                  <td className="p-4">
+                <TableRow key={b.id} className="border-b last:border-b-0 hover:bg-[var(--bg)] transition-colors" style={{ borderColor: "var(--border)" }}>
+                  <TableCell>
                     <div className="flex items-center gap-3">
                       <div
                         className="w-10 h-10 rounded-xl flex items-center justify-center font-bold"
@@ -288,61 +290,59 @@ export function Branches() {
                       >
                         <Building2 size={20} />
                       </div>
-                      <p className="font-semibold" style={{ color: "var(--text-main)" }}>{b.name}</p>
+                      <p className="font-semibold">{b.name}</p>
                     </div>
-                  </td>
-                  <td className="p-4 font-medium" style={{ color: "var(--text-sec)" }}>
+                  </TableCell>
+                  <TableCell className="font-medium text-muted-foreground">
                     <div className="flex items-start gap-1.5 max-w-xs">
                       <MapPin size={16} className="mt-0.5 shrink-0 opacity-60" />
                       <span className="text-sm line-clamp-2">{b.address || "No especificada"}</span>
                     </div>
-                  </td>
-                  <td className="p-4">
+                  </TableCell>
+                  <TableCell>
                     <div className="flex items-center gap-1.5">
                       <FileText size={16} className="opacity-60" />
-                      <span className="font-mono text-sm" style={{ color: "var(--text-main)" }}>{b.taxId || "---"}</span>
+                      <span className="font-mono text-sm">{b.taxId || "---"}</span>
                     </div>
-                  </td>
-                  <td className="p-4">
-                    <div className="flex items-center gap-1.5 text-sm" style={{ color: "var(--text-sec)" }}>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                       <Phone size={16} className="opacity-60" />
                       <span>{b.phone || "---"}</span>
                     </div>
-                  </td>
-                  <td className="p-4 text-center">
+                  </TableCell>
+                  <TableCell className="text-center">
                     <Badge
-                      className="rounded-full px-3 py-1 font-bold text-xs"
-                      style={{
-                        backgroundColor: b.isActive ? "var(--success-bg)" : "var(--error-bg)",
-                        color: b.isActive ? "var(--success-text)" : "var(--error-red)",
-                      }}
+                      variant={b.isActive ? "default" : "destructive"}
                     >
                       {b.isActive ? "Activa" : "Inactiva"}
                     </Badge>
-                  </td>
+                  </TableCell>
                   {isAdmin && (
-                    <td className="p-4 text-center">
-                      <div className="flex items-center justify-center gap-4">
-                        <button
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => handleOpenModal(b)}
-                          className="p-2 rounded-lg hover:bg-[var(--bg)] transition-all text-[var(--text-sec)] hover:text-[var(--accent)]"
+                          className="text-muted-foreground hover:text-[var(--color-accent)]"
                           title="Editar Sucursal"
                         >
                           <Edit size={18} />
-                        </button>
+                        </Button>
                         <Switch
                           checked={b.isActive}
                           onCheckedChange={() => handleToggleClick(b)}
                         />
                       </div>
-                    </td>
+                    </TableCell>
                   )}
-                </tr>
+                  </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
           {filteredBranches.length === 0 && (
-            <div className="p-12 text-center" style={{ color: "var(--text-sec)" }}>
+            <div className="p-12 text-center text-muted-foreground">
               {searchTerm ? "No hay sucursales que coincidan con la búsqueda" : "No hay sucursales registradas"}
             </div>
           )}

@@ -29,6 +29,7 @@ const navLinks = [
   { path: "/rrhh", icon: Users2, label: "Recursos Humanos", roles: [1, 2, 3] },
   { path: "/reports", icon: FileText, label: "Reportes" },
   { path: "/settings", icon: Settings, label: "Configuración" },
+  { path: "/ui-showcase", icon: LayoutDashboard, label: "UI Showcase" },
 ];
 
 interface SidebarProps {

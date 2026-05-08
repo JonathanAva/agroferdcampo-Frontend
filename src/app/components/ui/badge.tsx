@@ -5,18 +5,24 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "./utils";
 
 const badgeVariants = cva(
-  "inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive transition-[color,box-shadow] overflow-hidden",
+  "inline-flex items-center justify-center rounded-full border px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wider w-fit whitespace-nowrap shrink-0 transition-all shadow-sm",
   {
     variants: {
       variant: {
         default:
-          "border-transparent bg-primary text-primary-foreground [a&]:hover:bg-primary/90",
+          "bg-[var(--success-bg)] text-[var(--success-text)] border-[var(--success-text)]/20 hover:brightness-95",
         secondary:
-          "border-transparent bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90",
+          "bg-[var(--muted)] text-[var(--muted-foreground)] border-[var(--border)]",
         destructive:
-          "border-transparent bg-destructive text-white [a&]:hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
+          "bg-[var(--error-bg)] text-[var(--error-text)] border-[var(--error-text)]/20 hover:brightness-95",
         outline:
-          "text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
+          "text-[var(--text-main)] border-[var(--border)] hover:bg-[var(--accent-subtle)]",
+        warning:
+          "bg-[var(--warning-bg)] text-[var(--warning-text)] border-[var(--warning-text)]/20 hover:brightness-95",
+        info:
+          "bg-[rgba(59,130,246,0.1)] text-[#1d4ed8] border-blue-200/30",
+        accent:
+          "bg-[var(--accent)] text-white border-[var(--accent)] hover:opacity-90 shadow-md",
       },
     },
     defaultVariants: {

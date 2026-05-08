@@ -1,36 +1,130 @@
-import { useState } from 'react';
-import { Users, Search, Plus, Phone, Mail, CreditCard, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { 
+  Users, Search, Plus, Phone, Mail, CreditCard, 
+  AlertCircle, Edit2, Trash2, MoreVertical
+} from 'lucide-react';
+import { cn } from '../components/ui/utils';
+import { apiRequest } from '../config/api';
+import { useAuth } from '../context/AuthContext';
+import { toast } from 'sonner';
+import { Button } from '../components/ui/button';
+import { Switch } from '../components/ui/switch';
+import { Label } from '../components/ui/label';
+import { 
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger 
+} from '../components/ui/dropdown-menu';
+import { CustomerDialog } from '../components/customers/CustomerDialog';
+import { Input } from '../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
+import { Badge as UIBadge } from '../components/ui/badge';
 
+// --- Types ---
 interface Customer {
-  id: string;
+  id: number;
   name: string;
-  nit: string;
-  phone: string;
-  email: string;
-  creditLimit: number;
-  currentDebt: number;
-  status: 'active' | 'blocked';
+  customerType: 'CONSUMIDOR_FINAL' | 'CONTRIBUYENTE' | 'SUJETO_EXCLUIDO';
+  nit?: string;
+  nrc?: string;
+  phone?: string;
+  email?: string;
+  creditLimit: string | number;
+  creditBalance: string | number;
+  isActive: boolean;
+  comercialName?: string;
+  documentNumber?: string;
+  _count?: {
+    sales: number;
+    quotes: number;
+  };
 }
 
-const MOCK_CUSTOMERS: Customer[] = [
-  { id: '1', name: 'Hacienda El Progreso', nit: '0614-123456-001-2', phone: '2222-1111', email: 'contacto@elprogreso.com', creditLimit: 5000, currentDebt: 1250, status: 'active' },
-  { id: '2', name: 'Agropecuaria San José', nit: '0614-234567-001-3', phone: '2222-2222', email: 'ventas@sanjose.com', creditLimit: 3000, currentDebt: 2800, status: 'active' },
-  { id: '3', name: 'Finca La Esperanza', nit: '0614-345678-001-4', phone: '2222-3333', email: 'info@laesperanza.com', creditLimit: 4000, currentDebt: 4200, status: 'blocked' },
-  { id: '4', name: 'Don Carlos Martínez', nit: '0614-456789-001-5', phone: '7777-1234', email: 'carlos.m@email.com', creditLimit: 2000, currentDebt: 500, status: 'active' },
-];
+interface PaginationData {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
 
 export function Customers() {
+  const { user } = useAuth();
+  const isAdmin = user?.roleId === 1 || user?.roleId === 2;
+
+  // State
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [pagination, setPagination] = useState<PaginationData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showInactive, setShowInactive] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
-  const filteredCustomers = MOCK_CUSTOMERS.filter(c => 
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.nit.includes(searchTerm)
-  );
+  // Modals
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
-  const totalCustomers = MOCK_CUSTOMERS.length;
-  const activeCustomers = MOCK_CUSTOMERS.filter(c => c.status === 'active').length;
-  const totalCredit = MOCK_CUSTOMERS.reduce((sum, c) => sum + c.currentDebt, 0);
-  const blockedCustomers = MOCK_CUSTOMERS.filter(c => c.status === 'blocked').length;
+  useEffect(() => {
+    fetchCustomers();
+  }, [currentPage, searchTerm, showInactive]);
+
+  const fetchCustomers = async () => {
+    setLoading(true);
+    try {
+      const query = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: '10',
+        status: showInactive ? 'all' : 'active',
+      });
+
+      if (searchTerm) query.append('search', searchTerm);
+
+      const response = await apiRequest<any>(`/customers?${query.toString()}`);
+      
+      // La API devuelve directamente { data, total, page, limit, totalPages }
+      // apiRequest desempaqueta el { success: true, data: ... } si existe.
+      // Así que response es el objeto con la data.
+      
+      if (response && response.data) {
+        setCustomers(response.data);
+        setPagination({
+          total: response.total,
+          page: response.page,
+          limit: response.limit,
+          totalPages: response.totalPages
+        });
+      }
+    } catch (error) {
+      toast.error('Error al cargar clientes');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!window.confirm('¿Estás seguro de desactivar este cliente?')) return;
+    try {
+      await apiRequest(`/customers/${id}`, { method: 'DELETE' });
+      toast.success('Cliente desactivado correctamente');
+      fetchCustomers();
+    } catch (error: any) {
+      toast.error(error.message || 'No se pudo desactivar el cliente');
+    }
+  };
+
+  const toggleStatus = async (customer: Customer) => {
+    try {
+      const newStatus = !customer.isActive;
+      await apiRequest(`/customers/${customer.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ isActive: newStatus }),
+      });
+      toast.success(`Cliente ${newStatus ? 'activado' : 'desactivado'} correctamente`);
+      fetchCustomers();
+    } catch (error: any) {
+      toast.error(error.message || 'Error al cambiar el estado del cliente');
+    }
+  };
+
+  const totalCustomers = pagination?.total || 0;
+  const totalCredit = customers.reduce((sum, c) => sum + Number(c.creditBalance), 0);
 
   return (
     <div>
@@ -38,18 +132,20 @@ export function Customers() {
         <h1 className="text-3xl font-bold" style={{ color: 'var(--text-main)' }}>
           Clientes
         </h1>
-        <button
-          className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold"
-          style={{ backgroundColor: 'var(--accent)', color: '#ffffff' }}
+        <Button
+          size="lg"
+          className="gap-2 font-bold shadow-md"
+          style={{ backgroundColor: 'var(--color-accent)', color: '#ffffff' }}
+          onClick={() => { setSelectedCustomer(null); setIsDialogOpen(true); }}
         >
           <Plus size={20} />
           Nuevo Cliente
-        </button>
+        </Button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="p-4 rounded-xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+        <div className="p-4 rounded-xl border shadow-sm" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-3">
             <Users size={24} style={{ color: 'var(--accent)' }} />
             <div>
@@ -59,116 +155,190 @@ export function Customers() {
           </div>
         </div>
 
-        <div className="p-4 rounded-xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+        <div className="p-4 rounded-xl border shadow-sm" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-3">
             <Users size={24} style={{ color: 'var(--accent)' }} />
             <div>
               <p className="text-sm" style={{ color: 'var(--text-sec)' }}>Clientes Activos</p>
-              <p className="text-2xl font-bold" style={{ color: 'var(--accent)' }}>{activeCustomers}</p>
+              <p className="text-2xl font-bold" style={{ color: 'var(--accent)' }}>{totalCustomers}</p>
             </div>
           </div>
         </div>
 
-        <div className="p-4 rounded-xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+        <div className="p-4 rounded-xl border shadow-sm" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-3">
             <CreditCard size={24} style={{ color: '#f59e0b' }} />
             <div>
               <p className="text-sm" style={{ color: 'var(--text-sec)' }}>Crédito Total</p>
-              <p className="text-2xl font-bold" style={{ color: '#f59e0b' }}>${totalCredit.toFixed(0)}</p>
+              <p className="text-2xl font-bold" style={{ color: '#f59e0b' }}>${totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
             </div>
           </div>
         </div>
 
-        <div className="p-4 rounded-xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+        <div className="p-4 rounded-xl border shadow-sm" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-3">
             <AlertCircle size={24} style={{ color: '#ef4444' }} />
             <div>
-              <p className="text-sm" style={{ color: 'var(--text-sec)' }}>Bloqueados</p>
-              <p className="text-2xl font-bold" style={{ color: '#ef4444' }}>{blockedCustomers}</p>
+              <p className="text-sm" style={{ color: 'var(--text-sec)' }}>Con Deuda</p>
+              <p className="text-2xl font-bold" style={{ color: '#ef4444' }}>{customers.filter(c => Number(c.creditBalance) > 0).length}</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Search */}
-      <div className="p-4 rounded-xl border mb-4" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+      <div className="p-4 rounded-xl border mb-4 shadow-sm" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
         <div className="flex items-center gap-3 px-4 py-2 rounded-lg border" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}>
-          <Search size={20} style={{ color: 'var(--text-sec)' }} />
-          <input
+          <Search size={20} className="text-muted-foreground" />
+          <Input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar clientes por nombre o NIT..."
-            className="flex-1 bg-transparent outline-none"
-            style={{ color: 'var(--text-main)' }}
+            placeholder="Buscar clientes por nombre, NIT o NRC..."
+            className="border-none bg-transparent shadow-none focus-visible:ring-0 h-9"
           />
+        </div>
+        <div className="flex items-center gap-2 mt-4 px-1">
+          <Switch 
+            id="show-inactive" 
+            checked={showInactive} 
+            onCheckedChange={setShowInactive} 
+          />
+          <Label htmlFor="show-inactive" className="text-sm cursor-pointer opacity-70">
+            Mostrar clientes inactivos
+          </Label>
         </div>
       </div>
 
       {/* Customers Table */}
-      <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+      <div className="rounded-xl border overflow-hidden shadow-sm" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}>
-                <th className="text-left p-4 font-semibold" style={{ color: 'var(--text-main)' }}>Cliente</th>
-                <th className="text-left p-4 font-semibold" style={{ color: 'var(--text-main)' }}>Contacto</th>
-                <th className="text-right p-4 font-semibold" style={{ color: 'var(--text-main)' }}>Límite Crédito</th>
-                <th className="text-right p-4 font-semibold" style={{ color: 'var(--text-main)' }}>Deuda Actual</th>
-                <th className="text-center p-4 font-semibold" style={{ color: 'var(--text-main)' }}>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredCustomers.map((customer) => (
-                <tr key={customer.id} className="border-b" style={{ borderColor: 'var(--border)' }}>
-                  <td className="p-4">
-                    <div>
-                      <p className="font-medium" style={{ color: 'var(--text-main)' }}>{customer.name}</p>
-                      <p className="text-sm font-mono" style={{ color: 'var(--text-sec)' }}>{customer.nit}</p>
-                    </div>
-                  </td>
-                  <td className="p-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-sec)' }}>
-                        <Phone size={14} />
-                        <span>{customer.phone}</span>
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead>Cliente</TableHead>
+                <TableHead>Contacto</TableHead>
+                <TableHead className="text-right">Límite Crédito</TableHead>
+                <TableHead className="text-right">Deuda Actual</TableHead>
+                <TableHead className="text-center">Estado</TableHead>
+                <TableHead className="text-center">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow><TableCell colSpan={6} className="p-8 text-center opacity-50">Cargando clientes...</TableCell></TableRow>
+              ) : customers.length === 0 ? (
+                <TableRow><TableCell colSpan={6} className="p-8 text-center opacity-50">No se encontraron clientes</TableCell></TableRow>
+              ) : (
+                customers.map((customer) => (
+                  <TableRow key={customer.id} className="border-b hover:bg-[var(--bg)]/30 transition-colors" style={{ borderColor: 'var(--border)' }}>
+                    <TableCell className="p-4">
+                      <div>
+                        <p className="font-medium">{customer.name}</p>
+                        <p className="text-xs text-muted-foreground font-mono">
+                          {customer.customerType === 'CONSUMIDOR_FINAL' ? (customer.documentNumber || 'Consumidor Final') : (customer.nit || 'Sin NIT')}
+                          {customer.nrc && ` • NRC: ${customer.nrc}`}
+                        </p>
                       </div>
-                      <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-sec)' }}>
-                        <Mail size={14} />
-                        <span>{customer.email}</span>
+                    </TableCell>
+                    <TableCell className="p-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Phone size={12} className="opacity-60" />
+                          <span>{customer.phone || 'N/A'}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Mail size={12} className="opacity-60" />
+                          <span>{customer.email || 'N/A'}</span>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="p-4 text-right">
-                    <span className="font-semibold" style={{ color: 'var(--text-main)' }}>
-                      ${customer.creditLimit.toFixed(2)}
-                    </span>
-                  </td>
-                  <td className="p-4 text-right">
-                    <span 
-                      className="font-semibold"
-                      style={{ color: customer.currentDebt > customer.creditLimit ? '#ef4444' : 'var(--accent)' }}
-                    >
-                      ${customer.currentDebt.toFixed(2)}
-                    </span>
-                  </td>
-                  <td className="p-4 text-center">
-                    <span 
-                      className="px-3 py-1 rounded-full text-xs font-medium"
-                      style={{
-                        backgroundColor: customer.status === 'active' ? '#d1fae5' : '#fee2e2',
-                        color: customer.status === 'active' ? '#065f46' : '#991b1b'
-                      }}
-                    >
-                      {customer.status === 'active' ? 'Activo' : 'Bloqueado'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    </TableCell>
+                    <TableCell className="p-4 text-right">
+                      <span className="font-semibold">
+                        ${Number(customer.creditLimit).toFixed(2)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="p-4 text-right">
+                      <span 
+                        className={cn(
+                          "font-bold",
+                          Number(customer.creditBalance) > Number(customer.creditLimit) ? "text-destructive" : "text-[var(--color-accent)]"
+                        )}
+                      >
+                        ${Number(customer.creditBalance).toFixed(2)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="p-4 text-center">
+                      <div className="flex justify-center">
+                        <UIBadge 
+                          onClick={() => toggleStatus(customer)}
+                          variant={customer.isActive ? "default" : "destructive"}
+                          className="cursor-pointer hover:opacity-80 transition-all"
+                        >
+                          {customer.isActive ? 'Activo' : 'Inactivo'}
+                        </UIBadge>
+                      </div>
+                    </TableCell>
+                    <TableCell className="p-4">
+                      <div className="flex justify-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreVertical size={16} />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => { setSelectedCustomer(customer); setIsDialogOpen(true); }}>
+                              <Edit2 size={14} className="mr-2" /> Editar
+                            </DropdownMenuItem>
+                            {isAdmin && (
+                              <DropdownMenuItem onClick={() => handleDelete(customer.id)} className="text-red-500">
+                                <Trash2 size={14} className="mr-2" /> Desactivar
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </div>
+        
+        {/* Pagination Simple */}
+        {pagination && pagination.totalPages > 1 && (
+          <div className="p-4 border-t flex justify-center gap-2 bg-[var(--bg)]/10" style={{ borderColor: 'var(--border)' }}>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(p => p - 1)}
+            >
+              Anterior
+            </Button>
+            <div className="flex items-center px-4 text-sm font-medium">
+              Página {currentPage} de {pagination.totalPages}
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              disabled={currentPage === pagination.totalPages}
+              onClick={() => setCurrentPage(p => p + 1)}
+            >
+              Siguiente
+            </Button>
+          </div>
+        )}
       </div>
+
+      <CustomerDialog 
+        open={isDialogOpen} 
+        onOpenChange={setIsDialogOpen} 
+        customer={selectedCustomer} 
+        onSuccess={fetchCustomers}
+      />
     </div>
   );
 }

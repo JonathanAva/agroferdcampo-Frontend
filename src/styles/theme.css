@@ -1,159 +1,85 @@
 @layer base {
   :root {
-    /* Modo Claro - Serio y Limpio */
-    --color-bg: #f8fafc;
-    --color-sidebar: #ffffff;
-    --color-card: #ffffff;
-    --color-text-main: #1e293b;
-    --color-text-sec: #64748b;
-    --color-primary: #1e293b;
-    --color-accent: #10b981;
-    --color-border: #e2e8f0;
-    --color-shadow: rgba(30, 41, 59, 0.08);
-    --color-switch-background: #e2e8f0;
-    --color-background: var(--color-bg);
+    /* --- TUS COLORES ORIGINALES (Respetados al 100%) --- */
+    --bg: #f8fafc;
+    --sidebar: #ffffff;
+    --card: #ffffff;
+    --text-main: #1e293b;
+    --text-sec: #64748b;
+    --primary: #1e293b;
+    --accent: #10b981; /* Verde Original */
+    --border: #e2e8f0;
+    --shadow: rgba(30, 41, 59, 0.08);
 
-    /* Compatibilidad con variables previas */
-    --bg: var(--color-bg);
-    --sidebar: var(--color-sidebar);
-    --card: var(--color-card);
-    --text-main: var(--color-text-main);
-    --text-sec: var(--color-text-sec);
-    --primary: var(--color-primary);
-    --accent: var(--color-accent);
-    --border: var(--color-border);
-    --shadow: var(--color-shadow);
-    --switch-background: var(--color-switch-background);
-
-    /* Estados - Modo Claro */
-    --color-success-bg: #d1fae5;
-    --color-success-text: #065f46;
-    --color-warning-bg: #fef3c7;
-    --color-warning-text: #92400e;
-    --color-error-bg: #fee2e2;
-    --color-error-text: #991b1b;
-    --color-alert-orange: #f59e0b;
-    --color-error-red: #ef4444;
-    --color-destructive: var(--color-error-red);
-
-    --success-bg: var(--color-success-bg);
-    --success-text: var(--color-success-text);
-    --warning-bg: var(--color-warning-bg);
-    --warning-text: var(--color-warning-text);
-    --error-bg: var(--color-error-bg);
-    --error-text: var(--color-error-text);
-    --alert-orange: var(--color-alert-orange);
-    --error-red: var(--color-error-red);
+    /* --- Mapeo Shadcn para compatibilidad --- */
+    --background: var(--bg);
+    --foreground: var(--text-main);
+    
+    --card-foreground: var(--text-main);
+    
+    --popover: var(--card);
+    --popover-foreground: var(--text-main);
+    
+    --primary-foreground: #ffffff; /* Texto blanco sobre botones oscuros */
+    
+    --secondary: #f1f5f9;
+    --secondary-foreground: #1e293b;
+    
+    --muted: #f1f5f9;
+    --muted-foreground: var(--text-sec);
+    
+    /* Para hovers de menús, usamos un color sutil, NO el verde de marca */
+    --accent-subtle: #f1f5f9;
+    --accent-foreground: var(--text-main);
+    
+    --destructive: #ef4444;
+    --destructive-foreground: #ffffff;
+    
+    --input: var(--border);
+    --ring: var(--primary);
+    
+    --radius: 0.75rem;
   }
 
   [data-theme="dark"] {
-    /* Modo Oscuro - Navy & Slate con Fade */
-    --color-bg: #0f172a;
-    --color-sidebar: #1e293b;
-    --color-card: #1e293b;
-    --color-text-main: #f1f5f9;
-    --color-text-sec: #94a3b8;
-    --color-primary: #38bdf8;
-    --color-accent: #34d399;
-    --color-border: #334155;
-    --color-shadow: rgba(0, 0, 0, 0.3);
-    --color-switch-background: #334155;
-    --color-background: var(--color-bg);
+    /* --- TUS COLORES ORIGINALES DARK (Respetados al 100%) --- */
+    --bg: #0f172a;
+    --sidebar: #1e293b;
+    --card: #1e293b;
+    --text-main: #f1f5f9;
+    --text-sec: #94a3b8;
+    --primary: #38bdf8; /* Celeste Original */
+    --accent: #34d399; /* Verde/Celeste Original */
+    --border: #334155;
+    --shadow: rgba(0, 0, 0, 0.3);
 
-    /* Compatibilidad con variables previas */
-    --bg: var(--color-bg);
-    --sidebar: var(--color-sidebar);
-    --card: var(--color-card);
-    --text-main: var(--color-text-main);
-    --text-sec: var(--color-text-sec);
-    --primary: var(--color-primary);
-    --accent: var(--color-accent);
-    --border: var(--color-border);
-    --shadow: var(--color-shadow);
-    --switch-background: var(--color-switch-background);
-
-    /* Estados - Modo Oscuro */
-    --color-success-bg: #064e3b;
-    --color-success-text: #6ee7b7;
-    --color-warning-bg: #78350f;
-    --color-warning-text: #fde68a;
-    --color-error-bg: #7f1d1d;
-    --color-error-text: #fca5a5;
-    --color-alert-orange: #f59e0b;
-    --color-error-red: #ef4444;
-    --color-destructive: var(--color-error-red);
-
-    --success-bg: var(--color-success-bg);
-    --success-text: var(--color-success-text);
-    --warning-bg: var(--color-warning-bg);
-    --warning-text: var(--color-warning-text);
-    --error-bg: var(--color-error-bg);
-    --error-text: var(--color-error-text);
-    --alert-orange: var(--color-alert-orange);
-    --error-red: var(--color-error-red);
+    /* --- Mapeo Shadcn para compatibilidad Dark --- */
+    --background: var(--bg);
+    --foreground: var(--text-main);
+    
+    --popover: var(--card);
+    --popover-foreground: var(--text-main);
+    
+    --primary-foreground: #0f172a; /* Texto oscuro sobre botones celestes */
+    
+    --secondary: #334155;
+    --secondary-foreground: var(--text-main);
+    
+    --muted: #334155;
+    --muted-foreground: var(--text-sec);
+    
+    --accent-subtle: #334155;
+    --accent-foreground: var(--text-main);
   }
 
   * {
     box-sizing: border-box;
+    border-color: var(--border);
   }
 
   body {
-    background-color: var(--bg);
-    color: var(--text-main);
-    margin: 0;
-    font-family:
-      "Inter",
-      system-ui,
-      -apple-system,
-      sans-serif;
-    transition:
-      background-color 0.4s ease,
-      color 0.3s ease;
-  }
-
-  h1 {
-    font-size: 1.875rem;
-    font-weight: 700;
-    color: var(--text-main);
-    margin: 0;
-  }
-
-  h2 {
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: var(--text-main);
-    margin: 0;
-  }
-
-  h3 {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: var(--text-main);
-    margin: 0;
-  }
-
-  p {
-    color: var(--text-sec);
-    margin: 0;
-  }
-
-  input,
-  textarea,
-  select {
-    font-family:
-      "Inter",
-      system-ui,
-      -apple-system,
-      sans-serif;
-  }
-
-  /* Fix for browser autofill background */
-  input:-webkit-autofill,
-  input:-webkit-autofill:hover,
-  input:-webkit-autofill:focus,
-  input:-webkit-autofill:active {
-    -webkit-box-shadow: 0 0 0 30px var(--bg) inset !important;
-    -webkit-text-fill-color: var(--text-main) !important;
-    transition: background-color 5000s ease-in-out 0s;
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: "Inter", system-ui, sans-serif;
   }
 }

@@ -13,12 +13,23 @@ import {
   MapPin,
   Check,
 } from "lucide-react";
+import { Label } from "../components/ui/label";
 import { apiRequest } from "../config/api";
 import { useAuth } from "../context/AuthContext";
 import { Switch } from "../components/ui/switch";
 import { Badge } from "../components/ui/badge";
 import { cn } from "../components/ui/utils";
 import { toast } from "sonner";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/ui/table";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -214,14 +225,15 @@ export function Users() {
         >
           Usuarios
         </h1>
-        <button
+        <Button
           onClick={() => handleOpenModal()}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold"
-          style={{ backgroundColor: "var(--accent)", color: "#ffffff" }}
+          size="lg"
+          className="gap-2 font-bold shadow-lg transition-all hover:scale-105 active:scale-95"
+          style={{ backgroundColor: "var(--color-accent)", color: "#ffffff" }}
         >
           <Plus size={20} />
           Nuevo Usuario
-        </button>
+        </Button>
       </div>
 
       {/* Stats - Estilo Clientes */}
@@ -318,18 +330,14 @@ export function Users() {
         className="p-4 rounded-xl border mb-4"
         style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
       >
-        <div
-          className="flex items-center gap-3 px-4 py-2 rounded-lg border"
-          style={{ backgroundColor: "var(--bg)", borderColor: "var(--border)" }}
-        >
-          <Search size={20} style={{ color: "var(--text-sec)" }} />
-          <input
+        <div className="flex items-center gap-3 px-4 py-1 rounded-xl bg-[var(--bg)] border border-[var(--border)] focus-within:ring-2 focus-within:ring-[var(--color-accent)]/20 transition-all">
+          <Search size={20} className="text-muted-foreground" />
+          <Input
             type="text"
+            placeholder="Buscar por nombre, código o DUI..."
+            className="border-none bg-transparent shadow-none focus-visible:ring-0 h-9"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar usuarios..."
-            className="flex-1 bg-transparent outline-none"
-            style={{ color: "var(--text-main)" }}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
           />
         </div>
       </div>
@@ -340,70 +348,29 @@ export function Users() {
         style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
       >
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr
-                className="border-b"
-                style={{
-                  backgroundColor: "var(--bg)",
-                  borderColor: "var(--border)",
-                }}
-              >
-                <th
-                  className="text-left p-4 font-semibold"
-                  style={{ color: "var(--text-main)" }}
-                >
-                  Usuario
-                </th>
-                <th
-                  className="text-left p-4 font-semibold"
-                  style={{ color: "var(--text-main)" }}
-                >
-                  Contacto
-                </th>
-                <th
-                  className="text-right p-4 font-semibold"
-                  style={{ color: "var(--text-main)" }}
-                >
-                  Rol
-                </th>
-                <th
-                  className="text-left p-4 font-semibold"
-                  style={{ color: "var(--text-main)" }}
-                >
-                  Sucursales
-                </th>
-                <th
-                  className="text-right p-4 font-semibold"
-                  style={{ color: "var(--text-main)" }}
-                >
-                  DUI / Tel
-                </th>
-                <th
-                  className="text-center p-4 font-semibold"
-                  style={{ color: "var(--text-main)" }}
-                >
-                  Estado
-                </th>
-                <th
-                  className="text-center p-4 font-semibold"
-                  style={{ color: "var(--text-main)" }}
-                >
-                  Acciones
-                </th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="font-semibold">Usuario</TableHead>
+                <TableHead className="font-semibold">Contacto</TableHead>
+                <TableHead className="font-semibold text-right">Rol</TableHead>
+                <TableHead className="font-semibold">Sucursales</TableHead>
+                <TableHead className="font-semibold text-right">DUI / Tel</TableHead>
+                <TableHead className="font-semibold text-center">Estado</TableHead>
+                <TableHead className="font-semibold text-center">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {filteredUsers.map((u) => (
                 <tr
                   key={u.id}
                   className="border-b transition-colors"
                   style={{ borderColor: "var(--border)" }}
                 >
-                  <td className="p-4">
+                  <TableCell>
                     <div className="flex items-center gap-3">
                       <div
-                        className="w-8 h-8 rounded flex items-center justify-center font-bold text-base"
+                        className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-base"
                         style={{
                           backgroundColor: "var(--bg)",
                           color: "var(--accent)",
@@ -413,109 +380,72 @@ export function Users() {
                         {u.fullName.charAt(0)}
                       </div>
                       <div>
-                        <p
-                          className="font-medium"
-                          style={{ color: "var(--text-main)" }}
-                        >
-                          {u.fullName}
-                        </p>
-                        <p
-                          className="text-sm font-mono"
-                          style={{ color: "var(--text-sec)" }}
-                        >
-                          {u.email}
-                        </p>
+                        <p className="font-semibold">{u.fullName}</p>
+                        <p className="text-xs font-mono text-muted-foreground">{u.email}</p>
                       </div>
                     </div>
-                  </td>
-                  <td className="p-4">
-                    <div className="space-y-1">
-                      <div
-                        className="flex items-center gap-2 text-sm"
-                        style={{ color: "var(--text-sec)" }}
-                      >
-                        <Phone size={14} />
-                        <span>{u.phone}</span>
-                      </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Phone size={14} className="opacity-60" />
+                      <span>{u.phone}</span>
                     </div>
-                  </td>
-                  <td className="p-4 text-right">
-                    <span
-                      className="font-semibold"
-                      style={{ color: "var(--text-main)" }}
-                    >
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <span className="font-bold">
                       {ROLES.find((r) => r.id === u.roleId)?.name}
                     </span>
-                  </td>
-                  <td className="p-4">
+                  </TableCell>
+                  <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {u.branches && u.branches.length > 0 ? (
                         u.branches.map((ub) => (
                           <Badge
                             key={ub.branch?.id}
-                            className="text-xs py-1 px-3 h-6 flex items-center bg-[var(--bg)] border border-[var(--border)]"
-                            style={{ color: "var(--text-main)" }}
+                            className="text-[10px] py-0 px-2 h-5 flex items-center bg-muted border border-border text-foreground hover:bg-muted"
                           >
-                            <MapPin size={12} className="mr-1.5 opacity-70" />
+                            <MapPin size={10} className="mr-1 opacity-70" />
                             {ub.branch?.name}
                           </Badge>
                         ))
                       ) : (
-                        <span className="text-xs italic opacity-50">Sin sucursal</span>
+                        <span className="text-[10px] italic opacity-50">Sin sucursal</span>
                       )}
                     </div>
-                  </td>
-                  <td className="p-4 text-right">
-                    <span
-                      className="font-semibold font-mono"
-                      style={{ color: "var(--accent)" }}
-                    >
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <span className="font-mono text-xs text-[var(--color-accent)] font-bold">
                       {u.dui}
                     </span>
-                  </td>
-                  <td className="p-4 text-center">
-                    <Badge
-                      className={cn(
-                        "rounded-full px-3 py-1 border-none font-bold text-xs",
-                        u.isActive
-                          ? "bg-transparent hover:bg-transparent"
-                          : "bg-transparent hover:bg-transparent",
-                      )}
-                      style={{
-                        backgroundColor: u.isActive ? "var(--success-bg)" : "var(--error-bg)",
-                        color: u.isActive ? "var(--success-text)" : "var(--error-red)",
-                      }}
-                    >
-                      {u.isActive ? "Activo" : "Bloqueado"}
-                    </Badge>
-                  </td>
-                  <td className="p-4 text-center">
-                    <div className="flex items-center justify-center gap-4">
-                      <button
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <div className="flex justify-center">
+                      <Badge variant={u.isActive ? "default" : "destructive"}>
+                        {u.isActive ? "Activo" : "Bloqueado"}
+                      </Badge>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         onClick={() => handleOpenModal(u)}
-                        className="p-1 rounded-md hover:bg-accent transition-colors"
-                        style={{ color: "var(--text-sec)" }}
+                        className="text-muted-foreground hover:text-[var(--color-accent)]"
                         title="Editar Usuario"
                       >
                         <Edit size={18} />
-                      </button>
-                      <div
-                        className="flex items-center"
-                        title={
-                          u.isActive ? "Bloquear Usuario" : "Activar Usuario"
-                        }
-                      >
-                        <Switch
-                          checked={u.isActive}
-                          onCheckedChange={() => handleToggleClick(u)}
-                        />
-                      </div>
+                      </Button>
+                      <Switch
+                        checked={u.isActive}
+                        onCheckedChange={() => handleToggleClick(u)}
+                      />
                     </div>
-                  </td>
+                  </TableCell>
                 </tr>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </div>
 
@@ -548,102 +478,71 @@ export function Users() {
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               {formError && (
-                <div className="p-3 rounded-lg text-sm bg-red-50 text-red-600">
+                <div className="p-3 rounded-lg text-sm bg-destructive/10 text-destructive border border-destructive/20 font-medium animate-in shake duration-300">
                   {formError}
                 </div>
               )}
-              <div>
-                <label
-                  className="block text-xs font-bold mb-1 uppercase opacity-70"
-                  style={{ color: "var(--text-sec)" }}
-                >
+              <div className="space-y-2">
+                <Label className="text-xs font-bold uppercase opacity-70">
                   Nombre Completo
-                </label>
-                <input
+                </Label>
+                <Input
                   type="text"
                   required
                   value={formData.fullName}
                   onChange={(e) =>
                     setFormData({ ...formData, fullName: e.target.value })
                   }
-                  className="w-full px-4 py-2 rounded-lg border outline-none bg-transparent"
-                  style={{
-                    borderColor: "var(--border)",
-                    color: "var(--text-main)",
-                  }}
+                  placeholder="Ej. Juan Pérez"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label
-                    className="block text-xs font-bold mb-1 uppercase opacity-70"
-                    style={{ color: "var(--text-sec)" }}
-                  >
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase opacity-70">
                     Email
-                  </label>
-                  <input
+                  </Label>
+                  <Input
                     type="email"
                     required
                     value={formData.email}
                     onChange={(e) =>
                       setFormData({ ...formData, email: e.target.value })
                     }
-                    className="w-full px-4 py-2 rounded-lg border outline-none bg-transparent"
-                    style={{
-                      borderColor: "var(--border)",
-                      color: "var(--text-main)",
-                    }}
+                    placeholder="juan@ejemplo.com"
                   />
                 </div>
-                <div>
-                  <label
-                    className="block text-xs font-bold mb-1 uppercase opacity-70"
-                    style={{ color: "var(--text-sec)" }}
-                  >
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase opacity-70">
                     Teléfono
-                  </label>
-                  <input
+                  </Label>
+                  <Input
                     type="text"
                     value={formData.phone}
                     onChange={(e) =>
                       setFormData({ ...formData, phone: e.target.value })
                     }
-                    className="w-full px-4 py-2 rounded-lg border outline-none bg-transparent"
-                    style={{
-                      borderColor: "var(--border)",
-                      color: "var(--text-main)",
-                    }}
+                    placeholder="7777-7777"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label
-                    className="block text-xs font-bold mb-1 uppercase opacity-70"
-                    style={{ color: "var(--text-sec)" }}
-                  >
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase opacity-70">
                     DUI
-                  </label>
-                  <input
+                  </Label>
+                  <Input
                     type="text"
                     value={formData.dui}
                     onChange={(e) =>
                       setFormData({ ...formData, dui: e.target.value })
                     }
-                    className="w-full px-4 py-2 rounded-lg border outline-none bg-transparent"
-                    style={{
-                      borderColor: "var(--border)",
-                      color: "var(--text-main)",
-                    }}
+                    placeholder="00000000-0"
                   />
                 </div>
-                <div>
-                  <label
-                    className="block text-xs font-bold mb-1 uppercase opacity-70"
-                    style={{ color: "var(--text-sec)" }}
-                  >
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase opacity-70">
                     Rol
-                  </label>
+                  </Label>
                   <select
                     value={formData.roleId}
                     onChange={(e) =>
@@ -652,14 +551,10 @@ export function Users() {
                         roleId: parseInt(e.target.value),
                       })
                     }
-                    className="w-full px-4 py-2 rounded-lg border outline-none bg-transparent"
-                    style={{
-                      borderColor: "var(--border)",
-                      color: "var(--text-main)",
-                    }}
+                    className="w-full h-10 px-4 py-2 rounded-lg border outline-none bg-transparent focus:ring-2 focus:ring-[var(--color-accent)]/20 transition-all border-[var(--border)] text-[var(--text-main)]"
                   >
                     {ROLES.map((r) => (
-                      <option key={r.id} value={r.id}>
+                      <option key={r.id} value={r.id} className="bg-[var(--card)]">
                         {r.name}
                       </option>
                     ))}
@@ -669,12 +564,9 @@ export function Users() {
 
               {/* Multi-select de Sucursales */}
               <div className="space-y-2">
-                <label
-                  className="block text-xs font-bold mb-1 uppercase opacity-70"
-                  style={{ color: "var(--text-sec)" }}
-                >
+                <Label className="text-xs font-bold uppercase opacity-70">
                   Asignar Sucursales
-                </label>
+                </Label>
                 <div 
                   className="grid grid-cols-2 gap-2 p-3 rounded-lg border max-h-40 overflow-y-auto"
                   style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)" }}
@@ -694,8 +586,8 @@ export function Users() {
                         className={cn(
                           "flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all border",
                           isSelected 
-                            ? "bg-[var(--accent)] border-[var(--accent)] text-white" 
-                            : "bg-[var(--card)] border-[var(--border)] text-[var(--text-main)] hover:border-[var(--accent)]"
+                            ? "bg-[var(--color-accent)] border-[var(--color-accent)] text-white shadow-sm" 
+                            : "bg-[var(--card)] border-[var(--border)] text-[var(--text-main)] hover:border-[var(--color-accent)]"
                         )}
                       >
                         <span className="truncate">{branch.name}</span>
@@ -711,48 +603,38 @@ export function Users() {
                 </div>
               </div>
               {!editingUser && (
-                <div>
-                  <label
-                    className="block text-xs font-bold mb-1 uppercase opacity-70"
-                    style={{ color: "var(--text-sec)" }}
-                  >
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase opacity-70">
                     Contraseña
-                  </label>
-                  <input
+                  </Label>
+                  <Input
                     type="password"
                     required
                     value={formData.password}
                     onChange={(e) =>
                       setFormData({ ...formData, password: e.target.value })
                     }
-                    className="w-full px-4 py-2 rounded-lg border outline-none bg-transparent"
-                    style={{
-                      borderColor: "var(--border)",
-                      color: "var(--text-main)",
-                    }}
+                    placeholder="••••••••"
                   />
                 </div>
               )}
               <div className="flex gap-3 pt-4">
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={() => setShowModal(false)}
-                  className="flex-1 py-2 rounded-lg border font-bold"
-                  style={{
-                    borderColor: "var(--border)",
-                    color: "var(--text-main)",
-                  }}
+                  className="flex-1 font-bold"
                 >
                   Cancelar
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
                   disabled={formLoading}
-                  className="flex-1 py-2 rounded-lg font-bold"
-                  style={{ backgroundColor: "var(--accent)", color: "#ffffff" }}
+                  className="flex-1 font-bold shadow-lg"
+                  style={{ backgroundColor: "var(--color-accent)", color: "#ffffff" }}
                 >
                   {formLoading ? "Procesando..." : "Guardar"}
-                </button>
+                </Button>
               </div>
             </form>
           </div>

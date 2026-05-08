@@ -19,6 +19,9 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../components/ui/select';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '../components/ui/table';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface ProductPrice {
@@ -235,21 +238,9 @@ export function Inventory() {
 
   const getStatusBadge = (item: InventoryItem) => {
     const status = getProductStatus(item);
-    const styles = {
-      active: { label: 'En Stock', color: 'var(--success-text)', bg: 'var(--success-bg)' },
-      low: { label: 'Stock Bajo', color: '#92400e', bg: '#fef3c7' },
-      critical: { label: 'Crítico', color: 'var(--error-red)', bg: 'var(--error-bg)' }
-    };
-    const style = styles[status];
-    
-    return (
-      <Badge 
-        className="rounded-full px-3 py-1 font-bold text-[10px] uppercase border-none"
-        style={{ backgroundColor: style.bg, color: style.color }}
-      >
-        {style.label}
-      </Badge>
-    );
+    if (status === 'active') return <Badge variant="default">En Stock</Badge>;
+    if (status === 'low') return <Badge variant="warning">Stock Bajo</Badge>;
+    return <Badge variant="destructive">Crítico</Badge>;
   };
 
   if (loading) {
@@ -274,7 +265,7 @@ export function Inventory() {
             Ir al Catálogo
           </Button>
           {canAdjust && (
-            <Button onClick={() => setIsNewEntryOpen(true)} style={{ backgroundColor: 'var(--accent)' }} className="text-white">
+            <Button onClick={() => setIsNewEntryOpen(true)} style={{ backgroundColor: 'var(--color-accent)' }} className="text-white font-bold shadow-lg h-10 px-6">
               <Plus size={16} />
               Nuevo Ingreso
             </Button>
@@ -293,39 +284,39 @@ export function Inventory() {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="py-6 space-y-4">
-              <div className="space-y-2">
-                <Label>Buscar Producto</Label>
-                <div className="relative">
-                  <Input
-                    placeholder="Nombre o código..."
-                    value={entrySearch}
-                    onChange={(e) => {
-                      setEntrySearch(e.target.value);
-                      searchEntryProducts(e.target.value);
-                    }}
-                  />
-                  {entryProducts.length > 0 && (
-                    <div className="absolute z-50 w-full mt-1 bg-[var(--card)] border rounded-xl shadow-xl max-h-48 overflow-auto">
-                      {entryProducts.map(p => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          className="w-full text-left p-3 hover:bg-[var(--bg)] border-b last:border-0"
-                          onClick={() => {
-                            setEntrySelectedProduct(p);
-                            setEntrySearch(p.name);
-                            setEntryProducts([]);
-                          }}
-                        >
-                          <p className="font-bold text-sm">{p.name}</p>
-                          <p className="text-[10px] opacity-60">{p.internalCode || 'S/C'}</p>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+              <div className="py-6 space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase opacity-70">Buscar Producto</Label>
+                  <div className="relative">
+                    <Input
+                      placeholder="Nombre o código..."
+                      value={entrySearch}
+                      onChange={(e) => {
+                        setEntrySearch(e.target.value);
+                        searchEntryProducts(e.target.value);
+                      }}
+                    />
+                    {entryProducts.length > 0 && (
+                      <div className="absolute z-50 w-full mt-1 bg-[var(--card)] border rounded-xl shadow-xl max-h-48 overflow-auto animate-in fade-in zoom-in-95 duration-200">
+                        {entryProducts.map(p => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            className="w-full text-left p-3 hover:bg-muted border-b last:border-0 transition-colors"
+                            onClick={() => {
+                              setEntrySelectedProduct(p);
+                              setEntrySearch(p.name);
+                              setEntryProducts([]);
+                            }}
+                          >
+                            <p className="font-bold text-sm">{p.name}</p>
+                            <p className="text-[10px] opacity-60">{p.internalCode || 'S/C'}</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
 
               {entrySelectedProduct && (
                 <div className="p-3 rounded-lg bg-[var(--accent)]/5 border border-[var(--accent)]/10">
@@ -335,7 +326,7 @@ export function Inventory() {
 
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
-                  <Label>Cantidad</Label>
+                  <Label className="text-xs font-bold uppercase opacity-70">Cantidad</Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -344,7 +335,7 @@ export function Inventory() {
                     onChange={(e) => setEntryQty(e.target.value)}
                     placeholder="0.00"
                   />
-                  <p className="text-[10px] opacity-60">Se cargará en la sucursal actual: <span className="font-bold">{user?.branch || 'Cargando...'}</span></p>
+                  <p className="text-[10px] text-muted-foreground">Se cargará en la sucursal actual: <span className="font-bold text-[var(--color-accent)]">{user?.branch || 'Cargando...'}</span></p>
                 </div>
               </div>
 
@@ -365,8 +356,8 @@ export function Inventory() {
               <Button 
                 type="submit" 
                 disabled={formLoading || !entrySelectedProduct || !entryQty} 
-                style={{ backgroundColor: 'var(--accent)' }} 
-                className="text-white"
+                style={{ backgroundColor: 'var(--color-accent)' }} 
+                className="text-white font-bold shadow-lg h-11"
               >
                 {formLoading ? 'Procesando...' : 'Cargar Stock'}
               </Button>
@@ -400,16 +391,15 @@ export function Inventory() {
       <div className="p-4 rounded-2xl border mb-6 shadow-sm"
         style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
         <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all focus-within:border-[var(--accent)]"
+          <div className="flex-1 flex items-center gap-3 px-4 py-1 rounded-xl border transition-all focus-within:ring-2 focus-within:ring-[var(--color-accent)]/20"
             style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}>
-            <Search size={20} style={{ color: 'var(--text-sec)' }} />
-            <input
+            <Search size={20} className="text-muted-foreground" />
+            <Input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Buscar por nombre, código o categoría..."
-              className="flex-1 bg-transparent outline-none"
-              style={{ color: 'var(--text-main)' }}
+              className="border-none bg-transparent shadow-none focus-visible:ring-0 h-9"
             />
           </div>
 
@@ -433,69 +423,69 @@ export function Inventory() {
       <div className="rounded-xl border overflow-hidden shadow-sm"
         style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}>
-                <th className="text-left p-4 font-semibold" style={{ color: 'var(--text-main)' }}>Producto</th>
-                <th className="text-left p-4 font-semibold" style={{ color: 'var(--text-main)' }}>Categoría</th>
-                <th className="text-center p-4 font-semibold" style={{ color: 'var(--text-main)' }}>Existencia</th>
-                <th className="text-center p-4 font-semibold" style={{ color: 'var(--text-main)' }}>Estado</th>
-                <th className="text-right p-4 font-semibold" style={{ color: 'var(--text-main)' }}>Precio Público</th>
-                <th className="text-center p-4 font-semibold" style={{ color: 'var(--text-main)' }}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="font-semibold text-foreground">Producto</TableHead>
+                <TableHead className="font-semibold text-foreground">Categoría</TableHead>
+                <TableHead className="text-center font-semibold text-foreground">Existencia</TableHead>
+                <TableHead className="text-center font-semibold text-foreground">Estado</TableHead>
+                <TableHead className="text-right font-semibold text-foreground">Precio Público</TableHead>
+                <TableHead className="text-center font-semibold text-foreground">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {filteredInventory.map((item) => (
-                <tr key={item.id} className="border-b hover:bg-[var(--bg)] transition-colors" style={{ borderColor: 'var(--border)' }}>
-                  <td className="p-4">
+                <TableRow key={item.id} className="border-b hover:bg-[var(--bg)] transition-colors" style={{ borderColor: 'var(--border)' }}>
+                  <TableCell>
                     <div>
-                      <p className="font-medium" style={{ color: 'var(--text-main)' }}>{item.product.name}</p>
-                      <p className="text-sm font-mono" style={{ color: 'var(--text-sec)' }}>
+                      <p className="font-semibold">{item.product.name}</p>
+                      <p className="text-xs font-mono text-muted-foreground">
                         {item.product.internalCode || item.product.barcode || 'SIN-CODIGO'}
                       </p>
                     </div>
-                  </td>
-                  <td className="p-4 text-sm" style={{ color: 'var(--text-sec)' }}>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
                     {item.product.category?.name || 'General'}
-                  </td>
-                  <td className="p-4 text-center">
+                  </TableCell>
+                  <TableCell className="text-center">
                     <div className="flex flex-col items-center">
-                      <span className="text-lg font-semibold" style={{ color: Number(item.quantity) <= Number(item.minStock) ? '#ef4444' : 'var(--accent)' }}>
+                      <span className="text-lg font-bold" style={{ color: Number(item.quantity) <= Number(item.minStock) ? 'var(--error-red)' : 'var(--color-accent)' }}>
                         {Number(item.quantity)}
                       </span>
-                      <span className="text-[10px] uppercase opacity-50 font-semibold" style={{ color: 'var(--text-sec)' }}>
+                      <span className="text-[10px] uppercase opacity-50 font-bold text-muted-foreground">
                         Min: {Number(item.minStock)}
                       </span>
                     </div>
-                  </td>
-                  <td className="p-4 text-center">
+                  </TableCell>
+                  <TableCell className="text-center">
                     {getStatusBadge(item)}
-                  </td>
-                  <td className="p-4 text-right">
-                    <span className="font-semibold" style={{ color: 'var(--text-main)' }}>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <span className="font-bold">
                       ${getPublicPrice(item.product).toFixed(2)}
                     </span>
-                  </td>
-                  <td className="p-4">
+                  </TableCell>
+                  <TableCell>
                     <div className="flex items-center justify-center gap-2">
                       {canAdjust && (
                         <Button variant="ghost" size="icon" onClick={() => { setSelectedItem(item); setIsAdjustOpen(true); }}
-                          className="hover:bg-[var(--accent)] hover:text-white transition-all text-[var(--text-sec)]">
+                          className="hover:text-[var(--color-accent)] transition-all text-muted-foreground">
                           <ClipboardList size={18} />
                         </Button>
                       )}
                       {canTransfer && (
                         <Button variant="ghost" size="icon" onClick={() => { setSelectedItem(item); setIsTransferOpen(true); }}
-                          className="hover:bg-emerald-500 hover:text-white transition-all text-[var(--text-sec)]">
+                          className="hover:text-emerald-500 transition-all text-muted-foreground">
                           <ArrowLeftRight size={18} />
                         </Button>
                       )}
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
           {filteredInventory.length === 0 && (
             <div className="p-12 text-center" style={{ color: 'var(--text-sec)' }}>
               No se encontraron productos en el inventario.
@@ -569,7 +559,7 @@ export function Inventory() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="ref">Referencia (Opcional)</Label>
+                    <Label className="text-xs font-bold uppercase opacity-70">Referencia (Opcional)</Label>
                     <Textarea
                       id="ref"
                       rows={2}
@@ -585,7 +575,7 @@ export function Inventory() {
                 <Button type="button" variant="outline" onClick={() => setIsAdjustOpen(false)}>
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={formLoading} style={{ backgroundColor: 'var(--accent)' }} className="text-white">
+                <Button type="submit" disabled={formLoading} style={{ backgroundColor: 'var(--color-accent)' }} className="text-white font-bold shadow-lg h-11 px-8">
                   {formLoading ? 'Procesando...' : 'Aplicar Movimiento'}
                 </Button>
               </DialogFooter>
@@ -677,7 +667,7 @@ export function Inventory() {
                 <Button type="button" variant="outline" onClick={() => setIsTransferOpen(false)}>
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={formLoading || !transferData.toBranchId} style={{ backgroundColor: 'var(--accent)' }} className="text-white">
+                <Button type="submit" disabled={formLoading || !transferData.toBranchId} style={{ backgroundColor: 'var(--color-accent)' }} className="text-white font-bold shadow-lg h-11 px-8">
                   {formLoading ? 'Enviando...' : 'Confirmar Envío'}
                 </Button>
               </DialogFooter>

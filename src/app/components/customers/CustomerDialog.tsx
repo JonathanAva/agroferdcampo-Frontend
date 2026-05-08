@@ -1,0 +1,347 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription 
+} from '../ui/dialog';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { 
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
+} from '../ui/select';
+import { Textarea } from '../ui/textarea';
+import { apiRequest } from '../../config/api';
+import { toast } from 'sonner';
+import { User, Building2, UserCheck, ShieldCheck } from 'lucide-react';
+import { cn } from '../ui/utils';
+
+interface CustomerDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  customer?: any; // If provided, we are in edit mode
+  onSuccess: () => void;
+}
+
+export function CustomerDialog({ open, onOpenChange, customer, onSuccess }: CustomerDialogProps) {
+  const [loading, setLoading] = useState(false);
+  const isEdit = !!customer;
+
+  // Form State
+  const [formData, setFormData] = useState({
+    customerType: 'CONSUMIDOR_FINAL',
+    name: '',
+    comercialName: '',
+    nit: '',
+    nrc: '',
+    documentType: '13', // Default DUI
+    documentNumber: '',
+    phone: '',
+    email: '',
+    department: '',
+    municipality: '',
+    addressComplement: '',
+    activityCode: '',
+    activityDescription: '',
+    creditLimit: 0,
+  });
+
+  useEffect(() => {
+    if (customer) {
+      setFormData({
+        customerType: customer.customerType || 'CONSUMIDOR_FINAL',
+        name: customer.name || '',
+        comercialName: customer.comercialName || '',
+        nit: customer.nit || '',
+        nrc: customer.nrc || '',
+        documentType: customer.documentType || '13',
+        documentNumber: customer.documentNumber || '',
+        phone: customer.phone || '',
+        email: customer.email || '',
+        department: customer.department || '',
+        municipality: customer.municipality || '',
+        addressComplement: customer.addressComplement || '',
+        activityCode: customer.activityCode || '',
+        activityDescription: customer.activityDescription || '',
+        creditLimit: Number(customer.creditLimit) || 0,
+      });
+    } else {
+      // Reset form
+      setFormData({
+        customerType: 'CONSUMIDOR_FINAL',
+        name: '',
+        comercialName: '',
+        nit: '',
+        nrc: '',
+        documentType: '13',
+        documentNumber: '',
+        phone: '',
+        email: '',
+        department: '',
+        municipality: '',
+        addressComplement: '',
+        activityCode: '',
+        activityDescription: '',
+        creditLimit: 0,
+      });
+    }
+  }, [customer, open]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const url = isEdit ? `/customers/${customer.id}` : '/customers';
+      const method = isEdit ? 'PATCH' : 'POST';
+
+      await apiRequest(url, {
+        method,
+        body: JSON.stringify(formData),
+      });
+
+      toast.success(isEdit ? 'Cliente actualizado' : 'Cliente creado exitosamente');
+      onSuccess();
+      onOpenChange(false);
+    } catch (error: any) {
+      toast.error(error.message || 'Error al guardar el cliente');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? 'Editar Cliente' : 'Nuevo Cliente'}</DialogTitle>
+          <DialogDescription>
+            {isEdit ? 'Modifica los datos del cliente seleccionado.' : 'Completa la información para registrar un nuevo cliente.'}
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-6 py-4">
+          {/* Tipo de Cliente Selector */}
+          <div className="space-y-3">
+            <Label className="text-sm font-semibold">Tipo de Cliente (Importante para DTE)</Label>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { id: 'CONSUMIDOR_FINAL', label: 'Consumidor Final', icon: User, desc: 'DTE01 - Factura' },
+                { id: 'CONTRIBUYENTE', label: 'Contribuyente', icon: Building2, desc: 'DTE03 - Crédito Fiscal' },
+                { id: 'SUJETO_EXCLUIDO', label: 'Sujeto Excluido', icon: ShieldCheck, desc: 'DTE14 - ONG/Gob' },
+              ].map((type) => (
+                <button
+                  key={type.id}
+                  type="button"
+                  onClick={() => handleChange('customerType', type.id)}
+                  className={cn(
+                    "flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all gap-1 text-center",
+                    formData.customerType === type.id
+                      ? "border-[var(--accent)] bg-[var(--accent)]/5 text-[var(--accent)]"
+                      : "border-[var(--border)] hover:border-[var(--accent)]/50"
+                  )}
+                >
+                  <type.icon size={20} />
+                  <span className="text-xs font-bold">{type.label}</span>
+                  <span className="text-[10px] opacity-60">{type.desc}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Campos Comunes */}
+            <div className="space-y-2">
+              <Label>Nombre Completo / Razón Social</Label>
+              <Input 
+                required 
+                value={formData.name} 
+                onChange={(e) => handleChange('name', e.target.value)}
+                placeholder="Ej. Juan Pérez o Empresa S.A."
+              />
+            </div>
+
+            {formData.customerType === 'CONTRIBUYENTE' && (
+              <div className="space-y-2">
+                <Label>Nombre Comercial</Label>
+                <Input 
+                  value={formData.comercialName} 
+                  onChange={(e) => handleChange('comercialName', e.target.value)}
+                  placeholder="Ej. Tienda El Sol"
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label>Teléfono</Label>
+              <Input 
+                value={formData.phone} 
+                onChange={(e) => handleChange('phone', e.target.value)}
+                placeholder="2222-2222"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Correo Electrónico</Label>
+              <Input 
+                type="email"
+                value={formData.email} 
+                onChange={(e) => handleChange('email', e.target.value)}
+                placeholder="cliente@ejemplo.com"
+              />
+            </div>
+          </div>
+
+          {/* Campos Fiscales Condicionales */}
+          {(formData.customerType === 'CONTRIBUYENTE' || formData.customerType === 'SUJETO_EXCLUIDO') && (
+            <div className="space-y-4 pt-4 border-t border-dashed">
+              <h3 className="text-sm font-bold flex items-center gap-2 text-[var(--accent)]">
+                <Building2 size={16} />
+                Información Fiscal Obligatoria
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>NIT</Label>
+                  <Input 
+                    required 
+                    value={formData.nit} 
+                    onChange={(e) => handleChange('nit', e.target.value)}
+                    placeholder="0614-..."
+                  />
+                </div>
+
+                {formData.customerType === 'CONTRIBUYENTE' && (
+                  <div className="space-y-2">
+                    <Label>NRC</Label>
+                    <Input 
+                      required 
+                      value={formData.nrc} 
+                      onChange={(e) => handleChange('nrc', e.target.value)}
+                      placeholder="123456-7"
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label>Código Actividad (MH)</Label>
+                  <Input 
+                    required 
+                    value={formData.activityCode} 
+                    onChange={(e) => handleChange('activityCode', e.target.value)}
+                    placeholder="Ej. 4752"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Descripción Actividad</Label>
+                  <Input 
+                    required 
+                    value={formData.activityDescription} 
+                    onChange={(e) => handleChange('activityDescription', e.target.value)}
+                    placeholder="Ej. VENTA AL POR MENOR..."
+                  />
+                </div>
+              </div>
+
+              {formData.customerType === 'CONTRIBUYENTE' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Departamento (Cod)</Label>
+                    <Input 
+                      required 
+                      maxLength={2}
+                      value={formData.department} 
+                      onChange={(e) => handleChange('department', e.target.value)}
+                      placeholder="06"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Municipio (Cod)</Label>
+                    <Input 
+                      required 
+                      maxLength={2}
+                      value={formData.municipality} 
+                      onChange={(e) => handleChange('municipality', e.target.value)}
+                      placeholder="14"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Límite Crédito ($)</Label>
+                    <Input 
+                      type="number"
+                      value={formData.creditLimit} 
+                      onChange={(e) => handleChange('creditLimit', e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label>Dirección Completa / Complemento</Label>
+                <Textarea 
+                  required={formData.customerType === 'CONTRIBUYENTE'}
+                  value={formData.addressComplement} 
+                  onChange={(e) => handleChange('addressComplement', e.target.value)}
+                  placeholder="Calle, Colonia, Casa #..."
+                  rows={2}
+                />
+              </div>
+            </div>
+          )}
+
+          {formData.customerType === 'CONSUMIDOR_FINAL' && (
+            <div className="space-y-4 pt-4 border-t border-dashed">
+              <h3 className="text-sm font-bold flex items-center gap-2 opacity-70">
+                <UserCheck size={16} />
+                Documento de Identidad (Opcional)
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Tipo de Documento</Label>
+                  <Select 
+                    value={formData.documentType} 
+                    onValueChange={(v) => handleChange('documentType', v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="DUI" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="13">DUI</SelectItem>
+                      <SelectItem value="36">NIT</SelectItem>
+                      <SelectItem value="03">Pasaporte</SelectItem>
+                      <SelectItem value="37">Otro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Número Documento</Label>
+                  <Input 
+                    value={formData.documentNumber} 
+                    onChange={(e) => handleChange('documentNumber', e.target.value)}
+                    placeholder="00000000-0"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="pt-6">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              type="submit" 
+              disabled={loading}
+              className="bg-[var(--accent)] hover:bg-[var(--accent)]/90 text-white"
+            >
+              {loading ? 'Guardando...' : (isEdit ? 'Actualizar Cliente' : 'Crear Cliente')}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

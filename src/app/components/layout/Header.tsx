@@ -1,5 +1,6 @@
 import { Search, Moon, Sun, LogOut, MapPin, Menu } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
+import { Button } from "../ui/button";
 import { useAuth } from "../../context/AuthContext";
 import { useBranch } from "../../context/BranchContext";
 import { useState, useRef, useEffect } from "react";
@@ -33,13 +34,14 @@ export function Header({ onMenuClick }: HeaderProps) {
     >
       <div className="flex items-center gap-4">
         {/* Mobile Menu Toggle */}
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={onMenuClick}
-          className="p-2 -ml-2 rounded-lg md:hidden hover:bg-[var(--bg)] transition-colors"
-          style={{ color: "var(--text-main)" }}
+          className="md:hidden"
         >
           <Menu size={24} />
-        </button>
+        </Button>
 
         {/* Search Bar - Hidden on mobile, visible on tablet+ */}
         <div
@@ -83,11 +85,12 @@ export function Header({ onMenuClick }: HeaderProps) {
         )}
 
         {/* Theme Toggle - Simplified on mobile */}
-        <button
+        <Button
           onClick={toggleTheme}
-          className="flex items-center gap-2 p-2 sm:px-4 sm:py-2 rounded-lg font-semibold transition-all shrink-0"
+          size="lg"
+          className="gap-2 font-semibold shrink-0"
           style={{
-            backgroundColor: "var(--accent)",
+            backgroundColor: "var(--color-accent)",
             color: "#ffffff",
           }}
           title={theme === "light" ? "Modo Oscuro" : "Modo Claro"}
@@ -96,7 +99,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           <span className="hidden md:block">
             {theme === "light" ? "Modo Oscuro" : "Modo Claro"}
           </span>
-        </button>
+        </Button>
 
         {/* User Info & Logout */}
         <div className="flex items-center gap-2 md:gap-3">
@@ -109,27 +112,20 @@ export function Header({ onMenuClick }: HeaderProps) {
             </p>
             <p
               className="text-[10px] md:text-xs font-bold uppercase tracking-wider"
-              style={{ color: "var(--accent)" }}
+              style={{ color: "var(--color-accent)" }}
             >
               {user?.role || "Empleado"}
             </p>
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={handleLogout}
-            className="p-2 rounded-lg transition-colors bg-[var(--bg)]"
-            style={{
-              color: "var(--text-sec)",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = "var(--accent)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = "var(--text-sec)";
-            }}
+            className="text-muted-foreground hover:text-[var(--color-accent)] bg-[var(--bg)]"
             title="Cerrar Sesión"
           >
             <LogOut size={20} />
-          </button>
+          </Button>
         </div>
       </div>
     </header>

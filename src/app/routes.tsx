@@ -17,6 +17,7 @@ import { ThemeCustomizer } from "./pages/ThemeCustomizer";
 import { Branches as BranchesPage } from "./pages/Branches";
 import { HumanResources } from "./pages/HumanResources";
 import { Catalog } from "./pages/Catalog";
+import { UIComponentsShowcase } from "./pages/UIComponentsShowcase";
 
 export const router = createBrowserRouter([
   {
@@ -89,6 +90,10 @@ export const router = createBrowserRouter([
       {
         path: "rrhh",
         element: <HumanResources />,
+      },
+      {
+        path: "ui-showcase",
+        element: <UIComponentsShowcase />,
       },
     ],
   },
