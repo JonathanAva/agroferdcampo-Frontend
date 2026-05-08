@@ -6,6 +6,7 @@ import {
   Sprout,
   LayoutDashboard,
   Package,
+  Store,
   Users,
   Users2,
   ShoppingCart,
@@ -19,6 +20,7 @@ import {
 const navLinks = [
   { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { path: "/pos", icon: ShoppingCart, label: "Punto de Venta" },
+  { path: "/catalog", icon: Store, label: "Catálogo", roles: [1, 2] },
   { path: "/inventory", icon: Package, label: "Inventario" },
   { path: "/customers", icon: Users, label: "Clientes" },
   { path: "/users", icon: Users, label: "Usuarios", roles: [1, 2] },

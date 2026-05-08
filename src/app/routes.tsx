@@ -16,6 +16,7 @@ import { Settings } from "./pages/Settings";
 import { ThemeCustomizer } from "./pages/ThemeCustomizer";
 import { Branches as BranchesPage } from "./pages/Branches";
 import { HumanResources } from "./pages/HumanResources";
+import { Catalog } from "./pages/Catalog";
 
 export const router = createBrowserRouter([
   {
@@ -44,6 +45,10 @@ export const router = createBrowserRouter([
       {
         path: "pos",
         element: <POS />,
+      },
+      {
+        path: "catalog",
+        element: <Catalog />,
       },
       {
         path: "inventory",

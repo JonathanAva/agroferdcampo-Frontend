@@ -1,34 +1,48 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Package, 
-  Search, 
-  Plus, 
-  TrendingUp, 
-  TrendingDown,
-  AlertCircle,
-  Filter,
-  ArrowLeftRight,
-  ClipboardList,
-  ChevronDown,
-  X,
-  Building2,
-  Check,
+import {
+  Package, Search, TrendingUp, TrendingDown, AlertCircle, ArrowLeftRight,
+  ClipboardList, ChevronDown, Store, Trash2, PackagePlus, ArrowUpRight, ArrowDownLeft, Plus
 } from 'lucide-react';
+import { useNavigate } from 'react-router';
 import { apiRequest } from '../config/api';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '../components/ui/utils';
+import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Textarea } from '../components/ui/textarea';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from '../components/ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../components/ui/select';
+
+// ── Types ──────────────────────────────────────────────────────────────────────
+interface ProductPrice {
+  priceType: string;
+  branchId: number | null;
+  price: string | number;
+}
 
 interface Product {
   id: number;
   name: string;
   internalCode?: string;
   barcode?: string;
-  price: string | number;
-  costPrice: string | number;
+  prices?: ProductPrice[];
   category?: { name: string };
   unit: string;
+}
+
+function getPublicPrice(product: Product): number {
+  if (product.prices && product.prices.length > 0) {
+    const pub = product.prices.find(p => p.priceType === 'PUBLICO');
+    return Number(pub ? pub.price : product.prices[0].price);
+  }
+  return 0;
 }
 
 interface InventoryItem {
@@ -45,41 +59,42 @@ interface Branch {
   name: string;
 }
 
-const MOVEMENT_TYPES = [
-  { value: 'COMPRA', label: 'Compra (Entrada)', isAdd: true },
-  { value: 'VENTA', label: 'Venta (Salida)', isAdd: false },
-  { value: 'AJUSTE', label: 'Ajuste Manual', isAdd: true },
-];
-
+// ── Component ──────────────────────────────────────────────────────────────────
 export function Inventory() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+
+  // 1. Roles & Permissions (Define early to avoid ReferenceErrors)
+  const isOwner = user?.roleId === 1;
+  const isAdmin = user?.roleId === 2;
+  const canAdjust = isOwner || isAdmin || user?.roleId === 5;
+  const canTransfer = isOwner || isAdmin;
+
+  // 2. Main States
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'low' | 'critical'>('all');
 
-  // Modals state
-  const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
-  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  // 3. Modals state
+  const [isAdjustOpen, setIsAdjustOpen] = useState(false);
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
+  const [isNewEntryOpen, setIsNewEntryOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [formLoading, setFormLoading] = useState(false);
 
-  // Form states
-  const [adjustData, setAdjustData] = useState({
-    type: 'COMPRA',
-    quantity: '',
-    reference: '',
-  });
+  // 4. Form states
+  const [adjustData, setAdjustData] = useState({ type: 'COMPRA', quantity: '', reference: '' });
+  const [transferData, setTransferData] = useState({ toBranchId: '', quantity: '', reference: '' });
 
-  const [transferData, setTransferData] = useState({
-    toBranchId: '',
-    quantity: '',
-    reference: '',
-  });
-
-  const canAdjust = user?.roleId === 1 || user?.roleId === 2 || user?.roleId === 5;
-  const canTransfer = user?.roleId === 1 || user?.roleId === 2;
+  // 5. New Entry Form states
+  const [entrySearch, setEntrySearch] = useState('');
+  const [entryProducts, setEntryProducts] = useState<Product[]>([]);
+  const [entrySelectedProduct, setEntrySelectedProduct] = useState<Product | null>(null);
+  const [entryQty, setEntryQty] = useState('');
+  const [entryBranchId, setEntryBranchId] = useState('');
+  const [entryRef, setEntryRef] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -116,7 +131,7 @@ export function Inventory() {
         })
       });
       toast.success('Inventario actualizado');
-      setIsAdjustModalOpen(false);
+      setIsAdjustOpen(false);
       setAdjustData({ type: 'COMPRA', quantity: '', reference: '' });
       fetchData();
     } catch (error: any) {
@@ -143,11 +158,51 @@ export function Inventory() {
         })
       });
       toast.success('Traslado completado');
-      setIsTransferModalOpen(false);
+      setIsTransferOpen(false);
       setTransferData({ toBranchId: '', quantity: '', reference: '' });
       fetchData();
     } catch (error: any) {
       toast.error(error.message || 'Error al realizar traslado');
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const searchEntryProducts = async (q: string) => {
+    if (q.length < 2) return setEntryProducts([]);
+    try {
+      const data = await apiRequest<any[]>(`/catalog/products/search?q=${encodeURIComponent(q)}`);
+      setEntryProducts(data);
+    } catch {
+      toast.error('Error al buscar productos');
+    }
+  };
+
+  const handleNewEntry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!entrySelectedProduct || !entryQty) return;
+
+    setFormLoading(true);
+    try {
+      await apiRequest('/inventory/adjust', {
+        method: 'POST',
+        body: JSON.stringify({
+          productId: entrySelectedProduct.id,
+          quantity: Number(entryQty),
+          type: 'COMPRA',
+          reference: entryRef || 'Ingreso manual de mercadería',
+        })
+      });
+      toast.success('Mercadería cargada exitosamente');
+      setIsNewEntryOpen(false);
+      // Reset
+      setEntrySelectedProduct(null);
+      setEntrySearch('');
+      setEntryQty('');
+      setEntryRef('');
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message || 'Error al cargar mercadería');
     } finally {
       setFormLoading(false);
     }
@@ -176,14 +231,14 @@ export function Inventory() {
   const totalItemsCount = inventory.length;
   const lowStockCount = inventory.filter(i => getProductStatus(i) === 'low').length;
   const criticalStockCount = inventory.filter(i => getProductStatus(i) === 'critical').length;
-  const totalValue = inventory.reduce((sum, i) => sum + (Number(i.quantity) * Number(i.product.costPrice)), 0);
+  const totalValue = inventory.reduce((sum, i) => sum + (Number(i.quantity) * getPublicPrice(i.product)), 0);
 
   const getStatusBadge = (item: InventoryItem) => {
     const status = getProductStatus(item);
     const styles = {
       active: { label: 'En Stock', color: 'var(--success-text)', bg: 'var(--success-bg)' },
       low: { label: 'Stock Bajo', color: '#92400e', bg: '#fef3c7' },
-      critical: { label: 'Sin Stock / Crítico', color: 'var(--error-red)', bg: 'var(--error-bg)' }
+      critical: { label: 'Crítico', color: 'var(--error-red)', bg: 'var(--error-bg)' }
     };
     const style = styles[status];
     
@@ -206,81 +261,147 @@ export function Inventory() {
   }
 
   return (
-    <div className="animate-in fade-in duration-500">
+    <div className="animate-in fade-in duration-500 pb-10">
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold" style={{ color: 'var(--text-main)' }}>
-            Inventario
-          </h1>
-          <p style={{ color: 'var(--text-sec)' }}>Manejo de stock por sucursal</p>
+          <h1 className="text-3xl font-bold" style={{ color: 'var(--text-main)' }}>Inventario</h1>
+          <p style={{ color: 'var(--text-sec)' }}>Manejo de existencias físicas por sucursal</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate('/catalog')}>
+            <Store size={16} />
+            Ir al Catálogo
+          </Button>
+          {canAdjust && (
+            <Button onClick={() => setIsNewEntryOpen(true)} style={{ backgroundColor: 'var(--accent)' }} className="text-white">
+              <Plus size={16} />
+              Nuevo Ingreso
+            </Button>
+          )}
         </div>
       </div>
+
+      {/* Modal Nuevo Ingreso (Para productos que pueden o no estar en la tabla aún) */}
+      <Dialog open={isNewEntryOpen} onOpenChange={setIsNewEntryOpen}>
+        <DialogContent className="sm:max-w-md">
+          <form onSubmit={handleNewEntry}>
+            <DialogHeader>
+              <DialogTitle>Ingreso de Mercadería</DialogTitle>
+              <DialogDescription>
+                Busca un producto del catálogo para cargar stock en una sucursal.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="py-6 space-y-4">
+              <div className="space-y-2">
+                <Label>Buscar Producto</Label>
+                <div className="relative">
+                  <Input
+                    placeholder="Nombre o código..."
+                    value={entrySearch}
+                    onChange={(e) => {
+                      setEntrySearch(e.target.value);
+                      searchEntryProducts(e.target.value);
+                    }}
+                  />
+                  {entryProducts.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-[var(--card)] border rounded-xl shadow-xl max-h-48 overflow-auto">
+                      {entryProducts.map(p => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          className="w-full text-left p-3 hover:bg-[var(--bg)] border-b last:border-0"
+                          onClick={() => {
+                            setEntrySelectedProduct(p);
+                            setEntrySearch(p.name);
+                            setEntryProducts([]);
+                          }}
+                        >
+                          <p className="font-bold text-sm">{p.name}</p>
+                          <p className="text-[10px] opacity-60">{p.internalCode || 'S/C'}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {entrySelectedProduct && (
+                <div className="p-3 rounded-lg bg-[var(--accent)]/5 border border-[var(--accent)]/10">
+                   <p className="text-xs font-bold text-[var(--accent)]">Seleccionado: {entrySelectedProduct.name}</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-2">
+                  <Label>Cantidad</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={entryQty}
+                    onChange={(e) => setEntryQty(e.target.value)}
+                    placeholder="0.00"
+                  />
+                  <p className="text-[10px] opacity-60">Se cargará en la sucursal actual: <span className="font-bold">{user?.branch || 'Cargando...'}</span></p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Referencia / Documento</Label>
+                <Input
+                  value={entryRef}
+                  onChange={(e) => setEntryRef(e.target.value)}
+                  placeholder="Ej. Factura Compra #..."
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsNewEntryOpen(false)}>
+                Cancelar
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={formLoading || !entrySelectedProduct || !entryQty} 
+                style={{ backgroundColor: 'var(--accent)' }} 
+                className="text-white"
+              >
+                {formLoading ? 'Procesando...' : 'Cargar Stock'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div 
-          className="p-5 rounded-2xl border flex items-center gap-4 shadow-sm"
-          style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
-        >
-          <div className="p-3 rounded-xl bg-[var(--accent)]/10 text-[var(--accent)]">
-            <Package size={24} />
+        {[
+          { label: 'Productos', value: totalItemsCount, icon: Package, color: 'var(--accent)', bg: 'var(--accent)' },
+          { label: 'Stock Bajo', value: lowStockCount, icon: TrendingDown, color: '#f59e0b', bg: '#f59e0b' },
+          { label: 'Críticos', value: criticalStockCount, icon: AlertCircle, color: '#ef4444', bg: '#ef4444' },
+          { label: 'Valor Total', value: `$${totalValue.toLocaleString()}`, icon: TrendingUp, color: '#10b981', bg: '#10b981' },
+        ].map(({ label, value, icon: Icon, color, bg }) => (
+          <div key={label} className="p-5 rounded-2xl border flex items-center gap-4 shadow-sm"
+            style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+            <div className="p-3 rounded-xl" style={{ backgroundColor: `${bg}18`, color }}>
+              <Icon size={24} />
+            </div>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--text-sec)' }}>{label}</p>
+              <p className="text-2xl font-bold" style={{ color: 'var(--text-main)' }}>{value}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-medium" style={{ color: 'var(--text-sec)' }}>Total Productos</p>
-            <p className="text-2xl font-bold" style={{ color: 'var(--text-main)' }}>{totalItemsCount}</p>
-          </div>
-        </div>
-
-        <div 
-          className="p-5 rounded-2xl border flex items-center gap-4 shadow-sm"
-          style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
-        >
-          <div className="p-3 rounded-xl bg-amber-500/10 text-amber-500">
-            <TrendingDown size={24} />
-          </div>
-          <div>
-            <p className="text-sm font-medium" style={{ color: 'var(--text-sec)' }}>Stock Bajo</p>
-            <p className="text-2xl font-bold text-amber-500">{lowStockCount}</p>
-          </div>
-        </div>
-
-        <div 
-          className="p-5 rounded-2xl border flex items-center gap-4 shadow-sm"
-          style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
-        >
-          <div className="p-3 rounded-xl bg-red-500/10 text-red-500">
-            <AlertCircle size={24} />
-          </div>
-          <div>
-            <p className="text-sm font-medium" style={{ color: 'var(--text-sec)' }}>Críticos / Sin Stock</p>
-            <p className="text-2xl font-bold text-red-500">{criticalStockCount}</p>
-          </div>
-        </div>
-
-        <div 
-          className="p-5 rounded-2xl border flex items-center gap-4 shadow-sm"
-          style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
-        >
-          <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-500">
-            <TrendingUp size={24} />
-          </div>
-          <div>
-            <p className="text-sm font-medium" style={{ color: 'var(--text-sec)' }}>Valor Inventario</p>
-            <p className="text-2xl font-bold text-emerald-500">${totalValue.toLocaleString()}</p>
-          </div>
-        </div>
+        ))}
       </div>
 
       {/* Filters and Search */}
-      <div 
-        className="p-4 rounded-2xl border mb-6 shadow-sm"
-        style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
-      >
+      <div className="p-4 rounded-2xl border mb-6 shadow-sm"
+        style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
         <div className="flex flex-col md:flex-row gap-4">
-          <div 
-            className="flex-1 flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all focus-within:border-[var(--accent)]"
-            style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}
-          >
+          <div className="flex-1 flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all focus-within:border-[var(--accent)]"
+            style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}>
             <Search size={20} style={{ color: 'var(--text-sec)' }} />
             <input
               type="text"
@@ -293,69 +414,56 @@ export function Inventory() {
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="relative group">
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value as any)}
-                className="appearance-none pl-4 pr-10 py-2.5 rounded-xl border outline-none bg-transparent font-medium cursor-pointer transition-all hover:bg-[var(--bg)]"
-                style={{ borderColor: 'var(--border)', color: 'var(--text-main)' }}
-              >
-                <option value="all">Todos los estados</option>
-                <option value="active">En Stock (Normal)</option>
-                <option value="low">Stock Bajo</option>
-                <option value="critical">Crítico / Sin Stock</option>
-              </select>
-              <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50" />
-            </div>
+             <Select value={filterStatus} onValueChange={(v: any) => setFilterStatus(v)}>
+               <SelectTrigger className="w-[200px]" style={{ borderColor: 'var(--border)', color: 'var(--text-main)' }}>
+                 <SelectValue placeholder="Filtrar por estado" />
+               </SelectTrigger>
+               <SelectContent>
+                 <SelectItem value="all">Todos los estados</SelectItem>
+                 <SelectItem value="active">En Stock (Normal)</SelectItem>
+                 <SelectItem value="low">Stock Bajo</SelectItem>
+                 <SelectItem value="critical">Crítico / Sin Stock</SelectItem>
+               </SelectContent>
+             </Select>
           </div>
         </div>
       </div>
 
       {/* Inventory Table */}
-      <div 
-        className="rounded-2xl border border-separate overflow-hidden shadow-sm"
-        style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
-      >
+      <div className="rounded-xl border overflow-hidden shadow-sm"
+        style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="w-full">
             <thead>
-              <tr 
-                className="border-b"
-                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}
-              >
-                <th className="p-4 font-semibold" style={{ color: 'var(--text-main)' }}>Producto</th>
-                <th className="p-4 font-semibold" style={{ color: 'var(--text-main)' }}>Categoría</th>
-                <th className="p-4 font-semibold text-center" style={{ color: 'var(--text-main)' }}>Stock Actual</th>
-                <th className="p-4 font-semibold text-center" style={{ color: 'var(--text-main)' }}>Estado</th>
-                <th className="p-4 font-semibold text-right" style={{ color: 'var(--text-main)' }}>Precio</th>
-                <th className="p-4 font-semibold text-center" style={{ color: 'var(--text-main)' }}>Operaciones</th>
+              <tr className="border-b" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}>
+                <th className="text-left p-4 font-semibold" style={{ color: 'var(--text-main)' }}>Producto</th>
+                <th className="text-left p-4 font-semibold" style={{ color: 'var(--text-main)' }}>Categoría</th>
+                <th className="text-center p-4 font-semibold" style={{ color: 'var(--text-main)' }}>Existencia</th>
+                <th className="text-center p-4 font-semibold" style={{ color: 'var(--text-main)' }}>Estado</th>
+                <th className="text-right p-4 font-semibold" style={{ color: 'var(--text-main)' }}>Precio Público</th>
+                <th className="text-center p-4 font-semibold" style={{ color: 'var(--text-main)' }}>Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
+            <tbody>
               {filteredInventory.map((item) => (
-                <tr 
-                  key={item.id}
-                  className="hover:bg-[var(--bg)] transition-colors"
-                >
+                <tr key={item.id} className="border-b hover:bg-[var(--bg)] transition-colors" style={{ borderColor: 'var(--border)' }}>
                   <td className="p-4">
-                    <div className="flex flex-col">
-                      <span className="font-bold" style={{ color: 'var(--text-main)' }}>{item.product.name}</span>
-                      <span className="text-xs font-mono opacity-60" style={{ color: 'var(--text-sec)' }}>
+                    <div>
+                      <p className="font-medium" style={{ color: 'var(--text-main)' }}>{item.product.name}</p>
+                      <p className="text-sm font-mono" style={{ color: 'var(--text-sec)' }}>
                         {item.product.internalCode || item.product.barcode || 'SIN-CODIGO'}
-                      </span>
+                      </p>
                     </div>
                   </td>
-                  <td className="p-4">
-                    <span className="text-sm px-2 py-0.5 rounded-lg border bg-[var(--bg)]" style={{ borderColor: 'var(--border)', color: 'var(--text-sec)' }}>
-                      {item.product.category?.name || 'General'}
-                    </span>
+                  <td className="p-4 text-sm" style={{ color: 'var(--text-sec)' }}>
+                    {item.product.category?.name || 'General'}
                   </td>
                   <td className="p-4 text-center">
                     <div className="flex flex-col items-center">
-                      <span className="text-lg font-bold" style={{ color: Number(item.quantity) <= Number(item.minStock) ? 'var(--error-red)' : 'var(--accent)' }}>
+                      <span className="text-lg font-semibold" style={{ color: Number(item.quantity) <= Number(item.minStock) ? '#ef4444' : 'var(--accent)' }}>
                         {Number(item.quantity)}
                       </span>
-                      <span className="text-[10px] uppercase opacity-50 font-bold" style={{ color: 'var(--text-sec)' }}>
+                      <span className="text-[10px] uppercase opacity-50 font-semibold" style={{ color: 'var(--text-sec)' }}>
                         Min: {Number(item.minStock)}
                       </span>
                     </div>
@@ -364,29 +472,23 @@ export function Inventory() {
                     {getStatusBadge(item)}
                   </td>
                   <td className="p-4 text-right">
-                    <span className="font-bold" style={{ color: 'var(--text-main)' }}>
-                      ${Number(item.product.price).toFixed(2)}
+                    <span className="font-semibold" style={{ color: 'var(--text-main)' }}>
+                      ${getPublicPrice(item.product).toFixed(2)}
                     </span>
                   </td>
                   <td className="p-4">
                     <div className="flex items-center justify-center gap-2">
                       {canAdjust && (
-                        <button
-                          onClick={() => { setSelectedItem(item); setIsAdjustModalOpen(true); }}
-                          className="p-2 rounded-lg hover:bg-[var(--accent)] hover:text-white transition-all text-[var(--text-sec)]"
-                          title="Ajustar Stock"
-                        >
-                          <ClipboardList size={20} />
-                        </button>
+                        <Button variant="ghost" size="icon" onClick={() => { setSelectedItem(item); setIsAdjustOpen(true); }}
+                          className="hover:bg-[var(--accent)] hover:text-white transition-all text-[var(--text-sec)]">
+                          <ClipboardList size={18} />
+                        </Button>
                       )}
                       {canTransfer && (
-                        <button
-                          onClick={() => { setSelectedItem(item); setIsTransferModalOpen(true); }}
-                          className="p-2 rounded-lg hover:bg-emerald-500 hover:text-white transition-all text-[var(--text-sec)]"
-                          title="Trasladar a otra sucursal"
-                        >
-                          <ArrowLeftRight size={20} />
-                        </button>
+                        <Button variant="ghost" size="icon" onClick={() => { setSelectedItem(item); setIsTransferOpen(true); }}
+                          className="hover:bg-emerald-500 hover:text-white transition-all text-[var(--text-sec)]">
+                          <ArrowLeftRight size={18} />
+                        </Button>
                       )}
                     </div>
                   </td>
@@ -403,198 +505,186 @@ export function Inventory() {
       </div>
 
       {/* Modal Ajustar Stock */}
-      {isAdjustModalOpen && selectedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden scale-in-95 duration-200" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
-            <div className="p-6 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
-              <h2 className="text-xl font-bold" style={{ color: 'var(--text-main)' }}>Movimiento de Inventario</h2>
-              <button onClick={() => setIsAdjustModalOpen(false)} style={{ color: 'var(--text-sec)' }}><X size={20}/></button>
-            </div>
-            <form onSubmit={handleAdjust} className="p-6 space-y-4">
-              <div className="p-3 rounded-xl bg-[var(--bg)] border flex items-center gap-3" style={{ borderColor: 'var(--border)' }}>
-                <div className="w-10 h-10 rounded-lg bg-[var(--accent)]/10 flex items-center justify-center text-[var(--accent)] font-bold">
-                  {selectedItem.product.name.charAt(0)}
-                </div>
-                <div>
-                  <p className="font-bold text-sm" style={{ color: 'var(--text-main)' }}>{selectedItem.product.name}</p>
-                  <p className="text-xs opacity-60" style={{ color: 'var(--text-sec)' }}>Stock actual: {Number(selectedItem.quantity)}</p>
-                </div>
-              </div>
+      <Dialog open={isAdjustOpen} onOpenChange={setIsAdjustOpen}>
+        <DialogContent className="sm:max-w-md">
+          {selectedItem && (
+            <form onSubmit={handleAdjust}>
+              <DialogHeader>
+                <DialogTitle>Movimiento de Inventario</DialogTitle>
+                <DialogDescription>
+                  Registra una entrada, salida o ajuste manual para este producto.
+                </DialogDescription>
+              </DialogHeader>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold mb-1.5 uppercase opacity-70" style={{ color: 'var(--text-sec)' }}>Tipo de Movimiento</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {MOVEMENT_TYPES.map(t => (
-                      <button
-                        key={t.value}
-                        type="button"
-                        onClick={() => setAdjustData({...adjustData, type: t.value})}
-                        className={cn(
-                          "py-2 rounded-xl border text-xs font-bold transition-all",
-                          adjustData.type === t.value 
-                            ? "bg-[var(--accent)] border-[var(--accent)] text-white shadow-md shadow-[var(--accent)]/20" 
-                            : "bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]"
-                        )}
-                      >
-                        {t.label.split(' ')[0]}
-                      </button>
-                    ))}
+              <div className="py-6 space-y-5">
+                <div className="p-4 rounded-xl border flex items-center gap-4 shadow-sm"
+                  style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}>
+                  <div className="p-3 rounded-xl bg-[var(--accent)]/10 text-[var(--accent)]">
+                    <Package size={24} />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm" style={{ color: 'var(--text-main)' }}>{selectedItem.product.name}</p>
+                    <p className="text-xs opacity-60" style={{ color: 'var(--text-sec)' }}>Stock actual: {Number(selectedItem.quantity)} {selectedItem.product.unit}</p>
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold mb-1.5 uppercase opacity-70" style={{ color: 'var(--text-sec)' }}>Cantidad</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={adjustData.quantity}
-                    onChange={(e) => setAdjustData({...adjustData, quantity: e.target.value})}
-                    placeholder="0.00"
-                    className="w-full px-4 py-2.5 rounded-xl border outline-none bg-transparent transition-all focus:border-[var(--accent)]"
-                    style={{ borderColor: 'var(--border)', color: 'var(--text-main)' }}
-                  />
-                </div>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Tipo de Movimiento</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { v: 'COMPRA', l: 'Compra', icon: ArrowDownLeft, color: 'emerald' },
+                        { v: 'VENTA', l: 'Venta', icon: ArrowUpRight, color: 'red' },
+                        { v: 'AJUSTE', l: 'Ajuste', icon: ClipboardList, color: 'blue' }
+                      ].map(t => (
+                        <button
+                          key={t.v}
+                          type="button"
+                          onClick={() => setAdjustData({...adjustData, type: t.v})}
+                          className={cn(
+                            "flex flex-col items-center gap-1.5 py-2.5 rounded-xl border text-xs font-bold transition-all",
+                            adjustData.type === t.v 
+                              ? "bg-[var(--accent)] border-[var(--accent)] text-white shadow-md" 
+                              : "bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]"
+                          )}
+                        >
+                          <t.icon size={16} />
+                          {t.l}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-                <div>
-                  <label className="block text-xs font-bold mb-1.5 uppercase opacity-70" style={{ color: 'var(--text-sec)' }}>Referencia (Opcional)</label>
-                  <textarea
-                    rows={2}
-                    value={adjustData.reference}
-                    onChange={(e) => setAdjustData({...adjustData, reference: e.target.value})}
-                    placeholder="Ej. Factura #123, Ajuste por merma..."
-                    className="w-full px-4 py-2.5 rounded-xl border outline-none bg-transparent transition-all focus:border-[var(--accent)] resize-none"
-                    style={{ borderColor: 'var(--border)', color: 'var(--text-main)' }}
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsAdjustModalOpen(false)}
-                  className="flex-1 py-3 rounded-xl border font-bold transition-all hover:bg-[var(--bg)]"
-                  style={{ borderColor: 'var(--border)', color: 'var(--text-main)' }}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={formLoading || !adjustData.quantity}
-                  className="flex-1 py-3 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95 disabled:opacity-50"
-                  style={{ backgroundColor: 'var(--accent)' }}
-                >
-                  {formLoading ? 'Procesando...' : 'Aplicar'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Transferencia */}
-      {isTransferModalOpen && selectedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden scale-in-95 duration-200" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
-            <div className="p-6 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
-              <h2 className="text-xl font-bold" style={{ color: 'var(--text-main)' }}>Traslado entre Sucursales</h2>
-              <button onClick={() => setIsTransferModalOpen(false)} style={{ color: 'var(--text-sec)' }}><X size={20}/></button>
-            </div>
-            <form onSubmit={handleTransfer} className="p-6 space-y-4">
-              <div className="p-4 rounded-xl border bg-emerald-500/5 flex flex-col items-center gap-3 border-emerald-500/20">
-                <div className="flex items-center gap-4 w-full">
-                   <div className="flex-1 text-center bg-white p-2 rounded-lg shadow-sm border border-[var(--border)]">
-                      <p className="text-[10px] uppercase font-bold opacity-50">Origen</p>
-                      <p className="text-xs font-bold truncate">Actual</p>
-                   </div>
-                   <ArrowLeftRight className="text-emerald-500 shrink-0" size={24} />
-                   <div className="flex-1 text-center bg-emerald-500 text-white p-2 rounded-lg shadow-sm">
-                      <p className="text-[10px] uppercase font-bold opacity-80">Destino</p>
-                      <p className="text-xs font-bold truncate">Nueva</p>
-                   </div>
-                </div>
-                <div className="flex items-center gap-2 text-xs font-bold" style={{ color: 'var(--text-sec)' }}>
-                  <Package size={14} />
-                  <span>{selectedItem.product.name} (Disp: {Number(selectedItem.quantity)})</span>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold mb-1.5 uppercase opacity-70" style={{ color: 'var(--text-sec)' }}>Sucursal Destino</label>
-                  <select
-                    required
-                    value={transferData.toBranchId}
-                    onChange={(e) => setTransferData({...transferData, toBranchId: e.target.value})}
-                    className="w-full px-4 py-2.5 rounded-xl border outline-none bg-transparent transition-all focus:border-[var(--accent)]"
-                    style={{ borderColor: 'var(--border)', color: 'var(--text-main)' }}
-                  >
-                    <option value="">Selecciona sucursal...</option>
-                    {branches.filter(b => b.id !== selectedItem.branchId).map(b => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold mb-1.5 uppercase opacity-70" style={{ color: 'var(--text-sec)' }}>Cantidad</label>
-                    <input
+                  <div className="space-y-2">
+                    <Label htmlFor="qty">Cantidad</Label>
+                    <Input
+                      id="qty"
                       type="number"
                       step="0.01"
                       required
-                      max={Number(selectedItem.quantity)}
-                      value={transferData.quantity}
-                      onChange={(e) => setTransferData({...transferData, quantity: e.target.value})}
+                      value={adjustData.quantity}
+                      onChange={(e) => setAdjustData({...adjustData, quantity: e.target.value})}
                       placeholder="0.00"
-                      className="w-full px-4 py-2.5 rounded-xl border outline-none bg-transparent transition-all focus:border-[var(--accent)]"
-                      style={{ borderColor: 'var(--border)', color: 'var(--text-main)' }}
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold mb-1.5 uppercase opacity-70" style={{ color: 'var(--text-sec)' }}>UDM</label>
-                    <div className="w-full px-4 py-2.5 rounded-xl border bg-[var(--bg)] font-bold text-center" style={{ borderColor: 'var(--border)', color: 'var(--text-sec)' }}>
-                      {selectedItem.product.unit || 'UNID'}
-                    </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="ref">Referencia (Opcional)</Label>
+                    <Textarea
+                      id="ref"
+                      rows={2}
+                      value={adjustData.reference}
+                      onChange={(e) => setAdjustData({...adjustData, reference: e.target.value})}
+                      placeholder="Ej. Factura #123, Ajuste por merma..."
+                    />
                   </div>
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-xs font-bold mb-1.5 uppercase opacity-70" style={{ color: 'var(--text-sec)' }}>Referencia</label>
-                  <input
-                    type="text"
-                    value={transferData.reference}
-                    onChange={(e) => setTransferData({...transferData, reference: e.target.value})}
-                    placeholder="Ej. Reabastecimiento urgente..."
-                    className="w-full px-4 py-2.5 rounded-xl border outline-none bg-transparent transition-all focus:border-[var(--accent)]"
-                    style={{ borderColor: 'var(--border)', color: 'var(--text-main)' }}
-                  />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsAdjustOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={formLoading} style={{ backgroundColor: 'var(--accent)' }} className="text-white">
+                  {formLoading ? 'Procesando...' : 'Aplicar Movimiento'}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Transferencia */}
+      <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
+        <DialogContent className="sm:max-w-md">
+          {selectedItem && (
+            <form onSubmit={handleTransfer}>
+              <DialogHeader>
+                <DialogTitle>Traslado de Mercadería</DialogTitle>
+                <DialogDescription>
+                  Envía productos de esta sucursal a otra de forma segura.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="py-6 space-y-5">
+                <div className="p-4 rounded-xl border bg-emerald-500/5 flex flex-col items-center gap-3 border-emerald-500/10">
+                   <div className="flex items-center gap-4 w-full">
+                      <div className="flex-1 text-center bg-white p-2 rounded-lg shadow-sm border border-[var(--border)]">
+                         <p className="text-[10px] uppercase font-bold opacity-50">Origen</p>
+                         <p className="text-xs font-bold truncate">Actual</p>
+                      </div>
+                      <ArrowLeftRight className="text-emerald-500 shrink-0" size={24} />
+                      <div className="flex-1 text-center bg-emerald-500 text-white p-2 rounded-lg shadow-sm">
+                         <p className="text-[10px] uppercase font-bold opacity-80">Destino</p>
+                         <p className="text-xs font-bold truncate">Nueva</p>
+                      </div>
+                   </div>
+                   <div className="flex items-center gap-2 text-xs font-bold" style={{ color: 'var(--text-sec)' }}>
+                     <Package size={14} />
+                     <span>{selectedItem.product.name} (Disp: {Number(selectedItem.quantity)})</span>
+                   </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Sucursal Destino</Label>
+                    <Select value={transferData.toBranchId} onValueChange={v => setTransferData({...transferData, toBranchId: v})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona sucursal..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {branches.filter(b => b.id !== selectedItem.branchId).map(b => (
+                          <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Cantidad</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        required
+                        max={Number(selectedItem.quantity)}
+                        value={transferData.quantity}
+                        onChange={(e) => setTransferData({...transferData, quantity: e.target.value})}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>UDM</Label>
+                      <div className="h-9 flex items-center px-4 rounded-md border bg-[var(--bg)] font-bold text-sm" style={{ borderColor: 'var(--border)', color: 'var(--text-sec)' }}>
+                        {selectedItem.product.unit}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Referencia</Label>
+                    <Input
+                      type="text"
+                      value={transferData.reference}
+                      onChange={(e) => setTransferData({...transferData, reference: e.target.value})}
+                      placeholder="Ej. Reabastecimiento urgente..."
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsTransferModalOpen(false)}
-                  className="flex-1 py-3 rounded-xl border font-bold transition-all hover:bg-[var(--bg)]"
-                  style={{ borderColor: 'var(--border)', color: 'var(--text-main)' }}
-                >
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsTransferOpen(false)}>
                   Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={formLoading || !transferData.quantity || !transferData.toBranchId}
-                  className="flex-1 py-3 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95 disabled:opacity-50"
-                  style={{ backgroundColor: 'var(--accent)' }}
-                >
+                </Button>
+                <Button type="submit" disabled={formLoading || !transferData.toBranchId} style={{ backgroundColor: 'var(--accent)' }} className="text-white">
                   {formLoading ? 'Enviando...' : 'Confirmar Envío'}
-                </button>
-              </div>
+                </Button>
+              </DialogFooter>
             </form>
-          </div>
-        </div>
-      )}
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
