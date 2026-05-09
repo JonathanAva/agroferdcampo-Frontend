@@ -146,18 +146,18 @@ export function UIComponentsShowcase() {
           <Card className="p-8 space-y-6">
             <div className="space-y-2">
               <Label htmlFor="example-switch">Notificaciones por Correo</Label>
-              <div className="flex items-center space-x-3 p-4 rounded-2xl bg-slate-50 border border-slate-100 transition-all hover:border-primary/20">
+              <div className="flex items-center space-x-3 p-4 rounded-2xl bg-[var(--bg)]/50 border border-[var(--border)] transition-all hover:border-primary/20">
                 <Switch id="example-switch" />
-                <span className="text-sm text-slate-600 font-medium">Recibir alertas de inventario bajo</span>
+                <span className="text-sm text-[var(--text-sec)] font-medium">Recibir alertas de inventario bajo</span>
               </div>
             </div>
 
             <div className="space-y-2">
               <Label>Ajustes de Sistema</Label>
-              <div className="flex items-center justify-between p-4 rounded-2xl border border-dashed border-slate-200">
+              <div className="flex items-center justify-between p-4 rounded-2xl border border-dashed border-[var(--border)]">
                 <div className="space-y-0.5">
-                  <span className="text-sm font-bold text-slate-800">Modo Oscuro Automático</span>
-                  <p className="text-xs text-slate-500">Cambia el tema según la hora del día</p>
+                  <span className="text-sm font-bold text-[var(--text-main)]">Modo Oscuro Automático</span>
+                  <p className="text-xs text-[var(--text-sec)]">Cambia el tema según la hora del día</p>
                 </div>
                 <Switch defaultChecked />
               </div>
@@ -731,7 +731,7 @@ export function UIComponentsShowcase() {
             <h2 className="text-3xl font-bold tracking-tight">Data Management</h2>
             <Badge variant="outline">Advanced Tables</Badge>
         </div>
-        <Card className="overflow-hidden border-slate-200 shadow-xl rounded-2xl">
+        <Card className="overflow-hidden border-[var(--border)] shadow-xl rounded-2xl bg-[var(--card)]">
            <Table>
               <TableHeader>
                  <TableRow>
@@ -750,10 +750,10 @@ export function UIComponentsShowcase() {
                     { id: 4, name: "Pesticida EcoSafe", cat: "Químicos", stock: 0, price: "$32.50", status: "Agotado" },
                  ].map((item) => (
                     <TableRow key={item.id} className="group cursor-pointer">
-                       <TableCell className="font-bold text-slate-800">{item.name}</TableCell>
-                       <TableCell className="text-slate-500">{item.cat}</TableCell>
-                       <TableCell className="text-center font-medium">{item.stock} uds</TableCell>
-                       <TableCell className="text-right font-black text-primary">{item.price}</TableCell>
+                       <TableCell className="font-bold text-[var(--text-main)]">{item.name}</TableCell>
+                       <TableCell className="text-[var(--text-sec)]">{item.cat}</TableCell>
+                       <TableCell className="text-center font-medium text-[var(--text-sec)]">{item.stock} uds</TableCell>
+                       <TableCell className="text-right font-black text-[var(--primary)]">{item.price}</TableCell>
                        <TableCell className="text-center">
                           <Badge 
                             variant={item.status === "Disponible" ? "default" : item.status === "Agotado" ? "destructive" : "secondary"}
@@ -832,8 +832,8 @@ export function UIComponentsShowcase() {
               <TooltipProvider>
                  <Tooltip>
                     <TooltipTrigger asChild>
-                       <Button variant="outline" size="icon" className="rounded-xl h-12 w-12 border-slate-200 hover:border-primary/20 hover:bg-primary/5">
-                          <Settings className="size-5 text-slate-600" />
+                       <Button variant="outline" size="icon" className="rounded-xl h-12 w-12 border-[var(--border)] hover:border-primary/20 hover:bg-primary/5">
+                          <Settings className="size-5 text-[var(--text-sec)]" />
                        </Button>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -843,8 +843,8 @@ export function UIComponentsShowcase() {
 
                  <Tooltip>
                     <TooltipTrigger asChild>
-                       <Button variant="outline" size="icon" className="rounded-xl h-12 w-12 border-slate-200 hover:border-primary/20 hover:bg-primary/5">
-                          <Bell className="size-5 text-slate-600" />
+                       <Button variant="outline" size="icon" className="rounded-xl h-12 w-12 border-[var(--border)] hover:border-primary/20 hover:bg-primary/5">
+                          <Bell className="size-5 text-[var(--text-sec)]" />
                        </Button>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -854,8 +854,8 @@ export function UIComponentsShowcase() {
 
                  <Tooltip>
                     <TooltipTrigger asChild>
-                       <Button variant="outline" size="icon" className="rounded-xl h-12 w-12 border-slate-200 hover:border-primary/20 hover:bg-primary/5">
-                          <Mail className="size-5 text-slate-600" />
+                       <Button variant="outline" size="icon" className="rounded-xl h-12 w-12 border-[var(--border)] hover:border-primary/20 hover:bg-primary/5">
+                          <Mail className="size-5 text-[var(--text-sec)]" />
                        </Button>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -920,8 +920,8 @@ export function UIComponentsShowcase() {
               <TabsContent value="detalles" className="space-y-4">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                       <h4 className="text-sm font-bold text-slate-800">Descripción General</h4>
-                       <p className="text-sm text-slate-500 leading-relaxed">
+                       <h4 className="text-sm font-bold text-[var(--text-main)]">Descripción General</h4>
+                       <p className="text-sm text-[var(--text-sec)] leading-relaxed">
                           Fertilizante de alta eficiencia diseñado para cultivos de maíz y frijol. 
                           Optimizado para suelos con baja retención de nitrógeno.
                        </p>
@@ -937,15 +937,15 @@ export function UIComponentsShowcase() {
                     <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto">
                        <span className="text-2xl font-bold text-slate-400">450</span>
                     </div>
-                    <p className="text-sm text-slate-500">Unidades disponibles en sucursal central.</p>
+                    <p className="text-sm text-[var(--text-sec)]">Unidades disponibles en sucursal central.</p>
                  </div>
               </TabsContent>
               <TabsContent value="historial">
                  <div className="space-y-3">
                     {[1, 2, 3].map((i) => (
-                       <div key={i} className="flex justify-between items-center p-3 rounded-xl hover:bg-slate-50 transition-colors">
+                       <div key={i} className="flex justify-between items-center p-3 rounded-xl hover:bg-[var(--bg)]/50 transition-colors">
                           <span className="text-sm font-medium">Venta #120{i}</span>
-                          <span className="text-sm font-bold text-slate-800">$45.00</span>
+                          <span className="text-sm font-bold text-[var(--text-main)]">$45.00</span>
                        </div>
                     ))}
                  </div>
