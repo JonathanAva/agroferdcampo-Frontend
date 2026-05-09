@@ -59,6 +59,7 @@ import {
   Type,
   CheckCircle2,
 } from 'lucide-react';
+import { Button } from '../components/ui/button';
 
 export function ThemeCustomizer() {
   const navigate = useNavigate();
@@ -335,66 +336,20 @@ export function ThemeCustomizer() {
     boxShadow: '0 4px 6px var(--shadow)',
   };
 
-  const btnPrimary: React.CSSProperties = {
-    backgroundColor: 'var(--accent)',
-    color: '#fff',
-    border: 'none',
-    padding: '10px 20px',
-    borderRadius: '10px',
-    fontWeight: 600,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    fontSize: '14px',
-    transition: 'all 0.2s',
-  };
-
-  const btnOutline: React.CSSProperties = {
-    backgroundColor: 'transparent',
-    color: 'var(--text-main)',
-    border: '1px solid var(--border)',
-    padding: '10px 20px',
-    borderRadius: '10px',
-    fontWeight: 600,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    fontSize: '14px',
-    transition: 'all 0.2s',
-  };
-
-  const btnDanger: React.CSSProperties = {
-    backgroundColor: 'var(--error-red)',
-    color: '#fff',
-    border: 'none',
-    padding: '10px 20px',
-    borderRadius: '10px',
-    fontWeight: 600,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    fontSize: '14px',
-    transition: 'all 0.2s',
-  };
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <button
+          <Button
             onClick={handleCancel}
-            style={{
-              ...btnOutline,
-              padding: '8px',
-              borderRadius: '8px',
-            }}
+            variant="outline"
+            size="icon"
+            className="h-10 w-10"
           >
-            <ArrowLeft size={20} />
-          </button>
+            <ArrowLeft className="size-5" />
+          </Button>
           <div>
             <h1 className="text-3xl font-bold" style={{ color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '10px' }}>
               <Palette size={28} style={{ color: 'var(--accent)' }} />
@@ -428,20 +383,15 @@ export function ThemeCustomizer() {
             <span className="text-sm font-medium" style={{ color: 'var(--text-sec)' }}>
               Modos:
             </span>
-            <button
+            <Button
               onClick={handleToggleLinkedMode}
-              style={{
-                ...btnOutline,
-                padding: '6px 14px',
-                fontSize: '13px',
-                backgroundColor: linkedMode ? 'var(--accent)' : 'transparent',
-                color: linkedMode ? '#fff' : 'var(--text-main)',
-                borderColor: linkedMode ? 'var(--accent)' : 'var(--border)',
-              }}
+              variant={linkedMode ? "default" : "outline"}
+              size="sm"
+              className="gap-2"
             >
-              {linkedMode ? <Link2 size={16} /> : <Unlink2 size={16} />}
+              {linkedMode ? <Link2 className="size-4" /> : <Unlink2 className="size-4" />}
               {linkedMode ? 'Enlazados' : 'Separados'}
-            </button>
+            </Button>
             <span className="text-xs" style={{ color: 'var(--text-sec)', maxWidth: '250px' }}>
               {linkedMode
                 ? 'Cambiar un color genera automáticamente su contraparte'
@@ -451,34 +401,24 @@ export function ThemeCustomizer() {
 
           {/* Mode selector */}
           <div style={{ display: 'flex', gap: '6px' }}>
-            <button
+            <Button
               onClick={() => setEditingMode('light')}
-              style={{
-                ...btnOutline,
-                padding: '6px 14px',
-                fontSize: '13px',
-                backgroundColor: editingMode === 'light' ? 'var(--primary)' : 'transparent',
-                color: editingMode === 'light' ? '#fff' : 'var(--text-main)',
-                borderColor: editingMode === 'light' ? 'var(--primary)' : 'var(--border)',
-              }}
+              variant={editingMode === 'light' ? "default" : "outline"}
+              size="sm"
+              className={editingMode === 'light' ? "" : "border-border text-text-main"}
             >
-              <Sun size={16} />
+              <Sun className="size-4" />
               Claro
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => setEditingMode('dark')}
-              style={{
-                ...btnOutline,
-                padding: '6px 14px',
-                fontSize: '13px',
-                backgroundColor: editingMode === 'dark' ? 'var(--primary)' : 'transparent',
-                color: editingMode === 'dark' ? '#fff' : 'var(--text-main)',
-                borderColor: editingMode === 'dark' ? 'var(--primary)' : 'var(--border)',
-              }}
+              variant={editingMode === 'dark' ? "default" : "outline"}
+              size="sm"
+              className={editingMode === 'dark' ? "" : "border-border text-text-main"}
             >
-              <Moon size={16} />
+              <Moon className="size-4" />
               Oscuro
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -529,10 +469,14 @@ export function ThemeCustomizer() {
                   }}
                 />
               </div>
-              <button onClick={handleGenerateSuggestions} style={{ ...btnPrimary, padding: '8px 16px', fontSize: '13px' }}>
-                <Sparkles size={14} />
+              <Button 
+                onClick={handleGenerateSuggestions} 
+                size="sm"
+                className="gap-2"
+              >
+                <Sparkles className="size-4" />
                 Generar Sugerencias
-              </button>
+              </Button>
             </div>
 
             {/* Suggestions display */}
@@ -599,19 +543,15 @@ export function ThemeCustomizer() {
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: '8px' }}>
-                        <button
+                        <Button
                           onClick={() => handleApplySuggestion(s)}
-                          style={{ 
-                            ...btnPrimary, 
-                            padding: '6px 16px', 
-                            fontSize: '13px',
-                            backgroundColor: isApplied ? 'var(--text-sec)' : 'var(--accent)',
-                            opacity: isApplied ? 0.8 : 1
-                          }}
+                          size="sm"
+                          variant={isApplied ? "secondary" : "default"}
+                          className="gap-2"
                         >
-                          <Check size={14} />
+                          <Check className="size-4" />
                           {isApplied ? 'Aplicado' : 'Usar'}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   );
@@ -696,7 +636,7 @@ export function ThemeCustomizer() {
                         </div>
                         {(contrastGood !== null) && (
                           <div className="text-xs" style={{ 
-                            color: contrastGood ? 'var(--success-text)' : 'var(--error-red)',
+                            color: contrastGood ? 'var(--success-text)' : 'var(--destructive)',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '4px',
@@ -708,7 +648,7 @@ export function ThemeCustomizer() {
                         )}
                         {(bgContrastGood !== null) && (
                           <div className="text-xs" style={{ 
-                            color: bgContrastGood ? 'var(--success-text)' : 'var(--error-red)',
+                            color: bgContrastGood ? 'var(--success-text)' : 'var(--destructive)',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '4px',
@@ -739,21 +679,15 @@ export function ThemeCustomizer() {
 
                       {/* Reset single */}
                       {isModified && !isShadow && (
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => handleResetSingleColor(key)}
                           title="Restaurar predeterminado"
-                          style={{
-                            padding: '4px',
-                            borderRadius: '4px',
-                            border: 'none',
-                            backgroundColor: 'transparent',
-                            color: 'var(--text-sec)',
-                            cursor: 'pointer',
-                            flexShrink: 0,
-                          }}
+                          className="h-8 w-8 text-text-sec hover:text-accent"
                         >
-                          <RotateCcw size={14} />
-                        </button>
+                          <RotateCcw className="size-3.5" />
+                        </Button>
                       )}
                     </div>
                   );
@@ -800,43 +734,46 @@ export function ThemeCustomizer() {
               Acciones
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <button
+              <Button
                 onClick={handleApply}
-                style={{ ...btnPrimary, justifyContent: 'center', opacity: hasChanges ? 1 : 0.6 }}
+                variant="default"
                 disabled={!hasChanges}
+                className="w-full gap-2"
               >
-                <Check size={18} />
+                <Check className="size-5" />
                 Aplicar Cambios
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => setShowSaveModal(true)}
-                style={{ ...btnOutline, justifyContent: 'center', borderColor: 'var(--accent)', color: 'var(--accent)' }}
+                variant="outline"
+                className="w-full gap-2 border-primary/20 text-primary hover:bg-primary hover:text-primary-foreground"
               >
-                <Save size={18} />
+                <Save className="size-5" />
                 Guardar Combinación
-              </button>
+              </Button>
               {!confirmReset ? (
-                <button
+                <Button
                   onClick={() => setConfirmReset(true)}
-                  style={{ ...btnOutline, justifyContent: 'center', color: 'var(--error-red)', borderColor: 'var(--error-red)' }}
+                  variant="outline"
+                  className="w-full gap-2 border-destructive/20 text-destructive hover:bg-destructive hover:text-destructive-foreground hover:border-destructive"
                 >
-                  <RotateCcw size={18} />
+                  <RotateCcw className="size-5" />
                   Restaurar Predeterminado
-                </button>
+                </Button>
               ) : (
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={handleReset} style={{ ...btnDanger, flex: 1, justifyContent: 'center' }}>
+                  <Button onClick={handleReset} variant="destructive" className="flex-1">
                     Confirmar Reset
-                  </button>
-                  <button onClick={() => setConfirmReset(false)} style={{ ...btnOutline, flex: 1, justifyContent: 'center' }}>
+                  </Button>
+                  <Button onClick={() => setConfirmReset(false)} variant="outline" className="flex-1">
                     Cancelar
-                  </button>
+                  </Button>
                 </div>
               )}
-              <button onClick={handleCancel} style={{ ...btnOutline, justifyContent: 'center' }}>
-                <X size={18} />
+              <Button onClick={handleCancel} variant="outline" className="w-full gap-2">
+                <X className="size-5" />
                 Volver a Configuración
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -927,69 +864,46 @@ export function ThemeCustomizer() {
                           </div>
                         </div>
                         <div style={{ display: 'flex', gap: '6px' }}>
-                          <button
+                          <Button
                             onClick={() => handleLoadTheme(st.id)}
-                            style={{
-                              ...btnOutline,
-                              padding: '6px 12px',
-                              fontSize: '12px',
-                              fontWeight: 600,
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                            }}
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5"
                           >
-                            <Upload size={12} />
+                            <Upload className="size-3.5" />
                             Cargar
-                          </button>
+                          </Button>
                           {confirmDeleteId === st.id ? (
                             <div style={{ display: 'flex', gap: '4px' }}>
-                              <button
+                              <Button
                                 onClick={() => {
                                   handleDeleteTheme(st.id);
                                 }}
-                                style={{
-                                  padding: '6px 8px',
-                                  borderRadius: '6px',
-                                  border: 'none',
-                                  backgroundColor: 'var(--error-red)',
-                                  color: '#fff',
-                                  cursor: 'pointer',
-                                  fontSize: '11px',
-                                }}
+                                variant="destructive"
+                                size="sm"
+                                className="h-8 px-2 text-xs"
                               >
                                 Sí
-                              </button>
-                              <button
+                              </Button>
+                              <Button
                                 onClick={() => setConfirmDeleteId(null)}
-                                style={{
-                                  padding: '6px 8px',
-                                  borderRadius: '6px',
-                                  border: '1px solid var(--border)',
-                                  backgroundColor: 'transparent',
-                                  color: 'var(--text-main)',
-                                  cursor: 'pointer',
-                                  fontSize: '11px',
-                                }}
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2 text-xs"
                               >
                                 No
-                              </button>
+                              </Button>
                             </div>
                           ) : (
-                            <button
+                            <Button
                               onClick={() => setConfirmDeleteId(st.id)}
+                              variant="ghost"
+                              size="icon"
                               title="Eliminar tema"
-                              style={{
-                                padding: '6px',
-                                borderRadius: '6px',
-                                border: '1px solid var(--border)',
-                                backgroundColor: 'transparent',
-                                color: 'var(--text-sec)',
-                                cursor: 'pointer',
-                              }}
+                              className="h-8 w-8 text-text-sec hover:text-destructive"
                             >
-                              <Trash2 size={14} />
-                            </button>
+                              <Trash2 className="size-4" />
+                            </Button>
                           )}
                         </div>
                       </div>
@@ -1079,17 +993,17 @@ export function ThemeCustomizer() {
             </div>
 
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowSaveModal(false)} style={btnOutline}>
+              <Button onClick={() => setShowSaveModal(false)} variant="outline">
                 Cancelar
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleSave}
-                style={{ ...btnPrimary, opacity: saveThemeName.trim() ? 1 : 0.5 }}
                 disabled={!saveThemeName.trim()}
+                className="gap-2"
               >
-                <Save size={16} />
+                <Save className="size-4" />
                 Guardar
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1114,7 +1028,7 @@ export function ThemeCustomizer() {
               padding: '16px 20px',
               borderRadius: '12px',
               backgroundColor: 'var(--card)',
-              borderLeft: `6px solid ${n.type === 'success' ? 'var(--accent)' : n.type === 'error' ? 'var(--error-red)' : 'var(--primary)'}`,
+              borderLeft: `6px solid ${n.type === 'success' ? 'var(--primary)' : n.type === 'error' ? 'var(--destructive)' : 'var(--primary)'}`,
               boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
               display: 'flex',
               alignItems: 'center',
@@ -1123,8 +1037,8 @@ export function ThemeCustomizer() {
               color: 'var(--text-main)',
             }}
           >
-            {n.type === 'success' ? <CheckCircle2 size={20} style={{ color: 'var(--accent)' }} /> : 
-             n.type === 'error' ? <AlertTriangle size={20} style={{ color: 'var(--error-red)' }} /> : 
+            {n.type === 'success' ? <CheckCircle2 size={20} style={{ color: 'var(--primary)' }} /> : 
+             n.type === 'error' ? <AlertTriangle size={20} style={{ color: 'var(--destructive)' }} /> : 
              <Sparkles size={20} style={{ color: 'var(--primary)' }} />}
             <span style={{ fontSize: '14px', fontWeight: 500 }}>{n.message}</span>
           </div>
@@ -1166,7 +1080,7 @@ export function ThemeCustomizer() {
                 justifyContent: 'center', 
                 margin: '0 auto 16px' 
               }}>
-                <AlertTriangle size={32} style={{ color: 'var(--error-red)' }} />
+                <AlertTriangle size={32} style={{ color: 'var(--destructive)' }} />
               </div>
               <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--text-main)' }}>¿Abandonar el editor?</h2>
               <p style={{ color: 'var(--text-sec)', fontSize: '15px' }}>
@@ -1174,18 +1088,20 @@ export function ThemeCustomizer() {
               </p>
             </div>
             <div style={{ display: 'flex', gap: '12px' }}>
-              <button 
+              <Button 
                 onClick={() => navigate('/settings')} 
-                style={{ ...btnDanger, flex: 1, justifyContent: 'center' }}
+                variant="destructive"
+                className="flex-1"
               >
                 Salir sin guardar
-              </button>
-              <button 
+              </Button>
+              <Button 
                 onClick={() => setShowExitConfirm(false)} 
-                style={{ ...btnOutline, flex: 1, justifyContent: 'center' }}
+                variant="outline"
+                className="flex-1"
               >
                 Seguir editando
-              </button>
+              </Button>
             </div>
           </div>
         </div>
