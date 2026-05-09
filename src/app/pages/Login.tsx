@@ -3,7 +3,11 @@ import logo from "../../assets/logo.png";
 
 import { useNavigate, Link } from "react-router";
 import { useAuth, Branch } from "../context/AuthContext";
-import { Sprout, Mail, Lock, AlertCircle, MapPin, ArrowLeft } from "lucide-react";
+import { Mail, Lock, AlertCircle, MapPin, ArrowLeft } from "lucide-react";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Alert, AlertDescription } from "../components/ui/alert";
 
 export function Login() {
   const [email, setEmail] = useState("");
@@ -95,91 +99,68 @@ export function Login() {
         </div>
 
         {error && (
-          <div
-            className="flex items-center gap-2 p-3 rounded-lg mb-6 animate-shake"
-            style={{ backgroundColor: "#fee2e2", color: "#991b1b" }}
-          >
-            <AlertCircle size={20} />
-            <span className="text-sm font-medium">{error}</span>
-          </div>
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="size-5" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
         {step === "login" ? (
           /* Login Form */
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label
-                className="block text-sm font-medium mb-2"
-                style={{ color: "var(--text-main)" }}
-              >
-                Correo Electrónico
-              </label>
-              <div
-                className="flex items-center gap-3 px-4 py-3 rounded-lg border focus-within:ring-2 ring-[var(--accent)] transition-all"
-                style={{
-                  backgroundColor: "var(--bg)",
-                  borderColor: "var(--border)",
-                }}
-              >
-                <Mail size={20} style={{ color: "var(--text-sec)" }} />
-                <input
+            <div className="space-y-2">
+              <Label htmlFor="email">Correo Electrónico</Label>
+              <div className="relative">
+                <Mail 
+                  className="absolute left-3 top-1/2 -translate-y-1/2 size-5" 
+                  style={{ color: "var(--text-sec)" }} 
+                />
+                <Input
+                  id="email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="usuario@ejemplo.com"
                   required
-                  className="flex-1 bg-transparent outline-none"
-                  style={{ color: "var(--text-main)" }}
+                  className="pl-10"
                 />
               </div>
             </div>
 
-            <div>
-              <label
-                className="block text-sm font-medium mb-2"
-                style={{ color: "var(--text-main)" }}
-              >
-                Contraseña
-              </label>
-              <div
-                className="flex items-center gap-3 px-4 py-3 rounded-lg border focus-within:ring-2 ring-[var(--accent)] transition-all"
-                style={{
-                  backgroundColor: "var(--bg)",
-                  borderColor: "var(--border)",
-                }}
-              >
-                <Lock size={20} style={{ color: "var(--text-sec)" }} />
-                <input
+            <div className="space-y-2">
+              <Label htmlFor="password">Contraseña</Label>
+              <div className="relative">
+                <Lock 
+                  className="absolute left-3 top-1/2 -translate-y-1/2 size-5" 
+                  style={{ color: "var(--text-sec)" }} 
+                />
+                <Input
+                  id="password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="flex-1 bg-transparent outline-none"
-                  style={{ color: "var(--text-main)" }}
+                  className="pl-10"
                 />
               </div>
             </div>
 
             <div className="space-y-4">
-              <button
+              <Button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 rounded-lg font-semibold transition-all hover:brightness-110 active:scale-[0.98]"
-                style={{
-                  backgroundColor: "var(--accent)",
-                  color: "#ffffff",
-                  opacity: loading ? 0.7 : 1,
-                }}
+                variant="premium"
+                className="w-full"
               >
                 {loading ? "Iniciando sesión..." : "Iniciar Sesión"}
-              </button>
+              </Button>
 
               <div className="text-center">
                 <Link
                   to="/forgot-password"
-                  className="text-sm hover:underline transition-all"
-                  style={{ color: "var(--accent)" }}
+                  className="text-sm hover:underline transition-all font-medium"
+                  style={{ color: "var(--primary)" }}
                 >
                   ¿Olvidaste tu contraseña?
                 </Link>
@@ -192,30 +173,27 @@ export function Login() {
             <div className="grid gap-3">
               {branches && branches.length > 0 ? (
                 branches.map((branch) => (
-                  <button
+                  <Button
                     key={branch.id}
                     onClick={() => handleSelectBranch(branch.id)}
                     disabled={loading}
-                    className="flex items-center justify-between p-4 rounded-xl border text-left transition-all hover:bg-[var(--bg)] group active:scale-[0.98]"
-                    style={{
-                      backgroundColor: "var(--card)",
-                      borderColor: "var(--border)",
-                    }}
+                    variant="outline"
+                    className="flex h-auto w-full items-center justify-start p-4 rounded-2xl border-2 border-[var(--border)] hover:border-[var(--primary)] hover:bg-[var(--primary)]/5 transition-all group text-left shadow-sm"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-[var(--bg)] text-[var(--accent)] group-hover:bg-[var(--accent)] group-hover:text-white transition-colors">
-                        <MapPin size={20} />
+                    <div className="flex items-center gap-4 w-full">
+                      <div className="p-3 rounded-xl bg-[var(--bg)] text-[var(--primary)] group-hover:bg-[var(--primary)] group-hover:text-white transition-all shadow-sm">
+                        <MapPin size={22} />
                       </div>
-                      <div>
-                        <div className="font-bold" style={{ color: "var(--text-main)" }}>
+                      <div className="flex-1">
+                        <div className="font-bold text-lg leading-none mb-1 text-[var(--text-main)]">
                           {branch.name}
                         </div>
-                        <div className="text-xs uppercase tracking-wider font-semibold" style={{ color: "var(--text-sec)" }}>
-                          Rol: {branch.role}
+                        <div className="text-xs uppercase tracking-widest font-bold text-[var(--text-sec)]">
+                          ROL: {branch.role}
                         </div>
                       </div>
                     </div>
-                  </button>
+                  </Button>
                 ))
               ) : (
                 <div className="text-center py-8" style={{ color: "var(--text-sec)" }}>
@@ -225,15 +203,15 @@ export function Login() {
               )}
             </div>
 
-            <button
+            <Button
               onClick={() => setStep("login")}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium transition-colors"
-              style={{ color: "var(--text-sec)" }}
+              variant="ghost"
+              className="w-full flex items-center justify-center gap-2 text-[var(--text-sec)]"
             >
               <ArrowLeft size={16} />
               Volver al login
-            </button>
+            </Button>
           </div>
         )}
       </div>

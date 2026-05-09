@@ -3,6 +3,10 @@ import logo from "../../assets/logo.png";
 import { Link } from "react-router";
 import { Mail, ArrowLeft, Send, CheckCircle, AlertCircle } from "lucide-react";
 import { apiRequest } from "../config/api";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Alert, AlertDescription } from "../components/ui/alert";
 
 export function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -63,52 +67,37 @@ export function ForgotPassword() {
         {!submitted ? (
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
-              <div
-                className="flex items-center gap-2 p-3 rounded-lg"
-                style={{ backgroundColor: "#fee2e2", color: "#991b1b" }}
-              >
-                <AlertCircle size={20} />
-                <span className="text-sm">{error}</span>
-              </div>
+              <Alert variant="destructive">
+                <AlertCircle className="size-5" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
             {/* Email Input */}
-            <div>
-              <label
-                className="block text-sm font-medium mb-2"
-                style={{ color: "var(--text-main)" }}
-              >
-                Correo Electrónico
-              </label>
-              <div
-                className="flex items-center gap-3 px-4 py-3 rounded-lg border"
-                style={{
-                  backgroundColor: "var(--bg)",
-                  borderColor: "var(--border)",
-                }}
-              >
-                <Mail size={20} style={{ color: "var(--text-sec)" }} />
-                <input
+            <div className="space-y-2">
+              <Label htmlFor="email">Correo Electrónico</Label>
+              <div className="relative">
+                <Mail 
+                  className="absolute left-3 top-1/2 -translate-y-1/2 size-5" 
+                  style={{ color: "var(--text-sec)" }} 
+                />
+                <Input
+                  id="email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="usuario@ejemplo.com"
                   required
-                  className="flex-1 bg-transparent outline-none"
-                  style={{ color: "var(--text-main)" }}
+                  className="pl-10"
                 />
               </div>
             </div>
 
             {/* Submit Button */}
-            <button
+            <Button
               type="submit"
               disabled={loading}
-              className="w-full py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2"
-              style={{
-                backgroundColor: "var(--accent)",
-                color: "#ffffff",
-                opacity: loading ? 0.7 : 1,
-              }}
+              variant="premium"
+              className="w-full gap-2"
             >
               {loading ? (
                 "Enviando..."
@@ -118,7 +107,7 @@ export function ForgotPassword() {
                   Enviar Link de Recuperación
                 </>
               )}
-            </button>
+            </Button>
           </form>
         ) : (
           <div className="text-center py-4">

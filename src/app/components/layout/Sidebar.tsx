@@ -59,14 +59,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           ${isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
         `}
         style={{
-          backgroundColor: "#ffffff",
-          borderColor: "rgba(0,0,0,0.1)",
+          backgroundColor: "var(--sidebar)",
+          borderColor: "var(--border)",
         }}
       >
         {/* Close button - Mobile only */}
         <button
           onClick={onClose}
-          className="md:hidden absolute right-4 top-4 p-2 rounded-lg text-slate-600"
+          className="md:hidden absolute right-4 top-4 p-2 rounded-lg text-[var(--text-sec)]"
         >
           <X size={24} />
         </button>
@@ -102,19 +102,19 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                   }}
                   className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 font-medium"
                   style={{
-                    backgroundColor: isActive ? "rgba(var(--primary-rgb), 0.1)" : "transparent",
-                    color: isActive ? "var(--primary)" : "#475569",
+                    backgroundColor: isActive ? "var(--accent)" : "transparent",
+                    color: isActive ? "var(--primary)" : "var(--text-sec)",
                   }}
                   onMouseEnter={(e) => {
                     if (!isActive) {
-                      e.currentTarget.style.backgroundColor = "rgba(var(--primary-rgb), 0.05)";
+                      e.currentTarget.style.backgroundColor = "var(--accent)";
                       e.currentTarget.style.color = "var(--primary)";
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (!isActive) {
                       e.currentTarget.style.backgroundColor = "transparent";
-                      e.currentTarget.style.color = "#475569";
+                      e.currentTarget.style.color = "var(--text-sec)";
                     }
                   }}
                 >
@@ -127,13 +127,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         {/* Footer Info */}
         <div
-          className="mt-auto pt-6 border-t text-sm border-slate-200"
+          className="mt-auto pt-6 border-t text-sm border-[var(--border)]"
         >
-          <p className="font-semibold text-slate-800">
+          <p className="font-semibold text-[var(--text-main)]">
             Agroferr D'Campo
           </p>
 
-          <p className="text-xs mt-1 text-slate-500">Sistema Multi-Sucursal v1.0</p>
+          <p className="text-xs mt-1 text-[var(--text-sec)]">Sistema Multi-Sucursal v1.0</p>
         </div>
       </aside>
     </>
