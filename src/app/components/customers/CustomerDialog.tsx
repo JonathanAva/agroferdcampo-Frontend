@@ -114,9 +114,12 @@ export function CustomerDialog({ open, onOpenChange, customer, onSuccess }: Cust
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent 
+        className="sm:max-w-3xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar"
+        style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--text-main)" }}
+      >
         <DialogHeader>
-          <DialogTitle>{isEdit ? 'Editar Cliente' : 'Nuevo Cliente'}</DialogTitle>
+          <DialogTitle className="text-xl font-black">{isEdit ? 'Editar Cliente' : 'Nuevo Cliente'}</DialogTitle>
           <DialogDescription>
             {isEdit ? 'Modifica los datos del cliente seleccionado.' : 'Completa la información para registrar un nuevo cliente.'}
           </DialogDescription>
@@ -125,7 +128,7 @@ export function CustomerDialog({ open, onOpenChange, customer, onSuccess }: Cust
         <form onSubmit={handleSubmit} className="space-y-6 py-4">
           {/* Tipo de Cliente Selector */}
           <div className="space-y-3">
-            <Label className="text-sm font-semibold">Tipo de Cliente (Importante para DTE)</Label>
+            <Label className="text-xs font-bold uppercase opacity-70">Tipo de Cliente (Importante para DTE)</Label>
             <div className="grid grid-cols-3 gap-3">
               {[
                 { id: 'CONSUMIDOR_FINAL', label: 'Consumidor Final', icon: User, desc: 'DTE01 - Factura' },
@@ -139,13 +142,13 @@ export function CustomerDialog({ open, onOpenChange, customer, onSuccess }: Cust
                   className={cn(
                     "flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all gap-1 text-center",
                     formData.customerType === type.id
-                      ? "border-[var(--accent)] bg-[var(--accent)]/5 text-[var(--accent)]"
-                      : "border-[var(--border)] hover:border-[var(--accent)]/50"
+                      ? "border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--primary)] shadow-sm"
+                      : "border-[var(--border)] bg-[var(--bg)]/50 hover:border-[var(--primary)]/50 text-[var(--text-sec)]"
                   )}
                 >
-                  <type.icon size={20} />
+                  <type.icon size={20} className={cn(formData.customerType === type.id ? "text-[var(--primary)]" : "text-[var(--text-sec)]")} />
                   <span className="text-xs font-bold">{type.label}</span>
-                  <span className="text-[10px] opacity-60">{type.desc}</span>
+                  <span className="text-[9px] font-bold uppercase opacity-40">{type.desc}</span>
                 </button>
               ))}
             </div>
@@ -196,8 +199,8 @@ export function CustomerDialog({ open, onOpenChange, customer, onSuccess }: Cust
 
           {/* Campos Fiscales Condicionales */}
           {(formData.customerType === 'CONTRIBUYENTE' || formData.customerType === 'SUJETO_EXCLUIDO') && (
-            <div className="space-y-4 pt-4 border-t border-dashed">
-              <h3 className="text-sm font-bold flex items-center gap-2 text-[var(--accent)]">
+            <div className="space-y-4 pt-4 border-t border-dashed border-[var(--border)]">
+              <h3 className="text-sm font-black flex items-center gap-2 text-[var(--primary)] uppercase tracking-tight">
                 <Building2 size={16} />
                 Información Fiscal Obligatoria
               </h3>
@@ -328,14 +331,20 @@ export function CustomerDialog({ open, onOpenChange, customer, onSuccess }: Cust
             </div>
           )}
 
-          <DialogFooter className="pt-6">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <DialogFooter className="pt-6 border-t border-[var(--border)] gap-3">
+            <Button 
+              type="button" 
+              variant="ghost" 
+              onClick={() => onOpenChange(false)}
+              className="rounded-xl"
+            >
               Cancelar
             </Button>
             <Button 
               type="submit" 
               disabled={loading}
-              className="bg-[var(--accent)] hover:bg-[var(--accent)]/90 text-white"
+              variant="default"
+              className="font-bold shadow-xl px-8 rounded-xl h-11 flex-1"
             >
               {loading ? 'Guardando...' : (isEdit ? 'Actualizar Cliente' : 'Crear Cliente')}
             </Button>

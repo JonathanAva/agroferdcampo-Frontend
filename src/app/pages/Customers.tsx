@@ -15,6 +15,7 @@ import {
 } from '../components/ui/dropdown-menu';
 import { CustomerDialog } from '../components/customers/CustomerDialog';
 import { Input } from '../components/ui/input';
+import { Card } from '../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Badge as UIBadge } from '../components/ui/badge';
 
@@ -129,13 +130,13 @@ export function Customers() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold" style={{ color: 'var(--text-main)' }}>
-          Clientes
-        </h1>
+        <div>
+          <h1 className="text-3xl font-bold text-[var(--text-main)]">Clientes</h1>
+          <p className="text-[var(--text-sec)]">Administración de cartera de clientes y créditos</p>
+        </div>
         <Button
-          size="lg"
-          className="gap-2 font-bold shadow-md"
-          style={{ backgroundColor: 'var(--color-accent)', color: '#ffffff' }}
+          variant="default"
+          className="gap-2 font-bold shadow-lg"
           onClick={() => { setSelectedCustomer(null); setIsDialogOpen(true); }}
         >
           <Plus size={20} />
@@ -143,157 +144,151 @@ export function Customers() {
         </Button>
       </div>
 
-      {/* Stats */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="p-4 rounded-xl border shadow-sm" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
-          <div className="flex items-center gap-3">
-            <Users size={24} style={{ color: 'var(--accent)' }} />
-            <div>
-              <p className="text-sm" style={{ color: 'var(--text-sec)' }}>Total Clientes</p>
-              <p className="text-2xl font-bold" style={{ color: 'var(--text-main)' }}>{totalCustomers}</p>
+        {[
+          { label: 'Total Clientes', value: totalCustomers, icon: Users, color: 'var(--primary)' },
+          { label: 'Activos', value: totalCustomers, icon: Users, color: '#10b981' },
+          { label: 'Crédito Total', value: `$${totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, icon: CreditCard, color: '#f59e0b' },
+          { label: 'Con Deuda', value: customers.filter(c => Number(c.creditBalance) > 0).length, icon: AlertCircle, color: '#ef4444' },
+        ].map(({ label, value, icon: Icon, color }) => (
+          <Card key={label} className="px-5 py-4 flex items-center justify-between border-[var(--border)] bg-[var(--card)] shadow-sm hover:shadow-md transition-all">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg" style={{ backgroundColor: `${color}15`, color }}>
+                <Icon size={18} />
+              </div>
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)]">{label}</p>
             </div>
-          </div>
-        </div>
-
-        <div className="p-4 rounded-xl border shadow-sm" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
-          <div className="flex items-center gap-3">
-            <Users size={24} style={{ color: 'var(--accent)' }} />
-            <div>
-              <p className="text-sm" style={{ color: 'var(--text-sec)' }}>Clientes Activos</p>
-              <p className="text-2xl font-bold" style={{ color: 'var(--accent)' }}>{totalCustomers}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4 rounded-xl border shadow-sm" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
-          <div className="flex items-center gap-3">
-            <CreditCard size={24} style={{ color: '#f59e0b' }} />
-            <div>
-              <p className="text-sm" style={{ color: 'var(--text-sec)' }}>Crédito Total</p>
-              <p className="text-2xl font-bold" style={{ color: '#f59e0b' }}>${totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4 rounded-xl border shadow-sm" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
-          <div className="flex items-center gap-3">
-            <AlertCircle size={24} style={{ color: '#ef4444' }} />
-            <div>
-              <p className="text-sm" style={{ color: 'var(--text-sec)' }}>Con Deuda</p>
-              <p className="text-2xl font-bold" style={{ color: '#ef4444' }}>{customers.filter(c => Number(c.creditBalance) > 0).length}</p>
-            </div>
-          </div>
-        </div>
+            <p className="text-xl font-black text-[var(--text-main)]">{value}</p>
+          </Card>
+        ))}
       </div>
 
-      {/* Search */}
-      <div className="p-4 rounded-xl border mb-4 shadow-sm" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
-        <div className="flex items-center gap-3 px-4 py-2 rounded-lg border" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}>
-          <Search size={20} className="text-muted-foreground" />
-          <Input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar clientes por nombre, NIT o NRC..."
-            className="border-none bg-transparent shadow-none focus-visible:ring-0 h-9"
-          />
+      {/* Search & Filters */}
+      <Card className="p-4 mb-6 border-[var(--border)] bg-[var(--card)] shadow-sm">
+        <div className="flex flex-col md:flex-row items-center gap-4">
+          <div className="flex-1 flex items-center gap-3 px-4 py-1 rounded-xl border border-[var(--border)] bg-[var(--bg)] transition-all focus-within:ring-2 focus-within:ring-[var(--primary)]/20">
+            <Search size={20} className="text-[var(--text-sec)]" />
+            <Input
+              type="text"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Buscar clientes por nombre, NIT o NRC..."
+              className="border-none bg-transparent shadow-none focus-visible:ring-0 text-[var(--text-main)]"
+            />
+          </div>
+
+          <div className="flex items-center gap-3 px-2">
+            <Switch 
+              id="show-inactive" 
+              checked={showInactive} 
+              onCheckedChange={setShowInactive} 
+            />
+            <Label htmlFor="show-inactive" className="text-sm font-bold cursor-pointer opacity-70 text-[var(--text-main)]">
+              Mostrar inactivos
+            </Label>
+          </div>
         </div>
-        <div className="flex items-center gap-2 mt-4 px-1">
-          <Switch 
-            id="show-inactive" 
-            checked={showInactive} 
-            onCheckedChange={setShowInactive} 
-          />
-          <Label htmlFor="show-inactive" className="text-sm cursor-pointer opacity-70">
-            Mostrar clientes inactivos
-          </Label>
-        </div>
-      </div>
+      </Card>
 
       {/* Customers Table */}
-      <div className="rounded-xl border overflow-hidden shadow-sm" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+      <div className="rounded-xl border overflow-hidden shadow-sm bg-[var(--card)] border-[var(--border)]">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead>Cliente</TableHead>
-                <TableHead>Contacto</TableHead>
-                <TableHead className="text-right">Límite Crédito</TableHead>
-                <TableHead className="text-right">Deuda Actual</TableHead>
-                <TableHead className="text-center">Estado</TableHead>
-                <TableHead className="text-center">Acciones</TableHead>
+              <TableRow className="bg-[var(--bg)]/50 border-b border-[var(--border)]">
+                <TableHead className="font-bold text-[var(--text-main)]">Cliente</TableHead>
+                <TableHead className="font-bold text-[var(--text-main)]">Contacto</TableHead>
+                <TableHead className="text-right font-bold text-[var(--text-main)]">Límite</TableHead>
+                <TableHead className="text-right font-bold text-[var(--text-main)]">Deuda</TableHead>
+                <TableHead className="text-center font-bold text-[var(--text-main)]">Estado</TableHead>
+                <TableHead className="text-center font-bold text-[var(--text-main)]">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={6} className="p-8 text-center opacity-50">Cargando clientes...</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={6} className="h-32 text-center">
+                    <div className="flex items-center justify-center gap-2 text-[var(--text-sec)] animate-pulse">
+                      <Users className="animate-bounce" />
+                      <span className="font-bold">Cargando clientes...</span>
+                    </div>
+                  </TableCell>
+                </TableRow>
               ) : customers.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="p-8 text-center opacity-50">No se encontraron clientes</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={6} className="h-32 text-center text-[var(--text-sec)] font-medium">
+                    No se encontraron clientes
+                  </TableCell>
+                </TableRow>
               ) : (
                 customers.map((customer) => (
-                  <TableRow key={customer.id} className="border-b hover:bg-[var(--bg)]/30 transition-colors" style={{ borderColor: 'var(--border)' }}>
-                    <TableCell className="p-4">
-                      <div>
-                        <p className="font-medium">{customer.name}</p>
-                        <p className="text-xs text-muted-foreground font-mono">
+                  <TableRow key={customer.id} className="group hover:bg-[var(--bg)]/30 transition-colors border-b border-[var(--border)]">
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-bold text-[var(--text-main)]">{customer.name}</span>
+                        <span className="text-xs font-mono font-bold opacity-60 uppercase tracking-tight text-[var(--text-sec)]">
                           {customer.customerType === 'CONSUMIDOR_FINAL' ? (customer.documentNumber || 'Consumidor Final') : (customer.nit || 'Sin NIT')}
                           {customer.nrc && ` • NRC: ${customer.nrc}`}
-                        </p>
+                        </span>
                       </div>
                     </TableCell>
-                    <TableCell className="p-4">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Phone size={12} className="opacity-60" />
-                          <span>{customer.phone || 'N/A'}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Mail size={12} className="opacity-60" />
-                          <span>{customer.email || 'N/A'}</span>
-                        </div>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        {customer.phone && (
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-sec)]">
+                            <Phone size={12} className="text-[var(--primary)]" />
+                            {customer.phone}
+                          </div>
+                        )}
+                        {customer.email && (
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-sec)]">
+                            <Mail size={12} className="text-[var(--primary)]" />
+                            {customer.email}
+                          </div>
+                        )}
                       </div>
                     </TableCell>
-                    <TableCell className="p-4 text-right">
-                      <span className="font-semibold">
+                    <TableCell className="text-right">
+                      <span className="font-black text-[var(--text-main)]">
                         ${Number(customer.creditLimit).toFixed(2)}
                       </span>
                     </TableCell>
-                    <TableCell className="p-4 text-right">
+                    <TableCell className="text-right">
                       <span 
                         className={cn(
-                          "font-bold",
-                          Number(customer.creditBalance) > Number(customer.creditLimit) ? "text-destructive" : "text-[var(--color-accent)]"
+                          "font-black",
+                          Number(customer.creditBalance) > Number(customer.creditLimit) ? "text-destructive" : "text-[var(--primary)]"
                         )}
                       >
                         ${Number(customer.creditBalance).toFixed(2)}
                       </span>
                     </TableCell>
-                    <TableCell className="p-4 text-center">
-                      <div className="flex justify-center">
-                        <UIBadge 
-                          onClick={() => toggleStatus(customer)}
-                          variant={customer.isActive ? "default" : "destructive"}
-                          className="cursor-pointer hover:opacity-80 transition-all"
-                        >
-                          {customer.isActive ? 'Activo' : 'Inactivo'}
-                        </UIBadge>
-                      </div>
+                    <TableCell className="text-center">
+                      <UIBadge 
+                        onClick={() => toggleStatus(customer)}
+                        variant={customer.isActive ? "success" : "destructive"}
+                        className="cursor-pointer font-bold px-2"
+                      >
+                        <div className={cn("size-1.5 rounded-full bg-current mr-1.5", !customer.isActive && "animate-pulse")} />
+                        {customer.isActive ? 'Activo' : 'Inactivo'}
+                      </UIBadge>
                     </TableCell>
-                    <TableCell className="p-4">
+                    <TableCell>
                       <div className="flex justify-center">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreVertical size={16} />
+                            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-[var(--primary)]/10 text-[var(--primary)] rounded-lg">
+                              <MoreVertical size={18} />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => { setSelectedCustomer(customer); setIsDialogOpen(true); }}>
-                              <Edit2 size={14} className="mr-2" /> Editar
+                          <DropdownMenuContent align="end" className="bg-[var(--card)] border-[var(--border)] rounded-xl shadow-xl">
+                            <DropdownMenuItem onClick={() => { setSelectedCustomer(customer); setIsDialogOpen(true); }} className="gap-2 font-bold focus:bg-[var(--primary)]/10 cursor-pointer">
+                              <Edit2 size={14} className="text-[var(--primary)]" /> Editar
                             </DropdownMenuItem>
                             {isAdmin && (
-                              <DropdownMenuItem onClick={() => handleDelete(customer.id)} className="text-red-500">
-                                <Trash2 size={14} className="mr-2" /> Desactivar
+                              <DropdownMenuItem onClick={() => handleDelete(customer.id)} className="gap-2 font-bold text-destructive focus:bg-destructive/10 cursor-pointer">
+                                <Trash2 size={14} /> Desactivar
                               </DropdownMenuItem>
                             )}
                           </DropdownMenuContent>
@@ -307,28 +302,32 @@ export function Customers() {
           </Table>
         </div>
         
-        {/* Pagination Simple */}
+        {/* Pagination */}
         {pagination && pagination.totalPages > 1 && (
-          <div className="p-4 border-t flex justify-center gap-2 bg-[var(--bg)]/10" style={{ borderColor: 'var(--border)' }}>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage(p => p - 1)}
-            >
-              Anterior
-            </Button>
-            <div className="flex items-center px-4 text-sm font-medium">
-              Página {currentPage} de {pagination.totalPages}
+          <div className="p-4 border-t border-[var(--border)] flex items-center justify-between bg-[var(--bg)]/5">
+            <p className="text-xs font-bold text-[var(--text-sec)]">
+              Mostrando página {currentPage} de {pagination.totalPages} ({pagination.total} clientes)
+            </p>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(p => p - 1)}
+                className="h-8 rounded-lg font-bold"
+              >
+                Anterior
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                disabled={currentPage === pagination.totalPages}
+                onClick={() => setCurrentPage(p => p + 1)}
+                className="h-8 rounded-lg font-bold"
+              >
+                Siguiente
+              </Button>
             </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              disabled={currentPage === pagination.totalPages}
-              onClick={() => setCurrentPage(p => p + 1)}
-            >
-              Siguiente
-            </Button>
           </div>
         )}
       </div>

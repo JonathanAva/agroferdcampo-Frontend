@@ -19,6 +19,7 @@ import { useAuth } from "../context/AuthContext";
 import { Switch } from "../components/ui/switch";
 import { Badge } from "../components/ui/badge";
 import { cn } from "../components/ui/utils";
+import { Card } from "../components/ui/card";
 import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -42,6 +43,9 @@ import {
 } from "../components/ui/alert-dialog";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { ShieldAlert, ShieldCheck } from "lucide-react";
+import { 
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription 
+} from "../components/ui/dialog";
 
 interface User {
   id: number;
@@ -219,427 +223,294 @@ export function Users() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1
-          className="text-3xl font-bold"
-          style={{ color: "var(--text-main)" }}
-        >
-          Usuarios
-        </h1>
+        <div>
+          <h1 className="text-3xl font-bold text-[var(--text-main)]">Usuarios</h1>
+          <p className="text-[var(--text-sec)]">Gestión de accesos, roles y sucursales</p>
+        </div>
         <Button
+          variant="default"
           onClick={() => handleOpenModal()}
-          size="lg"
-          className="gap-2 font-bold shadow-lg transition-all hover:scale-105 active:scale-95"
-          style={{ backgroundColor: "var(--color-accent)", color: "#ffffff" }}
+          className="gap-2 font-bold shadow-lg transition-all hover:scale-105"
         >
           <Plus size={20} />
           Nuevo Usuario
         </Button>
       </div>
 
-      {/* Stats - Estilo Clientes */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div
-          className="p-4 rounded-xl border"
-          style={{
-            backgroundColor: "var(--card)",
-            borderColor: "var(--border)",
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <UsersIcon size={24} style={{ color: "var(--accent)" }} />
-            <div>
-              <p className="text-sm" style={{ color: "var(--text-sec)" }}>
-                Total Usuarios
-              </p>
-              <p
-                className="text-2xl font-bold"
-                style={{ color: "var(--text-main)" }}
-              >
-                {users.length}
-              </p>
+        {[
+          { label: 'Total Usuarios', value: users.length, icon: UsersIcon, color: 'var(--primary)' },
+          { label: 'Activos', value: users.filter(u => u.isActive).length, icon: UsersIcon, color: '#10b981' },
+          { label: 'Admins', value: users.filter(u => u.roleId === 2).length, icon: Shield, color: '#f59e0b' },
+          { label: 'Inactivos', value: users.filter(u => !u.isActive).length, icon: AlertCircle, color: '#ef4444' },
+        ].map(({ label, value, icon: Icon, color }) => (
+          <Card key={label} className="px-5 py-4 flex items-center justify-between border-[var(--border)] bg-[var(--card)] shadow-sm hover:shadow-md transition-all">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg" style={{ backgroundColor: `${color}15`, color }}>
+                <Icon size={18} />
+              </div>
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)]">{label}</p>
             </div>
-          </div>
-        </div>
-
-        <div
-          className="p-4 rounded-xl border"
-          style={{
-            backgroundColor: "var(--card)",
-            borderColor: "var(--border)",
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <UsersIcon size={24} style={{ color: "var(--accent)" }} />
-            <div>
-              <p className="text-sm" style={{ color: "var(--text-sec)" }}>
-                Activos
-              </p>
-              <p
-                className="text-2xl font-bold"
-                style={{ color: "var(--accent)" }}
-              >
-                {users.filter((u) => u.isActive).length}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div
-          className="p-4 rounded-xl border"
-          style={{
-            backgroundColor: "var(--card)",
-            borderColor: "var(--border)",
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <Shield size={24} style={{ color: "#f59e0b" }} />
-            <div>
-              <p className="text-sm" style={{ color: "var(--text-sec)" }}>
-                Admins
-              </p>
-              <p className="text-2xl font-bold" style={{ color: "#f59e0b" }}>
-                {users.filter((u) => u.roleId === 2).length}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div
-          className="p-4 rounded-xl border"
-          style={{
-            backgroundColor: "var(--card)",
-            borderColor: "var(--border)",
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <AlertCircle size={24} style={{ color: "#ef4444" }} />
-            <div>
-              <p className="text-sm" style={{ color: "var(--text-sec)" }}>
-                Inactivos
-              </p>
-              <p className="text-2xl font-bold" style={{ color: "#ef4444" }}>
-                {users.filter((u) => !u.isActive).length}
-              </p>
-            </div>
-          </div>
-        </div>
+            <p className="text-xl font-black text-[var(--text-main)]">{value}</p>
+          </Card>
+        ))}
       </div>
 
-      {/* Search - Estilo Clientes */}
-      <div
-        className="p-4 rounded-xl border mb-4"
-        style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-      >
-        <div className="flex items-center gap-3 px-4 py-1 rounded-xl bg-[var(--bg)] border border-[var(--border)] focus-within:ring-2 focus-within:ring-[var(--color-accent)]/20 transition-all">
-          <Search size={20} className="text-muted-foreground" />
+      {/* Search & Filters */}
+      <Card className="p-4 mb-6 border-[var(--border)] bg-[var(--card)] shadow-sm">
+        <div className="flex-1 flex items-center gap-3 px-4 py-1 rounded-xl border border-[var(--border)] bg-[var(--bg)] transition-all focus-within:ring-2 focus-within:ring-[var(--primary)]/20">
+          <Search size={20} className="text-[var(--text-sec)]" />
           <Input
             type="text"
             placeholder="Buscar por nombre, código o DUI..."
-            className="border-none bg-transparent shadow-none focus-visible:ring-0 h-9"
+            className="border-none bg-transparent shadow-none focus-visible:ring-0 text-[var(--text-main)] h-9"
             value={searchTerm}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
           />
         </div>
-      </div>
+      </Card>
 
-      {/* Table - Estilo Clientes */}
-      <div
-        className="rounded-xl border border-separate overflow-hidden"
-        style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
-      >
+      {/* Users Table */}
+      <Card className="rounded-xl border overflow-hidden shadow-sm bg-[var(--card)] border-[var(--border)]">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead className="font-semibold">Usuario</TableHead>
-                <TableHead className="font-semibold">Contacto</TableHead>
-                <TableHead className="font-semibold text-right">Rol</TableHead>
-                <TableHead className="font-semibold">Sucursales</TableHead>
-                <TableHead className="font-semibold text-right">DUI / Tel</TableHead>
-                <TableHead className="font-semibold text-center">Estado</TableHead>
-                <TableHead className="font-semibold text-center">Acciones</TableHead>
+              <TableRow className="bg-[var(--bg)]/50 border-b border-[var(--border)]">
+                <TableHead className="font-bold text-[var(--text-main)]">Usuario</TableHead>
+                <TableHead className="font-bold text-[var(--text-main)]">Sucursales</TableHead>
+                <TableHead className="font-bold text-[var(--text-main)] text-right">Rol</TableHead>
+                <TableHead className="font-bold text-[var(--text-main)] text-center">Estado</TableHead>
+                <TableHead className="font-bold text-[var(--text-main)] text-center">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredUsers.map((u) => (
-                <tr
-                  key={u.id}
-                  className="border-b transition-colors"
-                  style={{ borderColor: "var(--border)" }}
-                >
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-base"
-                        style={{
-                          backgroundColor: "var(--bg)",
-                          color: "var(--accent)",
-                          border: "1px solid var(--border)",
-                        }}
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-32 text-center">
+                    <div className="flex items-center justify-center gap-2 text-[var(--text-sec)] animate-pulse">
+                      <UsersIcon className="animate-bounce" />
+                      <span className="font-bold">Cargando usuarios...</span>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : filteredUsers.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-32 text-center text-[var(--text-sec)] font-medium">
+                    No se encontraron usuarios
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredUsers.map((u) => (
+                  <TableRow key={u.id} className="group hover:bg-[var(--bg)]/30 transition-colors border-b border-[var(--border)]">
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="size-10 rounded-xl flex items-center justify-center font-black text-sm bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/20 shadow-sm group-hover:scale-110 transition-transform">
+                          {u.fullName.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-base font-black text-[var(--text-main)] leading-tight">{u.fullName}</span>
+                          <span className="text-xs font-bold text-[var(--text-sec)] opacity-80 italic">{u.email}</span>
+                          <span className="text-xs font-mono font-bold opacity-60 uppercase tracking-tight mt-1 text-[var(--text-sec)]">
+                            DUI: {u.dui} • TEL: {u.phone}
+                          </span>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1 max-w-[200px]">
+                        {u.branches && u.branches.length > 0 ? (
+                          u.branches.map((ub) => (
+                            <Badge
+                              key={ub.branch?.id}
+                              variant="outline"
+                              className="text-[10px] py-0 px-2 h-5 flex items-center bg-[var(--bg)]/50 border-[var(--border)] text-[var(--text-sec)]"
+                            >
+                              <MapPin size={10} className="mr-1 opacity-70" />
+                              {ub.branch?.name}
+                            </Badge>
+                          ))
+                        ) : (
+                          <span className="text-[10px] italic opacity-50">Sin sucursales</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="inline-flex items-center px-2 py-1 rounded-lg bg-[var(--bg)] border border-[var(--border)]">
+                        <span className="text-xs font-black text-[var(--text-main)] uppercase tracking-tight">
+                          {ROLES.find((r) => r.id === u.roleId)?.name}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge 
+                        onClick={() => handleToggleClick(u)}
+                        variant={u.isActive ? "success" : "destructive"}
+                        className="cursor-pointer font-bold px-2"
                       >
-                        {u.fullName.charAt(0)}
-                      </div>
-                      <div>
-                        <p className="font-semibold">{u.fullName}</p>
-                        <p className="text-xs font-mono text-muted-foreground">{u.email}</p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Phone size={14} className="opacity-60" />
-                      <span>{u.phone}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <span className="font-bold">
-                      {ROLES.find((r) => r.id === u.roleId)?.name}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {u.branches && u.branches.length > 0 ? (
-                        u.branches.map((ub) => (
-                          <Badge
-                            key={ub.branch?.id}
-                            className="text-[10px] py-0 px-2 h-5 flex items-center bg-muted border border-border text-foreground hover:bg-muted"
-                          >
-                            <MapPin size={10} className="mr-1 opacity-70" />
-                            {ub.branch?.name}
-                          </Badge>
-                        ))
-                      ) : (
-                        <span className="text-[10px] italic opacity-50">Sin sucursal</span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <span className="font-mono text-xs text-[var(--color-accent)] font-bold">
-                      {u.dui}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex justify-center">
-                      <Badge variant={u.isActive ? "default" : "destructive"}>
-                        {u.isActive ? "Activo" : "Bloqueado"}
+                        <div className={cn("size-1.5 rounded-full bg-current mr-1.5", !u.isActive && "animate-pulse")} />
+                        {u.isActive ? 'Activo' : 'Bloqueado'}
                       </Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenModal(u)}
-                        className="text-muted-foreground hover:text-[var(--color-accent)]"
-                        title="Editar Usuario"
-                      >
-                        <Edit size={18} />
-                      </Button>
-                      <Switch
-                        checked={u.isActive}
-                        onCheckedChange={() => handleToggleClick(u)}
-                      />
-                    </div>
-                  </TableCell>
-                </tr>
-              ))}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenModal(u)}
+                          className="h-8 w-8 text-[var(--primary)] hover:bg-[var(--primary)]/10 rounded-lg"
+                        >
+                          <Edit size={18} />
+                        </Button>
+                        <Switch
+                          checked={u.isActive}
+                          onCheckedChange={() => handleToggleClick(u)}
+                          className="scale-75"
+                        />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>
-      </div>
+      </Card>
 
-      {/* Modal - Estilo consistente con el sistema */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div
-            className="w-full max-w-lg rounded-xl border shadow-2xl"
-            style={{
-              backgroundColor: "var(--card)",
-              borderColor: "var(--border)",
-            }}
-          >
-            <div
-              className="flex items-center justify-between p-6 border-b"
-              style={{ borderColor: "var(--border)" }}
-            >
-              <h2
-                className="text-xl font-bold"
-                style={{ color: "var(--text-main)" }}
-              >
-                {editingUser ? "Editar Usuario" : "Nuevo Usuario"}
-              </h2>
-              <button
-                onClick={() => setShowModal(false)}
-                style={{ color: "var(--text-sec)" }}
-              >
-                <X size={20} />
-              </button>
+      {/* Modal Nuevo/Editar Usuario */}
+      <Dialog open={showModal} onOpenChange={setShowModal}>
+        <DialogContent 
+          className="sm:max-w-xl w-full"
+          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--text-main)" }}
+        >
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black">{editingUser ? "Editar Usuario" : "Nuevo Usuario"}</DialogTitle>
+            <DialogDescription>
+              {editingUser ? "Modifica los permisos y accesos del usuario." : "Registra un nuevo usuario en la plataforma."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmit} className="space-y-4 py-4">
+            {formError && (
+              <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 text-destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle className="font-black uppercase text-[10px]">Error de validación</AlertTitle>
+                <AlertDescription className="text-xs">{formError}</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase opacity-70">Nombre Completo</Label>
+              <Input
+                required
+                value={formData.fullName}
+                onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                placeholder="Ej. Juan Pérez"
+              />
             </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {formError && (
-                <div className="p-3 rounded-lg text-sm bg-destructive/10 text-destructive border border-destructive/20 font-medium animate-in shake duration-300">
-                  {formError}
-                </div>
-              )}
+
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase opacity-70">
-                  Nombre Completo
-                </Label>
+                <Label className="text-xs font-bold uppercase opacity-70">Email</Label>
                 <Input
-                  type="text"
+                  type="email"
                   required
-                  value={formData.fullName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, fullName: e.target.value })
-                  }
-                  placeholder="Ej. Juan Pérez"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="juan@ejemplo.com"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase opacity-70">
-                    Email
-                  </Label>
-                  <Input
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={(e) =>
-                      setFormData({ ...formData, email: e.target.value })
-                    }
-                    placeholder="juan@ejemplo.com"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase opacity-70">
-                    Teléfono
-                  </Label>
-                  <Input
-                    type="text"
-                    value={formData.phone}
-                    onChange={(e) =>
-                      setFormData({ ...formData, phone: e.target.value })
-                    }
-                    placeholder="7777-7777"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase opacity-70">
-                    DUI
-                  </Label>
-                  <Input
-                    type="text"
-                    value={formData.dui}
-                    onChange={(e) =>
-                      setFormData({ ...formData, dui: e.target.value })
-                    }
-                    placeholder="00000000-0"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase opacity-70">
-                    Rol
-                  </Label>
-                  <select
-                    value={formData.roleId}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        roleId: parseInt(e.target.value),
-                      })
-                    }
-                    className="w-full h-10 px-4 py-2 rounded-lg border outline-none bg-transparent focus:ring-2 focus:ring-[var(--color-accent)]/20 transition-all border-[var(--border)] text-[var(--text-main)]"
-                  >
-                    {ROLES.map((r) => (
-                      <option key={r.id} value={r.id} className="bg-[var(--card)]">
-                        {r.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Multi-select de Sucursales */}
               <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase opacity-70">
-                  Asignar Sucursales
-                </Label>
-                <div 
-                  className="grid grid-cols-2 gap-2 p-3 rounded-lg border max-h-40 overflow-y-auto"
-                  style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)" }}
-                >
-                  {availableBranches.map((branch) => {
-                    const isSelected = formData.branchIds.includes(branch.id);
-                    return (
-                      <button
-                        key={branch.id}
-                        type="button"
-                        onClick={() => {
-                          const newIds = isSelected
-                            ? formData.branchIds.filter((id) => id !== branch.id)
-                            : [...formData.branchIds, branch.id];
-                          setFormData({ ...formData, branchIds: newIds });
-                        }}
-                        className={cn(
-                          "flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all border",
-                          isSelected 
-                            ? "bg-[var(--color-accent)] border-[var(--color-accent)] text-white shadow-sm" 
-                            : "bg-[var(--card)] border-[var(--border)] text-[var(--text-main)] hover:border-[var(--color-accent)]"
-                        )}
-                      >
-                        <span className="truncate">{branch.name}</span>
-                        {isSelected && <Check size={14} />}
-                      </button>
-                    );
-                  })}
-                  {availableBranches.length === 0 && (
-                    <p className="col-span-2 text-center text-xs py-2 opacity-50">
-                      Cargando sucursales...
-                    </p>
-                  )}
-                </div>
+                <Label className="text-xs font-bold uppercase opacity-70">Teléfono</Label>
+                <Input
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="7777-7777"
+                />
               </div>
-              {!editingUser && (
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase opacity-70">
-                    Contraseña
-                  </Label>
-                  <Input
-                    type="password"
-                    required
-                    value={formData.password}
-                    onChange={(e) =>
-                      setFormData({ ...formData, password: e.target.value })
-                    }
-                    placeholder="••••••••"
-                  />
-                </div>
-              )}
-              <div className="flex gap-3 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 font-bold"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={formLoading}
-                  className="flex-1 font-bold shadow-lg"
-                  style={{ backgroundColor: "var(--color-accent)", color: "#ffffff" }}
-                >
-                  {formLoading ? "Procesando..." : "Guardar"}
-                </Button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold uppercase opacity-70">DUI</Label>
+                <Input
+                  value={formData.dui}
+                  onChange={(e) => setFormData({ ...formData, dui: e.target.value })}
+                  placeholder="00000000-0"
+                />
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+              <div className="space-y-2">
+                <Label className="text-xs font-bold uppercase opacity-70">Rol</Label>
+                <select
+                  value={formData.roleId}
+                  onChange={(e) => setFormData({ ...formData, roleId: parseInt(e.target.value) })}
+                  className="w-full h-10 px-4 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg)] text-[var(--text-main)] text-sm focus:ring-2 focus:ring-[var(--primary)]/20 outline-none"
+                >
+                  {ROLES.map((r) => (
+                    <option key={r.id} value={r.id} className="bg-[var(--card)]">{r.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase opacity-70">Asignar Sucursales</Label>
+              <div className="grid grid-cols-2 gap-2 p-3 rounded-xl border border-[var(--border)] bg-[var(--bg)]/30 max-h-40 overflow-y-auto">
+                {availableBranches.map((branch) => {
+                  const isSelected = formData.branchIds.includes(branch.id);
+                  return (
+                    <button
+                      key={branch.id}
+                      type="button"
+                      onClick={() => {
+                        const newIds = isSelected
+                          ? formData.branchIds.filter((id) => id !== branch.id)
+                          : [...formData.branchIds, branch.id];
+                        setFormData({ ...formData, branchIds: newIds });
+                      }}
+                      className={cn(
+                        "flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all border",
+                        isSelected 
+                          ? "bg-[var(--primary)] border-[var(--primary)] text-white shadow-sm font-bold" 
+                          : "bg-[var(--card)] border-[var(--border)] text-[var(--text-sec)] hover:border-[var(--primary)]/50"
+                      )}
+                    >
+                      <span className="truncate">{branch.name}</span>
+                      {isSelected && <Check size={14} />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {!editingUser && (
+              <div className="space-y-2">
+                <Label className="text-xs font-bold uppercase opacity-70">Contraseña Temporal</Label>
+                <Input
+                  type="password"
+                  required
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  placeholder="••••••••"
+                />
+              </div>
+            )}
+
+            <DialogFooter className="pt-6 border-t border-[var(--border)] gap-2">
+              <Button type="button" variant="ghost" onClick={() => setShowModal(false)} className="rounded-xl">
+                Cancelar
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={formLoading}
+                className="font-bold shadow-xl px-8 rounded-xl h-11 flex-1"
+              >
+                {formLoading ? "Guardando..." : (editingUser ? "Actualizar Usuario" : "Crear Usuario")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Confirmation Dialog (SweetAlert2 Style) */}
       <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
@@ -689,30 +560,22 @@ export function Users() {
             </div>
 
             <div className="flex w-full gap-3 mt-8">
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => setIsConfirmOpen(false)}
                 disabled={toggleLoading}
-                className="flex-1 py-3 rounded-xl font-bold transition-all shadow-sm"
-                style={{
-                  backgroundColor: "var(--bg)",
-                  color: "var(--text-sec)",
-                  border: "1px solid var(--border)",
-                }}
+                className="flex-1 rounded-xl font-bold h-12"
               >
                 No, cancelar
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={confirmToggleStatus}
                 disabled={toggleLoading}
-                className="flex-1 py-3 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95"
-                style={{
-                  backgroundColor: userToToggle?.isActive
-                    ? "var(--error-red)"
-                    : "var(--accent)",
-                }}
+                variant={userToToggle?.isActive ? "destructive" : "default"}
+                className="flex-1 rounded-xl font-bold h-12 shadow-lg"
               >
                 {toggleLoading ? "Procesando..." : "Sí, continuar"}
-              </button>
+              </Button>
             </div>
           </div>
         </AlertDialogContent>
