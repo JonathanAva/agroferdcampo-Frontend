@@ -6,8 +6,9 @@
     --card: #ffffff;
     --text-main: #1e293b;
     --text-sec: #64748b;
-    --primary: #1e293b;
-    --accent: #10b981; /* Verde Original */
+    --primary: #10b981; /* Verde Original - Tu Marca */
+    --accent: #ecfdf5; /* Verde Ultra-claro para Hovers (Modo Claro) */
+    --accent-foreground: #047857; /* Texto verde oscuro sobre hover claro */
     --border: #e2e8f0;
     --shadow: rgba(30, 41, 59, 0.08);
 
@@ -20,7 +21,7 @@
     --popover: var(--card);
     --popover-foreground: var(--text-main);
     
-    --primary-foreground: #ffffff; /* Texto blanco sobre botones oscuros */
+    --primary-foreground: #ffffff;
     
     --secondary: #f1f5f9;
     --secondary-foreground: #1e293b;
@@ -28,9 +29,8 @@
     --muted: #f1f5f9;
     --muted-foreground: var(--text-sec);
     
-    /* Para hovers de menús, usamos un color sutil, NO el verde de marca */
-    --accent-subtle: #f1f5f9;
-    --accent-foreground: var(--text-main);
+    /* Para hovers de menús y botones fantasma */
+    --accent-subtle: var(--accent);
     
     --destructive: #ef4444;
     --destructive-foreground: #ffffff;
@@ -42,14 +42,14 @@
   }
 
   [data-theme="dark"] {
-    /* --- TUS COLORES ORIGINALES DARK (Respetados al 100%) --- */
     --bg: #0f172a;
     --sidebar: #1e293b;
     --card: #1e293b;
     --text-main: #f1f5f9;
     --text-sec: #94a3b8;
-    --primary: #38bdf8; /* Celeste Original */
-    --accent: #34d399; /* Verde/Celeste Original */
+    --primary: #34d399; /* Verde Original Dark */
+    --accent: #134e4a; /* Verde muy oscuro para Hovers (Modo Oscuro) */
+    --accent-foreground: #34d399; /* Texto verde claro sobre hover oscuro */
     --border: #334155;
     --shadow: rgba(0, 0, 0, 0.3);
 
@@ -60,7 +60,7 @@
     --popover: var(--card);
     --popover-foreground: var(--text-main);
     
-    --primary-foreground: #0f172a; /* Texto oscuro sobre botones celestes */
+    --primary-foreground: #0f172a;
     
     --secondary: #334155;
     --secondary-foreground: var(--text-main);
@@ -68,8 +68,7 @@
     --muted: #334155;
     --muted-foreground: var(--text-sec);
     
-    --accent-subtle: #334155;
-    --accent-foreground: var(--text-main);
+    --accent-subtle: var(--accent);
   }
 
   * {

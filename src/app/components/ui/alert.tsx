@@ -4,21 +4,21 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "./utils";
 
 const alertVariants = cva(
-  "relative w-full rounded-xl border px-4 py-4 text-sm grid has-[>svg]:grid-cols-[calc(var(--spacing)*5)_1fr] grid-cols-[0_1fr] has-[>svg]:gap-x-3 gap-y-0.5 items-start [&>svg]:size-5 [&>svg]:translate-y-0.5 transition-all duration-200 shadow-sm",
+  "relative w-full rounded-2xl border px-5 py-4 text-sm grid has-[>svg]:grid-cols-[calc(var(--spacing)*6)_1fr] grid-cols-[0_1fr] has-[>svg]:gap-x-4 gap-y-0.5 items-start [&>svg]:size-5 [&>svg]:translate-y-0.5 transition-all duration-200 shadow-sm",
   {
     variants: {
       variant: {
-        default: "bg-card text-card-foreground",
+        default: "bg-white text-slate-900 border-slate-200",
         destructive:
-          "border-destructive/50 bg-destructive/5 text-destructive [&>svg]:text-destructive *:data-[slot=alert-description]:text-destructive/90",
+          "border-red-500/20 bg-red-500/5 text-red-600 [&>svg]:text-red-600 *:data-[slot=alert-description]:text-red-600/80",
         success:
-          "border-accent/50 bg-accent/5 text-accent [&>svg]:text-accent *:data-[slot=alert-description]:text-accent/90",
+          "border-primary/20 bg-primary/5 text-primary [&>svg]:text-primary *:data-[slot=alert-description]:text-primary/80",
         info:
-          "border-primary/50 bg-primary/5 text-primary [&>svg]:text-primary *:data-[slot=alert-description]:text-primary/90",
+          "border-blue-500/20 bg-blue-500/5 text-blue-600 [&>svg]:text-blue-600 *:data-[slot=alert-description]:text-blue-600/80",
         warning:
-          "border-amber-500/50 bg-amber-500/5 text-amber-600 dark:text-amber-400 [&>svg]:text-amber-600 dark:[&>svg]:text-amber-400 *:data-[slot=alert-description]:text-amber-700/90 dark:*:data-[slot=alert-description]:text-amber-300/90",
+          "border-amber-500/20 bg-amber-500/5 text-amber-600 [&>svg]:text-amber-600 *:data-[slot=alert-description]:text-amber-600/80",
         sweet:
-          "flex flex-col items-center text-center p-8 bg-card border-none shadow-lg",
+          "flex flex-col items-center text-center p-8 bg-white border-none shadow-2xl rounded-3xl",
       },
     },
     defaultVariants: {

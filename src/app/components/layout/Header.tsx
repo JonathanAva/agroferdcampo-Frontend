@@ -75,7 +75,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           >
             <MapPin
               size={18}
-              style={{ color: "var(--accent)" }}
+              style={{ color: "var(--primary)" }}
               className="shrink-0"
             />
             <span className="font-medium text-sm hidden sm:block truncate max-w-[150px] md:max-w-none">
@@ -90,7 +90,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           size="lg"
           className="gap-2 font-semibold shrink-0"
           style={{
-            backgroundColor: "var(--color-accent)",
+            backgroundColor: "var(--color-primary)",
             color: "#ffffff",
           }}
           title={theme === "light" ? "Modo Oscuro" : "Modo Claro"}
@@ -112,7 +112,7 @@ export function Header({ onMenuClick }: HeaderProps) {
             </p>
             <p
               className="text-[10px] md:text-xs font-bold uppercase tracking-wider"
-              style={{ color: "var(--color-accent)" }}
+              style={{ color: "var(--color-primary)" }}
             >
               {user?.role || "Empleado"}
             </p>
@@ -121,7 +121,7 @@ export function Header({ onMenuClick }: HeaderProps) {
             variant="ghost"
             size="icon"
             onClick={handleLogout}
-            className="text-muted-foreground hover:text-[var(--color-accent)] bg-[var(--bg)]"
+            className="text-muted-foreground hover:text-[var(--color-primary)] bg-[var(--bg)]"
             title="Cerrar Sesión"
           >
             <LogOut size={20} />

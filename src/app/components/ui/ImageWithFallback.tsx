@@ -1,27 +1,55 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react';
+import { ImageOff, Loader2 } from 'lucide-react';
+import { cn } from './utils';
 
-const ERROR_IMG_SRC =
-  'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODgiIGhlaWdodD0iODgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgc3Ryb2tlPSIjMDAwIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBvcGFjaXR5PSIuMyIgZmlsbD0ibm9uZSIgc3Ryb2tlLXdpZHRoPSIzLjciPjxyZWN0IHg9IjE2IiB5PSIxNiIgd2lkdGg9IjU2IiBoZWlnaHQ9IjU2IiByeD0iNiIvPjxwYXRoIGQ9Im0xNiA1OCAxNi0xOCAzMiAzMiIvPjxjaXJjbGUgY3g9IjUzIiBjeT0iMzUiIHI9IjciLz48L3N2Zz4KCg=='
+export function ImageWithFallback({ 
+  src, 
+  alt, 
+  className, 
+  style, 
+  ...props 
+}: React.ImgHTMLAttributes<HTMLImageElement>) {
+  const [status, setStatus] = useState<'loading' | 'error' | 'loaded'>('loading');
 
-export function ImageWithFallback(props: React.ImgHTMLAttributes<HTMLImageElement>) {
-  const [didError, setDidError] = useState(false)
+  useEffect(() => {
+    if (!src) setStatus('error');
+  }, [src]);
 
-  const handleError = () => {
-    setDidError(true)
-  }
-
-  const { src, alt, style, className, ...rest } = props
-
-  return didError ? (
-    <div
-      className={`inline-block bg-gray-100 text-center align-middle ${className ?? ''}`}
+  return (
+    <div 
+      className={cn(
+        "relative overflow-hidden bg-muted flex items-center justify-center shrink-0", 
+        className
+      )}
       style={style}
     >
-      <div className="flex items-center justify-center w-full h-full">
-        <img src={ERROR_IMG_SRC} alt="Error loading image" {...rest} data-original-url={src} />
-      </div>
+      {/* Skeleton / Loading State */}
+      {status === 'loading' && (
+        <div className="absolute inset-0 animate-pulse bg-primary/5 flex items-center justify-center">
+           <Loader2 className="size-5 text-primary/20 animate-spin" />
+        </div>
+      )}
+
+      {/* Error / Fallback State */}
+      {status === 'error' && (
+        <div className="flex flex-col items-center justify-center w-full h-full bg-primary/5 text-primary/40 p-4 text-center">
+          <ImageOff className="size-8 mb-2 opacity-50" />
+          <span className="text-[10px] font-medium uppercase tracking-tight leading-none">No Image</span>
+        </div>
+      )}
+
+      {/* Actual Image */}
+      <img
+        src={src}
+        alt={alt}
+        className={cn(
+          "w-full h-full object-cover transition-opacity duration-500",
+          status === 'loaded' ? "opacity-100" : "opacity-0"
+        )}
+        onLoad={() => setStatus('loaded')}
+        onError={() => setStatus('error')}
+        {...props}
+      />
     </div>
-  ) : (
-    <img src={src} alt={alt} className={className} style={style} {...rest} onError={handleError} />
-  )
+  );
 }

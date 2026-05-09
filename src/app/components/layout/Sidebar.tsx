@@ -59,15 +59,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           ${isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
         `}
         style={{
-          backgroundColor: "var(--sidebar)",
-          borderColor: "var(--border)",
+          backgroundColor: "#ffffff",
+          borderColor: "rgba(0,0,0,0.1)",
         }}
       >
         {/* Close button - Mobile only */}
         <button
           onClick={onClose}
-          className="md:hidden absolute right-4 top-4 p-2 rounded-lg"
-          style={{ color: "var(--text-sec)" }}
+          className="md:hidden absolute right-4 top-4 p-2 rounded-lg text-slate-600"
         >
           <X size={24} />
         </button>
@@ -76,8 +75,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="flex flex-col items-center gap-0 mb-10 text-center -mt-4">
           <img src={logo} alt="Logo" className="w-44 h-auto" />
           <span
-            className="text-xl font-bold leading-tight -mt-6"
-            style={{ color: "var(--accent)" }}
+            className="text-xl font-bold leading-tight -mt-6 text-primary"
           >
             Agroferr D'Campo
           </span>
@@ -88,7 +86,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           {navLinks
             .filter(
               (link) =>
-                !link.roles || (user?.roleId !== undefined && link.roles.includes(user.roleId)),
+                !link.roles ||
+                (user?.roleId !== undefined &&
+                  link.roles.includes(user.roleId)),
             )
             .map(({ path, icon: Icon, label }) => {
               const isActive = location.pathname === path;
@@ -102,19 +102,19 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                   }}
                   className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 font-medium"
                   style={{
-                    backgroundColor: isActive ? "var(--bg)" : "transparent",
-                    color: isActive ? "var(--accent)" : "var(--text-sec)",
+                    backgroundColor: isActive ? "rgba(var(--primary-rgb), 0.1)" : "transparent",
+                    color: isActive ? "var(--primary)" : "#475569",
                   }}
                   onMouseEnter={(e) => {
                     if (!isActive) {
-                      e.currentTarget.style.backgroundColor = "var(--bg)";
-                      e.currentTarget.style.color = "var(--accent)";
+                      e.currentTarget.style.backgroundColor = "rgba(var(--primary-rgb), 0.05)";
+                      e.currentTarget.style.color = "var(--primary)";
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (!isActive) {
                       e.currentTarget.style.backgroundColor = "transparent";
-                      e.currentTarget.style.color = "var(--text-sec)";
+                      e.currentTarget.style.color = "#475569";
                     }
                   }}
                 >
@@ -127,17 +127,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         {/* Footer Info */}
         <div
-          className="mt-auto pt-6 border-t text-sm"
-          style={{
-            borderColor: "var(--border)",
-            color: "var(--text-sec)",
-          }}
+          className="mt-auto pt-6 border-t text-sm border-slate-200"
         >
-          <p className="font-semibold" style={{ color: "var(--text-main)" }}>
+          <p className="font-semibold text-slate-800">
             Agroferr D'Campo
           </p>
 
-          <p className="text-xs mt-1">Sistema Multi-Sucursal v1.0</p>
+          <p className="text-xs mt-1 text-slate-500">Sistema Multi-Sucursal v1.0</p>
         </div>
       </aside>
     </>
