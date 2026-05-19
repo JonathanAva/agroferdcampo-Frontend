@@ -15,6 +15,7 @@ import {
   Settings,
   TruckIcon,
   X,
+  RotateCcw,
 } from "lucide-react";
 
 const navLinks = [
@@ -92,7 +93,17 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                   link.roles.includes(user.roleId)),
             )
             .map(({ path, icon: Icon, label }) => {
-              const isActive = location.pathname === path;
+              const isActive = (() => {
+                const [basePath, searchStr] = path.split("?");
+                if (location.pathname !== basePath) return false;
+                if (!searchStr) {
+                  const currentTab = new URLSearchParams(location.search).get("tab");
+                  return !currentTab || currentTab === "history";
+                }
+                const targetParams = new URLSearchParams(searchStr);
+                const currentParams = new URLSearchParams(location.search);
+                return targetParams.get("tab") === currentParams.get("tab");
+              })();
 
               return (
                 <Link
