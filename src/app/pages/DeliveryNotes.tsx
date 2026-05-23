@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Search, Eye, Filter, Calendar as CalendarIcon, 
-  TruckIcon, CheckCircle2, Trash2, X, PackageCheck, Plus
+  TruckIcon, CheckCircle2, Trash2, X, PackageCheck, Plus, Mail
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -39,6 +39,12 @@ export function DeliveryNotes() {
   const [productSearch, setProductSearch] = useState("");
   const [productResults, setProductResults] = useState<any[]>([]);
   const [savingNote, setSavingNote] = useState(false);
+
+  // Email state
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailNote, setEmailNote] = useState<DeliveryNoteResponse | null>(null);
+  const [destinationEmail, setDestinationEmail] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -143,6 +149,32 @@ export function DeliveryNotes() {
       toast.error(e.message || 'Error al confirmar entrega');
     } finally {
       setDelivering(false);
+    }
+  };
+
+  const handleOpenEmailModal = (note: DeliveryNoteResponse) => {
+    setEmailNote(note);
+    // Asumimos que si es de tipo CLIENTE, y tiene un cliente cargado, podemos prellenar el correo
+    setDestinationEmail(note.type === 'CLIENTE' ? '' : ''); 
+    // Ideally note.customer.email, but we don't have it in the list by default, so we leave it empty.
+    setEmailModalOpen(true);
+  };
+
+  const handleSendEmail = async () => {
+    if (!emailNote) return;
+    if (!destinationEmail || !destinationEmail.includes('@')) {
+      toast.error('Ingrese un correo electrónico válido');
+      return;
+    }
+    setSendingEmail(true);
+    try {
+      await deliveryNotesService.resendEmail(emailNote.id, destinationEmail);
+      toast.success('Correo de albarán enviado correctamente');
+      setEmailModalOpen(false);
+    } catch (e: any) {
+      toast.error(e.message || 'Error al enviar correo');
+    } finally {
+      setSendingEmail(false);
     }
   };
 
@@ -338,6 +370,10 @@ export function DeliveryNotes() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => handleOpenDetail(note)} className="font-bold cursor-pointer">
                             <Eye size={14} className="mr-2 text-[var(--primary)]" /> Ver Detalle
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem onClick={() => handleOpenEmailModal(note)} className="font-bold cursor-pointer text-blue-600">
+                            <Mail size={14} className="mr-2" /> Enviar Notificación
                           </DropdownMenuItem>
                           
                           {note.status === 'EMITIDO' && (
@@ -653,6 +689,37 @@ export function DeliveryNotes() {
             <Button variant="outline" onClick={() => setCreateModalOpen(false)}>Cancelar</Button>
             <Button onClick={handleCreateSubmit} disabled={savingNote || !newNote.items?.length} style={{ backgroundColor: 'var(--primary)', color: '#fff' }}>
               {savingNote ? 'Emitiendo...' : 'Emitir Albarán'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- MODAL ENVIAR CORREO --- */}
+      <Dialog open={emailModalOpen} onOpenChange={setEmailModalOpen}>
+        <DialogContent className="sm:max-w-[425px]" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[var(--text-main)]">
+              <Mail className="text-[var(--primary)]" /> Enviar Albarán por Correo
+            </DialogTitle>
+            <DialogDescription>
+              {emailNote && `Enviando copia del albarán #${emailNote.id}`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="email" className="text-[var(--text-main)]">Correo Electrónico Destino</Label>
+            <Input 
+              id="email" 
+              type="email" 
+              placeholder="cliente@ejemplo.com"
+              value={destinationEmail}
+              onChange={(e) => setDestinationEmail(e.target.value)}
+              className="mt-2 bg-[var(--bg)] text-[var(--text-main)]"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEmailModalOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSendEmail} disabled={sendingEmail || !destinationEmail} style={{ backgroundColor: 'var(--primary)', color: '#fff' }}>
+              {sendingEmail ? 'Enviando...' : 'Enviar Correo'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -109,6 +109,7 @@ const productSchema = z.object({
   prices: z
     .array(
       z.object({
+        id: z.number().optional(),
         priceType: z.string(),
         branchId: z.string(),
         price: z.string(),
@@ -249,6 +250,7 @@ export function Catalog() {
         costPrice: "", // Cost usually not editable this way or not returned
         trackStock: product.trackStock,
         prices: product.prices.map((p) => ({
+          id: p.id,
           priceType: p.priceType,
           branchId: p.branchId === null ? "global" : String(p.branchId),
           price: String(p.price),
@@ -870,10 +872,23 @@ export function Catalog() {
                         {priceFields.length > 1 && (
                           <button
                             type="button"
-                            onClick={() => removePrice(i)}
-                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                            onClick={async () => {
+                              const priceId = watch(`prices.${i}.id`);
+                              if (priceId && editingProduct) {
+                                if (!confirm("¿Eliminar este precio? Se aplicará inmediatamente.")) return;
+                                try {
+                                  await apiRequest(`/catalog/products/${editingProduct.id}/prices/${priceId}`, { method: "DELETE" });
+                                  toast.success("Precio eliminado");
+                                } catch (e: any) {
+                                  toast.error(e.message || "Error al eliminar precio");
+                                  return; // Stop removal from UI if failed
+                                }
+                              }
+                              removePrice(i);
+                            }}
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-10 hover:scale-110"
                           >
-                            <Trash2 size={12} />
+                            <Trash2 size={14} />
                           </button>
                         )}
                       </div>

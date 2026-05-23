@@ -40,6 +40,7 @@ import { cn } from "../components/ui/utils";
 import { useAuth } from "../context/AuthContext";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Label } from "../components/ui/label";
+import { SystemConfigData } from "./SystemConfig";
 
 // --- Types ---
 interface Product {
@@ -147,6 +148,10 @@ export function POS() {
   const [selectedPayment, setSelectedPayment] = useState<
     "EFECTIVO" | "TARJETA" | "TRANSFERENCIA" | "CREDITO"
   >("EFECTIVO");
+  
+  // System Config
+  const [sysConfig, setSysConfig] = useState<SystemConfigData | null>(null);
+  const [branchPaymentConfig, setBranchPaymentConfig] = useState<any>(null);
 
   // Customer State
   const [customerSearch, setCustomerSearch] = useState("");
@@ -156,6 +161,9 @@ export function POS() {
   );
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
   const [searchingCustomer, setSearchingCustomer] = useState(false);
+  
+  // Checkout Errors
+  const [checkoutErrorAlert, setCheckoutErrorAlert] = useState<string | null>(null);
 
   // New Checkout States
   const [processingOverlay, setProcessingOverlay] = useState(false);
@@ -194,8 +202,36 @@ export function POS() {
     if (user) {
       checkActiveShift();
       searchProducts("");
+      loadSysConfig();
+      loadBranchPaymentConfig();
     }
   }, [user]);
+
+  const loadBranchPaymentConfig = async () => {
+    try {
+      const branches = await apiRequest<any[]>("/branches");
+      const current = branches.find(b => b.name === user?.branch);
+      if (current) {
+        setBranchPaymentConfig({
+          acceptsCash: current.acceptsCash ?? true,
+          acceptsCard: current.acceptsCard ?? true,
+          acceptsTransfer: current.acceptsTransfer ?? true,
+          acceptsCredit: current.acceptsCredit ?? true,
+        });
+      }
+    } catch (err) {
+      console.error("Error loading branch config:", err);
+    }
+  };
+
+  const loadSysConfig = async () => {
+    try {
+      const data = await apiRequest<SystemConfigData>("/system-config");
+      setSysConfig(data);
+    } catch (err) {
+      console.error("Error loading sys config in POS:", err);
+    }
+  };
 
   const checkActiveShift = async () => {
     setLoadingShift(true);
@@ -352,12 +388,19 @@ export function POS() {
         const inv = Array.isArray(p.inventory) ? p.inventory[0] : p.inventory;
         const stockValue = inv?.quantity ?? p.stock ?? 0;
 
-        const publicPrice =
-          p.prices?.find((pr: any) => pr.priceType === "PUBLICO")?.price ||
-          p.prices?.[0]?.price ||
-          p.price ||
-          0;
+        let publicPrice = p.prices?.find(
+          (pr: any) => pr.priceType === "PUBLICO" && pr.branchId === Number(user?.branchId)
+        )?.price;
 
+        if (publicPrice === undefined || publicPrice === null) {
+          publicPrice = p.prices?.find(
+            (pr: any) => pr.priceType === "PUBLICO" && !pr.branchId
+          )?.price;
+        }
+
+        if (publicPrice === undefined || publicPrice === null) {
+          publicPrice = p.prices?.[0]?.price || p.price || 0;
+        }
         return {
           id: p.id,
           internalCode: p.internalCode || p.barcode || "S/C",
@@ -475,8 +518,19 @@ export function POS() {
   };
 
   const total = cart.reduce((sum, item) => sum + item.subtotal, 0);
-  const subtotal = isNaN(total) ? 0 : total / 1.13;
-  const iva = isNaN(total) ? 0 : total - subtotal;
+  const vatRate = sysConfig?.vatRate || 0.13;
+  const isVatIncluded = sysConfig?.vatIncluded !== false; // Default to true if not set
+  
+  let subtotal = 0;
+  let iva = 0;
+
+  if (isVatIncluded) {
+    subtotal = isNaN(total) ? 0 : total / (1 + vatRate);
+    iva = isNaN(total) ? 0 : total - subtotal;
+  } else {
+    subtotal = isNaN(total) ? 0 : total;
+    iva = subtotal * vatRate;
+  }
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
@@ -515,7 +569,15 @@ export function POS() {
       setCheckoutDueDate("");
 
     } catch (error: any) {
-      toast.error(error.message || "Error al procesar la venta. Verifique el stock.");
+      const msg = error.message || "Error al procesar la venta. Verifique el stock.";
+      
+      // Si el error parece ser una restricción de crédito / método inactivo (400 Bad Request)
+      if (msg.toLowerCase().includes("crédito") || msg.toLowerCase().includes("tarjeta") || msg.toLowerCase().includes("límite") || msg.toLowerCase().includes("mora") || msg.toLowerCase().includes("sucursal no acepta")) {
+        setCheckoutErrorAlert(msg);
+      } else {
+        toast.error(msg);
+      }
+
       // Si falla, rehabilitar el botón para que el cajero corrija y reintente
       if (checkoutBtnRef.current) {
         checkoutBtnRef.current.disabled = false;
@@ -817,12 +879,12 @@ export function POS() {
               style={{ borderColor: "var(--border)" }}
             >
               <div className="space-y-1.5 px-1">
-                <div className="flex justify-between text-xs font-medium text-[var(--text-sec)]">
+                <div className="flex justify-between font-bold text-[var(--text-sec)]">
                   <span>Subtotal</span>
                   <span>${subtotal.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-xs font-medium text-[var(--text-sec)]">
-                  <span>IVA (13%)</span>
+                <div className="flex justify-between font-bold text-[var(--text-sec)]">
+                  <span>IVA ({(vatRate * 100).toFixed(0)}%)</span>
                   <span>${iva.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-3xl font-black text-[var(--primary)] pt-3 mt-3 border-t-2 border-dashed border-[var(--border)]">
@@ -832,7 +894,19 @@ export function POS() {
               </div>
 
               <div className="grid grid-cols-4 gap-1">
-                {["EFECTIVO", "TARJETA", "TRANSFERENCIA", "CREDITO"].map(
+                {["EFECTIVO", "TARJETA", "TRANSFERENCIA", "CREDITO"]
+                  .filter((method) => {
+                    if (method === "CREDITO" && sysConfig?.allowCreditSales === false) return false;
+                    if (!branchPaymentConfig) return true; // Default allow all if config not loaded
+                    
+                    if (method === "EFECTIVO" && !branchPaymentConfig.acceptsCash) return false;
+                    if (method === "TARJETA" && !branchPaymentConfig.acceptsCard) return false;
+                    if (method === "TRANSFERENCIA" && !branchPaymentConfig.acceptsTransfer) return false;
+                    if (method === "CREDITO" && !branchPaymentConfig.acceptsCredit) return false;
+                    
+                    return true;
+                  })
+                  .map(
                   (method) => (
                     <Button
                       key={method}
@@ -1084,6 +1158,30 @@ export function POS() {
               Confirmar y Guardar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Alerta de Error de Checkout (Ej: Crédito) */}
+      <Dialog open={!!checkoutErrorAlert} onOpenChange={(open) => !open && setCheckoutErrorAlert(null)}>
+        <DialogContent className="sm:max-w-[425px] border-none bg-rose-500 text-white shadow-2xl">
+          <div className="flex flex-col items-center justify-center p-6 text-center space-y-4">
+            <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center animate-pulse">
+              <AlertTriangle size={40} className="text-white" />
+            </div>
+            <DialogTitle className="text-2xl font-black uppercase tracking-tight text-white">
+              Venta Denegada
+            </DialogTitle>
+            <DialogDescription className="text-white/90 font-bold text-sm">
+              {checkoutErrorAlert}
+            </DialogDescription>
+            <div className="pt-4 w-full">
+              <Button
+                onClick={() => setCheckoutErrorAlert(null)}
+                className="w-full bg-white text-rose-600 hover:bg-white/90 font-black uppercase tracking-widest h-12 rounded-xl"
+              >
+                Entendido, cambiar método
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
