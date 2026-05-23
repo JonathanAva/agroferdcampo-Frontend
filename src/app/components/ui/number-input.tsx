@@ -6,10 +6,11 @@ export interface NumberInputProps
   extends React.InputHTMLAttributes<HTMLInputElement> {
   onValueChange?: (value: number | undefined) => void
   step?: number
+  hideControls?: boolean
 }
 
 const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
-  ({ className, onValueChange, step = 1, ...props }, ref) => {
+  ({ className, onValueChange, step = 1, hideControls = false, ...props }, ref) => {
     const inputRef = React.useRef<HTMLInputElement>(null)
     const combinedRef = (ref as React.MutableRefObject<HTMLInputElement>) || inputRef
 
@@ -19,7 +20,6 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
         input.stepUp(step)
         const newValue = parseFloat(input.value)
         onValueChange?.(isNaN(newValue) ? undefined : newValue)
-        // Trigger change event for React Hook Form or other listeners
         input.dispatchEvent(new Event('change', { bubbles: true }))
       }
     }
@@ -51,24 +51,26 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
           onChange={handleChange}
           {...props}
         />
-        <div className="absolute right-0 top-0 h-full flex flex-col border-l border-input overflow-hidden rounded-r-xl">
-          <button
-            type="button"
-            onClick={handleIncrement}
-            className="flex-1 px-2 hover:bg-accent hover:text-accent-foreground transition-colors border-b border-input flex items-center justify-center"
-            tabIndex={-1}
-          >
-            <ChevronUp className="h-3 w-3" />
-          </button>
-          <button
-            type="button"
-            onClick={handleDecrement}
-            className="flex-1 px-2 hover:bg-accent hover:text-accent-foreground transition-colors flex items-center justify-center"
-            tabIndex={-1}
-          >
-            <ChevronDown className="h-3 w-3" />
-          </button>
-        </div>
+        {!hideControls && (
+          <div className="absolute right-0 top-0 h-full flex flex-col border-l border-input overflow-hidden rounded-r-xl">
+            <button
+              type="button"
+              onClick={handleIncrement}
+              className="flex-1 px-2 hover:bg-accent hover:text-accent-foreground transition-colors border-b border-input flex items-center justify-center"
+              tabIndex={-1}
+            >
+              <ChevronUp className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onClick={handleDecrement}
+              className="flex-1 px-2 hover:bg-accent hover:text-accent-foreground transition-colors flex items-center justify-center"
+              tabIndex={-1}
+            >
+              <ChevronDown className="h-3 w-3" />
+            </button>
+          </div>
+        )}
       </div>
     )
   }

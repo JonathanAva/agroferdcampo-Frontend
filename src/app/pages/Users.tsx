@@ -69,6 +69,7 @@ const ROLES = [
   { id: 3, name: "Supervisor" },
   { id: 4, name: "Cajero" },
   { id: 5, name: "Bodeguero" },
+  { id: 6, name: "Conductor" },
 ];
 
 export function Users() {

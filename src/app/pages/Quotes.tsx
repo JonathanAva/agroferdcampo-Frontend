@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Search, FileText, Eye, CheckCircle2, AlertCircle, Calendar as CalendarIcon, RefreshCcw, Filter, X,
-  Mail, UserCog, Clock, Send, Plus, Banknote, CreditCard, Smartphone
+  Mail, UserCog, Clock, Send, Plus, Banknote, CreditCard, Smartphone, Trash2, Truck as TruckIcon
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { quotesService, QuoteResponse } from '../services/quotes.service';
@@ -16,7 +16,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
 import { Label } from '../components/ui/label';
+import { Switch } from '../components/ui/switch';
 import { apiRequest } from '../config/api';
+import { TransportSelector, TransportData } from '../components/transport/TransportSelector';
 
 export function Quotes() {
   const [quotes, setQuotes] = useState<QuoteResponse[]>([]);
@@ -39,6 +41,25 @@ export function Quotes() {
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [quoteToConfirm, setQuoteToConfirm] = useState<QuoteResponse | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('EFECTIVO');
+  const [transportData, setTransportData] = useState<TransportData | null>(null);
+
+  // --- Estados para Crear Cotización ---
+  const [createQuoteModalOpen, setCreateQuoteModalOpen] = useState(false);
+  const [newQuote, setNewQuote] = useState({
+    customerId: undefined as number | undefined,
+    validDays: 7,
+    notes: '',
+    items: [] as { productId: number; productName: string; quantity: number; unitPrice: number }[],
+    requiresTransport: false,
+    vehicleId: undefined as number | undefined,
+    deliveryAddress: '',
+  });
+  const [productSearchCreate, setProductSearchCreate] = useState('');
+  const [productResultsCreate, setProductResultsCreate] = useState<any[]>([]);
+  const [customerSearchCreate, setCustomerSearchCreate] = useState('');
+  const [customerResultsCreate, setCustomerResultsCreate] = useState<any[]>([]);
+  const [selectedCustomerCreate, setSelectedCustomerCreate] = useState<any>(null);
+  const [savingQuote, setSavingQuote] = useState(false);
 
   // --- Estados para Modales Extras de la Guía ---
   const [editCustomerModalOpen, setEditCustomerModalOpen] = useState(false);
@@ -104,6 +125,7 @@ export function Quotes() {
   const handleOpenConfirmModal = (quote: QuoteResponse) => {
     setQuoteToConfirm(quote);
     setSelectedPaymentMethod('EFECTIVO');
+    setTransportData(null);
     setPaymentModalOpen(true);
   };
 
@@ -111,7 +133,16 @@ export function Quotes() {
     if (!quoteToConfirm) return;
     setConfirmingId(quoteToConfirm.id);
     try {
-      await quotesService.confirmQuote(quoteToConfirm.id, selectedPaymentMethod);
+      await quotesService.confirmQuote(quoteToConfirm.id, {
+        paymentMethod: selectedPaymentMethod,
+        ...(transportData && transportData.requiresTransport ? {
+          requiresTransport: true,
+          vehicleId: transportData.vehicleId,
+          driverId: transportData.driverId,
+          deliveryAddress: transportData.deliveryAddress,
+          scheduledAt: transportData.scheduledDeliveryAt,
+        } : {})
+      });
       toast.success('Cotización confirmada y venta generada');
       fetchQuotes();
       setPaymentModalOpen(false);
@@ -132,6 +163,53 @@ export function Quotes() {
       toast.error(error.message || 'Error al cancelar la cotización');
     } finally {
       setCancelingId(null);
+    }
+  };
+
+  useEffect(() => {
+    if (productSearchCreate.length > 2) {
+      const delay = setTimeout(async () => {
+        try {
+          const res = await apiRequest<any>(`/products/search?q=${encodeURIComponent(productSearchCreate)}&limit=10`);
+          setProductResultsCreate(res.data || res || []);
+        } catch (e) { console.error(e); }
+      }, 400);
+      return () => clearTimeout(delay);
+    } else {
+      setProductResultsCreate([]);
+    }
+  }, [productSearchCreate]);
+
+  const handleCreateQuote = async () => {
+    if (!newQuote.items.length) {
+      toast.error('Agrega al menos un producto a la cotización');
+      return;
+    }
+    setSavingQuote(true);
+    try {
+      await quotesService.createQuote({
+        customerId: selectedCustomerCreate?.id,
+        validDays: newQuote.validDays || 7,
+        notes: newQuote.notes || undefined,
+        requiresTransport: newQuote.requiresTransport,
+        vehicleId: newQuote.requiresTransport ? newQuote.vehicleId : undefined,
+        deliveryAddress: newQuote.requiresTransport ? newQuote.deliveryAddress : undefined,
+        items: newQuote.items.map(i => ({
+          productId: i.productId,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+        })),
+      });
+      toast.success('Cotización creada exitosamente');
+      setCreateQuoteModalOpen(false);
+      setNewQuote({ customerId: undefined, validDays: 7, notes: '', items: [], requiresTransport: false, vehicleId: undefined, deliveryAddress: '' });
+      setSelectedCustomerCreate(null);
+      setProductSearchCreate('');
+      fetchQuotes();
+    } catch (e: any) {
+      toast.error(e.message || 'Error al crear la cotización');
+    } finally {
+      setSavingQuote(false);
     }
   };
 
@@ -253,7 +331,7 @@ export function Quotes() {
           <h1 className="text-3xl font-bold text-[var(--text-main)]">Cotizaciones</h1>
           <p className="text-[var(--text-sec)]">Gestiona las cotizaciones de clientes y conviértelas en ventas.</p>
         </div>
-        <Button onClick={() => navigate('/pos')} className="font-bold whitespace-nowrap bg-[var(--primary)] text-white hover:bg-[var(--primary)]/90">
+        <Button onClick={() => setCreateQuoteModalOpen(true)} className="font-bold whitespace-nowrap bg-[var(--primary)] text-white hover:bg-[var(--primary)]/90">
           <Plus size={16} className="mr-2" /> Nueva Cotización
         </Button>
       </div>
@@ -574,7 +652,7 @@ export function Quotes() {
                   </Button>
                   <Button 
                     onClick={() => {
-                      handleConfirmQuote(selectedQuote);
+                      handleOpenConfirmModal(selectedQuote);
                       setDetailModalOpen(false);
                     }}
                     disabled={confirmingId === selectedQuote.id}
@@ -778,6 +856,24 @@ export function Quotes() {
                 <span className="text-xl font-black text-[var(--text-main)]">${Number(quoteToConfirm.totalAmount).toFixed(2)}</span>
               </div>
             )}
+
+            {quoteToConfirm?.requiresTransport && (
+              <div className="mt-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 text-sm flex items-center gap-2">
+                <TruckIcon size={16} className="text-blue-600" />
+                <span className="text-blue-800 dark:text-blue-300 font-medium">
+                  Esta cotización incluye entrega a domicilio. Se generará un albarán automáticamente al confirmar.
+                </span>
+              </div>
+            )}
+
+            <div className="mt-4">
+              <TransportSelector
+                customerId={quoteToConfirm?.customerId}
+                value={transportData}
+                onChange={setTransportData}
+                disabled={!!confirmingId}
+              />
+            </div>
           </div>
 
           <DialogFooter>
@@ -792,6 +888,255 @@ export function Quotes() {
               ) : (
                 <><CheckCircle2 size={16} /> Confirmar Venta</>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* MODAL CREAR COTIZACIÓN */}
+      <Dialog open={createQuoteModalOpen} onOpenChange={setCreateQuoteModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
+          <DialogHeader className="p-6 border-b border-[var(--border)]">
+            <DialogTitle className="flex items-center gap-2 text-2xl text-[var(--primary)]">
+              <FileText /> Nueva Cotización
+            </DialogTitle>
+            <DialogDescription>
+              Crea una cotización para un cliente. Puedes indicar si requiere entrega a domicilio.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {/* Fila 1: Cliente + Vigencia */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Búsqueda de cliente */}
+              <div className="space-y-2">
+                <Label className="font-bold text-xs uppercase text-[var(--text-sec)]">Cliente (Opcional)</Label>
+                {selectedCustomerCreate ? (
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-[var(--border)] bg-[var(--bg)]">
+                    <div>
+                      <p className="font-bold text-sm">{selectedCustomerCreate.name}</p>
+                      <p className="text-xs text-[var(--text-sec)]">{selectedCustomerCreate.documentNumber || selectedCustomerCreate.nit || 'Sin documento'}</p>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => { setSelectedCustomerCreate(null); setCustomerSearchCreate(''); }}>
+                      <X size={14} />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-sec)]" />
+                    <Input
+                      className="pl-9 bg-[var(--bg)]"
+                      placeholder="Buscar cliente por nombre..."
+                      value={customerSearchCreate}
+                      onChange={e => {
+                        setCustomerSearchCreate(e.target.value);
+                        if (e.target.value.length > 1) {
+                          apiRequest<any>(`/customers/search?q=${encodeURIComponent(e.target.value)}`)
+                            .then(res => setCustomerResultsCreate(Array.isArray(res) ? res : []))
+                            .catch(console.error);
+                        } else {
+                          setCustomerResultsCreate([]);
+                        }
+                      }}
+                    />
+                    {customerResultsCreate.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-xl z-50 max-h-40 overflow-y-auto">
+                        {customerResultsCreate.map(c => (
+                          <div
+                            key={c.id}
+                            className="p-3 hover:bg-[var(--bg)]/50 cursor-pointer flex justify-between border-b border-[var(--border)] text-sm"
+                            onClick={() => { setSelectedCustomerCreate(c); setCustomerResultsCreate([]); setCustomerSearchCreate(''); }}
+                          >
+                            <span className="font-bold">{c.name}</span>
+                            <span className="text-[var(--text-sec)] text-xs">{c.documentNumber || c.nit || ''}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              
+              {/* Vigencia en días */}
+              <div className="space-y-2">
+                <Label className="font-bold text-xs uppercase text-[var(--text-sec)]">Vigencia (días)</Label>
+                <Select
+                  value={String(newQuote.validDays)}
+                  onValueChange={v => setNewQuote(prev => ({ ...prev, validDays: Number(v) }))}
+                >
+                  <SelectTrigger className="bg-[var(--bg)]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="3">3 días</SelectItem>
+                    <SelectItem value="7">7 días</SelectItem>
+                    <SelectItem value="15">15 días</SelectItem>
+                    <SelectItem value="30">30 días</SelectItem>
+                    <SelectItem value="60">60 días</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Sección de Transporte */}
+            <Card className="p-4 border-l-4 border-l-[var(--primary)] border-[var(--border)] bg-[var(--card)]">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <TruckIcon size={18} className="text-[var(--primary)]" />
+                  <Label className="font-bold">¿Requiere entrega a domicilio?</Label>
+                </div>
+                <Switch
+                  checked={newQuote.requiresTransport}
+                  onCheckedChange={c => setNewQuote(prev => ({ ...prev, requiresTransport: c }))}
+                />
+              </div>
+              {newQuote.requiresTransport && (
+                <div className="mt-4 pt-4 border-t border-[var(--border)] space-y-3 animate-in fade-in">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase text-[var(--text-sec)]">Dirección de Entrega</Label>
+                    <Input
+                      placeholder="Dirección exacta de entrega..."
+                      value={newQuote.deliveryAddress}
+                      onChange={e => setNewQuote(prev => ({ ...prev, deliveryAddress: e.target.value }))}
+                      className="bg-[var(--bg)]"
+                    />
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            {/* Notas */}
+            <div className="space-y-2">
+              <Label className="font-bold text-xs uppercase text-[var(--text-sec)]">Notas (Opcional)</Label>
+              <Input
+                placeholder="Condiciones especiales, comentarios..."
+                value={newQuote.notes}
+                onChange={e => setNewQuote(prev => ({ ...prev, notes: e.target.value }))}
+                className="bg-[var(--bg)]"
+              />
+            </div>
+
+            {/* Búsqueda de productos */}
+            <Card className="p-4 border-[var(--border)] bg-[var(--card)]">
+              <Label className="mb-3 block font-bold text-xs uppercase text-[var(--text-sec)]">Agregar Productos</Label>
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-sec)]" />
+                <Input
+                  className="pl-9 bg-[var(--bg)]"
+                  placeholder="Buscar producto por nombre o código..."
+                  value={productSearchCreate}
+                  onChange={e => setProductSearchCreate(e.target.value)}
+                />
+                {productResultsCreate.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
+                    {productResultsCreate.map(p => (
+                      <div
+                        key={p.id}
+                        className="p-3 hover:bg-[var(--bg)]/50 cursor-pointer flex justify-between border-b border-[var(--border)] text-sm"
+                        onClick={() => {
+                          const existing = newQuote.items.find(i => i.productId === p.id);
+                          if (existing) { toast.info('Producto ya agregado'); return; }
+                          const price = p.price || (p.prices?.[0]?.price) || 0;
+                          setNewQuote(prev => ({
+                            ...prev,
+                            items: [...prev.items, {
+                              productId: p.id,
+                              productName: p.name,
+                              quantity: 1,
+                              unitPrice: Number(price),
+                            }]
+                          }));
+                          setProductSearchCreate('');
+                          setProductResultsCreate([]);
+                        }}
+                      >
+                        <span className="font-bold">{p.name}</span>
+                        <span className="text-emerald-600 font-bold text-xs">${Number(p.price || 0).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {/* Lista de items */}
+            {newQuote.items.length > 0 && (
+              <div className="rounded-xl border border-[var(--border)] overflow-hidden bg-[var(--card)]">
+                <Table>
+                  <TableHeader className="bg-[var(--bg)]">
+                    <TableRow>
+                      <TableHead>Producto</TableHead>
+                      <TableHead className="w-28 text-center">Cantidad</TableHead>
+                      <TableHead className="w-32 text-center">Precio Unit.</TableHead>
+                      <TableHead className="w-28 text-right">Subtotal</TableHead>
+                      <TableHead className="w-12"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {newQuote.items.map((item, idx) => (
+                      <TableRow key={item.productId}>
+                        <TableCell className="font-bold text-sm">{item.productName}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1 justify-center">
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
+                              const items = [...newQuote.items];
+                              if (items[idx].quantity > 1) items[idx].quantity--;
+                              setNewQuote(prev => ({ ...prev, items }));
+                            }}>-</Button>
+                            <span className="w-8 text-center font-bold">{item.quantity}</span>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
+                              const items = [...newQuote.items];
+                              items[idx].quantity++;
+                              setNewQuote(prev => ({ ...prev, items }));
+                            }}>+</Button>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            className="w-24 text-center h-8 bg-[var(--bg)]"
+                            value={item.unitPrice}
+                            min={0}
+                            step={0.01}
+                            onChange={e => {
+                              const items = [...newQuote.items];
+                              items[idx].unitPrice = Number(e.target.value);
+                              setNewQuote(prev => ({ ...prev, items }));
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-[var(--primary)]">
+                          ${(item.quantity * item.unitPrice).toFixed(2)}
+                        </TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="icon" className="text-destructive h-7 w-7" onClick={() => {
+                            setNewQuote(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) }));
+                          }}>
+                            <Trash2 size={14} />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <div className="p-4 bg-[var(--bg)] flex justify-end border-t border-[var(--border)]">
+                  <div className="text-right">
+                    <p className="text-sm text-[var(--text-sec)]">Total Cotización</p>
+                    <p className="text-2xl font-black text-[var(--primary)]">
+                      ${newQuote.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0).toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter className="p-6 border-t border-[var(--border)] bg-[var(--card)]">
+            <Button variant="outline" onClick={() => setCreateQuoteModalOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={handleCreateQuote}
+              disabled={savingQuote || !newQuote.items.length}
+              style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
+              className="font-bold"
+            >
+              {savingQuote ? 'Guardando...' : 'Crear Cotización'}
             </Button>
           </DialogFooter>
         </DialogContent>

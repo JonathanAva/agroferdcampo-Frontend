@@ -19,6 +19,10 @@ export interface CreateSaleDto {
   dueDate?: string;
   creditNotes?: string;
   items: SaleItemDto[];
+  requiresTransport?: boolean;
+  vehicleId?: number;
+  deliveryAddress?: string;
+  scheduledAt?: string;
 }
 
 export interface VoidSaleDto {
