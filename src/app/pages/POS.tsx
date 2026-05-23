@@ -560,7 +560,7 @@ export function POS() {
   };
 
   const total = cart.reduce((sum, item) => sum + item.subtotal, 0);
-  const vatRate = sysConfig?.vatRate || 0.13;
+  const vatRate = parseFloat(String(sysConfig?.vatRate ?? 0.13));
   const isVatIncluded = sysConfig?.vatIncluded !== false; // Default to true if not set
   
   let subtotal = 0;

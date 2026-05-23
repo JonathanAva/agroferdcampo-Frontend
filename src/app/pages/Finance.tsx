@@ -241,7 +241,7 @@ export function Finance() {
                 <h3 className="text-sm font-bold text-[var(--text-sec)]">Saldo Caja General</h3>
               </div>
               <p className={`text-3xl font-black ${generalSummary && generalSummary.balance >= 0 ? 'text-[var(--primary)]' : 'text-red-500'}`}>
-                ${generalSummary?.balance.toFixed(2) || '0.00'}
+                ${generalSummary?.balance?.toFixed(2) || '0.00'}
               </p>
             </Card>
             <Card className="p-6 bg-[var(--card)] border-[var(--border)] shadow-sm">
@@ -252,7 +252,7 @@ export function Finance() {
                 <h3 className="text-sm font-bold text-[var(--text-sec)]">Total Ingresos</h3>
               </div>
               <p className="text-3xl font-black text-emerald-600">
-                ${generalSummary?.totalIngresos.toFixed(2) || '0.00'}
+                ${generalSummary?.totalIngresos?.toFixed(2) || '0.00'}
               </p>
             </Card>
             <Card className="p-6 bg-[var(--card)] border-[var(--border)] shadow-sm">
@@ -263,7 +263,7 @@ export function Finance() {
                 <h3 className="text-sm font-bold text-[var(--text-sec)]">Total Egresos</h3>
               </div>
               <p className="text-3xl font-black text-rose-600">
-                ${generalSummary?.totalEgresos.toFixed(2) || '0.00'}
+                ${generalSummary?.totalEgresos?.toFixed(2) || '0.00'}
               </p>
             </Card>
           </div>

@@ -37,6 +37,15 @@ export async function apiRequest<T>(
       data = { message: text || 'Respuesta vacía del servidor' };
     }
 
+    // Si el token expiró, limpiar sesión y redirigir al login
+    // (pero no en endpoints de auth para evitar bucles)
+    if (response.status === 401 && !endpoint.includes('/auth/')) {
+      localStorage.removeItem('agro-token');
+      localStorage.removeItem('agro-user');
+      window.location.href = '/login';
+      throw new Error('Tu sesión ha expirado. Por favor inicia sesión de nuevo.');
+    }
+
     if (!response.ok) {
       // NestJS suele enviar el error en data.message
       const errorMsg = data.message || `Error ${response.status}: ${response.statusText}`;

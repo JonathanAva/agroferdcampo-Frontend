@@ -1,6 +1,6 @@
 import { apiRequest } from '../config/api';
 
-const BASE = '/api/v1/general-cash';
+const BASE = '/general-cash';
 
 export interface GeneralCashEntry {
   id: number;
