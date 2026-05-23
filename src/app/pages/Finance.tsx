@@ -28,7 +28,7 @@ export function Finance() {
   const [generalSummary, setGeneralSummary] = useState<GeneralCashSummary | null>(null);
   const [generalMovements, setGeneralMovements] = useState<GeneralCashEntry[]>([]);
   const [generalLoading, setGeneralLoading] = useState(true);
-  const [generalFilters, setGeneralFilters] = useState({ page: 1, limit: 20, type: 'all', category: 'all' });
+  const [generalFilters, setGeneralFilters] = useState({ page: 1, limit: 20, type: 'all', category: 'all', startDate: '', endDate: '' });
   const [generalPagination, setGeneralPagination] = useState({ total: 0, totalPages: 1 });
 
   const [showAddGeneralModal, setShowAddGeneralModal] = useState(false);
@@ -61,18 +61,23 @@ export function Finance() {
     } else {
       fetchPettyCash();
     }
-  }, [activeTab, generalFilters.page, generalFilters.type, generalFilters.category]);
+  }, [activeTab, generalFilters.page, generalFilters.type, generalFilters.category, generalFilters.startDate, generalFilters.endDate]);
 
   // --- GENERAL CASH LOGIC ---
   const fetchGeneralCash = async () => {
     setGeneralLoading(true);
     try {
-      const summary = await generalCashService.getSummary();
+      const summary = await generalCashService.getSummary(
+        generalFilters.startDate || undefined, 
+        generalFilters.endDate || undefined
+      );
       setGeneralSummary(summary);
 
       const filters: any = { page: generalFilters.page, limit: generalFilters.limit };
       if (generalFilters.type !== 'all') filters.type = generalFilters.type;
       if (generalFilters.category !== 'all') filters.category = generalFilters.category;
+      if (generalFilters.startDate) filters.startDate = generalFilters.startDate;
+      if (generalFilters.endDate) filters.endDate = generalFilters.endDate;
 
       const res = await generalCashService.findAll(filters);
       setGeneralMovements(res.data);
@@ -270,8 +275,26 @@ export function Finance() {
 
           {/* FILTROS Y ACCIONES */}
           <div className="flex flex-col md:flex-row justify-between gap-4">
-            <div className="flex gap-4">
-              <Select value={generalFilters.type} onValueChange={v => setGeneralFilters({...generalFilters, type: v})}>
+            <div className="flex flex-wrap gap-4 items-center">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-[var(--text-sec)]">Desde:</span>
+                <Input 
+                  type="date" 
+                  className="w-40 bg-[var(--card)]" 
+                  value={generalFilters.startDate} 
+                  onChange={e => setGeneralFilters({...generalFilters, startDate: e.target.value, page: 1})}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-[var(--text-sec)]">Hasta:</span>
+                <Input 
+                  type="date" 
+                  className="w-40 bg-[var(--card)]" 
+                  value={generalFilters.endDate} 
+                  onChange={e => setGeneralFilters({...generalFilters, endDate: e.target.value, page: 1})}
+                />
+              </div>
+              <Select value={generalFilters.type} onValueChange={v => setGeneralFilters({...generalFilters, type: v, page: 1})}>
                 <SelectTrigger className="w-32 bg-[var(--card)]"><SelectValue placeholder="Tipo" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
@@ -279,8 +302,20 @@ export function Finance() {
                   <SelectItem value="EGRESO">Egreso</SelectItem>
                 </SelectContent>
               </Select>
+              
+              {(generalFilters.startDate || generalFilters.endDate || generalFilters.type !== 'all') && (
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setGeneralFilters({ ...generalFilters, startDate: '', endDate: '', type: 'all', page: 1 })}
+                  className="text-[var(--text-sec)] hover:text-rose-500"
+                >
+                  <Filter size={16} className="mr-2" />
+                  Limpiar
+                </Button>
+              )}
             </div>
-            <Button onClick={() => setShowAddGeneralModal(true)} className="font-bold">
+            <Button onClick={() => setShowAddGeneralModal(true)} className="font-bold whitespace-nowrap">
               Registrar Movimiento
             </Button>
           </div>

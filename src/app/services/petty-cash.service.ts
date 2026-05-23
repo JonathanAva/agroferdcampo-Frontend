@@ -1,6 +1,6 @@
 import { apiRequest } from '../config/api';
 
-const BASE = '/api/v1/petty-cash';
+const BASE = '/petty-cash';
 
 export interface PettyCashStatus {
   id: number;

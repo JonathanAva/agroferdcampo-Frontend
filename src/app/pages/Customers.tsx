@@ -14,6 +14,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger 
 } from '../components/ui/dropdown-menu';
 import { CustomerDialog } from '../components/customers/CustomerDialog';
+import { CreditLimitDialog } from '../components/customers/CreditLimitDialog';
 import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
@@ -60,6 +61,7 @@ export function Customers() {
 
   // Modals
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   useEffect(() => {
@@ -286,6 +288,9 @@ export function Customers() {
                             <DropdownMenuItem onClick={() => { setSelectedCustomer(customer); setIsDialogOpen(true); }} className="gap-2 font-bold focus:bg-[var(--primary)]/10 cursor-pointer">
                               <Edit2 size={14} className="text-[var(--primary)]" /> Editar
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setSelectedCustomer(customer); setIsCreditDialogOpen(true); }} className="gap-2 font-bold focus:bg-amber-500/10 cursor-pointer text-amber-500">
+                              <CreditCard size={14} className="text-amber-500" /> Asignar Crédito
+                            </DropdownMenuItem>
                             {isAdmin && (
                               <DropdownMenuItem onClick={() => handleDelete(customer.id)} className="gap-2 font-bold text-destructive focus:bg-destructive/10 cursor-pointer">
                                 <Trash2 size={14} /> Desactivar
@@ -336,6 +341,12 @@ export function Customers() {
         open={isDialogOpen} 
         onOpenChange={setIsDialogOpen} 
         customer={selectedCustomer} 
+        onSuccess={fetchCustomers}
+      />
+      <CreditLimitDialog
+        open={isCreditDialogOpen}
+        onOpenChange={setIsCreditDialogOpen}
+        customer={selectedCustomer}
         onSuccess={fetchCustomers}
       />
     </div>

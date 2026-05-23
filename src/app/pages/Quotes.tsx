@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Search, FileText, Eye, CheckCircle2, AlertCircle, Calendar as CalendarIcon, RefreshCcw, Filter, X,
-  Mail, UserCog, Clock, Send
+  Mail, UserCog, Clock, Send, Plus, Banknote, CreditCard, Smartphone
 } from 'lucide-react';
+import { useNavigate } from 'react-router';
 import { quotesService, QuoteResponse } from '../services/quotes.service';
 import { toast } from 'sonner';
 import { Button } from '../components/ui/button';
@@ -25,12 +26,19 @@ export function Quotes() {
   // Filtros
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const navigate = useNavigate();
 
   // Modales
   const [selectedQuote, setSelectedQuote] = useState<QuoteResponse | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [cancelingId, setCancelingId] = useState<number | null>(null);
+
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [quoteToConfirm, setQuoteToConfirm] = useState<QuoteResponse | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('EFECTIVO');
 
   // --- Estados para Modales Extras de la Guía ---
   const [editCustomerModalOpen, setEditCustomerModalOpen] = useState(false);
@@ -59,6 +67,7 @@ export function Quotes() {
       const filters: any = { page: pagination.page, limit: pagination.limit };
       if (statusFilter !== 'all') filters.status = statusFilter;
       if (dateFilter) filters.startDate = dateFilter;
+      if (searchTerm) filters.search = searchTerm;
 
       const res = await quotesService.getQuotes(filters);
       setQuotes(res.data);
@@ -78,6 +87,7 @@ export function Quotes() {
   const resetFilters = () => {
     setStatusFilter('all');
     setDateFilter('');
+    setSearchTerm('');
     setPagination(p => ({ ...p, page: 1 }));
   };
 
@@ -91,12 +101,20 @@ export function Quotes() {
     }
   };
 
-  const handleConfirmQuote = async (quote: QuoteResponse) => {
-    setConfirmingId(quote.id);
+  const handleOpenConfirmModal = (quote: QuoteResponse) => {
+    setQuoteToConfirm(quote);
+    setSelectedPaymentMethod('EFECTIVO');
+    setPaymentModalOpen(true);
+  };
+
+  const handleConfirmQuote = async () => {
+    if (!quoteToConfirm) return;
+    setConfirmingId(quoteToConfirm.id);
     try {
-      await quotesService.confirmQuote(quote.id);
+      await quotesService.confirmQuote(quoteToConfirm.id, selectedPaymentMethod);
       toast.success('Cotización confirmada y venta generada');
       fetchQuotes();
+      setPaymentModalOpen(false);
     } catch (error: any) {
       toast.error(error.message || 'Error al confirmar la cotización');
     } finally {
@@ -140,6 +158,13 @@ export function Quotes() {
     }, 300);
     return () => clearTimeout(delayDebounce);
   }, [customerSearchQuery]);
+
+  useEffect(() => {
+    const delayDebounce = setTimeout(() => {
+      fetchQuotes();
+    }, 500);
+    return () => clearTimeout(delayDebounce);
+  }, [searchTerm]);
 
   const handleOpenEditCustomer = (quote: QuoteResponse) => {
     setEditingQuote(quote);
@@ -228,10 +253,29 @@ export function Quotes() {
           <h1 className="text-3xl font-bold text-[var(--text-main)]">Cotizaciones</h1>
           <p className="text-[var(--text-sec)]">Gestiona las cotizaciones de clientes y conviértelas en ventas.</p>
         </div>
+        <Button onClick={() => navigate('/pos')} className="font-bold whitespace-nowrap bg-[var(--primary)] text-white hover:bg-[var(--primary)]/90">
+          <Plus size={16} className="mr-2" /> Nueva Cotización
+        </Button>
       </div>
 
       <Card className="p-4 border-[var(--border)] bg-[var(--card)] shadow-sm">
         <div className="flex flex-col md:flex-row gap-4 items-end">
+          <div className="flex-2 w-full md:max-w-xs space-y-1.5">
+            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Buscar Cotización</Label>
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-sec)]" />
+              <Input 
+                type="text" 
+                placeholder="Buscar por N°, Cliente, Total..."
+                value={searchTerm}
+                onChange={e => {
+                  setSearchTerm(e.target.value);
+                  setPagination(p => ({ ...p, page: 1 }));
+                }}
+                className="pl-9 bg-[var(--bg)]"
+              />
+            </div>
+          </div>
           <div className="flex-1 w-full space-y-1.5">
             <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Estado</Label>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -348,7 +392,7 @@ export function Quotes() {
                               </DropdownMenuItem>
                               
                               <DropdownMenuItem 
-                                onClick={() => handleConfirmQuote(quote)} 
+                                onClick={() => handleOpenConfirmModal(quote)} 
                                 disabled={confirmingId === quote.id}
                                 className="font-bold cursor-pointer text-emerald-600 focus:text-emerald-700"
                               >
@@ -669,6 +713,84 @@ export function Quotes() {
                 <>
                   <Send size={14} /> Enviar Correo
                 </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG CONFIRMAR VENTA Y MÉTODO DE PAGO */}
+      <Dialog open={paymentModalOpen} onOpenChange={setPaymentModalOpen}>
+        <DialogContent className="max-w-md bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-600">
+              <CheckCircle2 size={20} />
+              Confirmar a Venta
+            </DialogTitle>
+            <DialogDescription>
+              Seleccione el método de pago con el que el cliente pagará la cotización. Esta venta se sumará a su caja actual.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            <Label className="text-xs font-bold uppercase text-[var(--text-sec)] mb-3 block">Método de Pago</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div 
+                onClick={() => setSelectedPaymentMethod('EFECTIVO')}
+                className={cn(
+                  "border rounded-xl p-3 flex flex-col items-center gap-2 cursor-pointer transition-all",
+                  selectedPaymentMethod === 'EFECTIVO' 
+                    ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold" 
+                    : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]/50"
+                )}
+              >
+                <Banknote size={24} />
+                <span className="text-sm">Efectivo</span>
+              </div>
+              <div 
+                onClick={() => setSelectedPaymentMethod('TRANSFERENCIA')}
+                className={cn(
+                  "border rounded-xl p-3 flex flex-col items-center gap-2 cursor-pointer transition-all",
+                  selectedPaymentMethod === 'TRANSFERENCIA' 
+                    ? "border-sky-500 bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold" 
+                    : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]/50"
+                )}
+              >
+                <Smartphone size={24} />
+                <span className="text-sm">Transf.</span>
+              </div>
+              <div 
+                onClick={() => setSelectedPaymentMethod('TARJETA')}
+                className={cn(
+                  "border rounded-xl p-3 flex flex-col items-center gap-2 cursor-pointer transition-all",
+                  selectedPaymentMethod === 'TARJETA' 
+                    ? "border-indigo-500 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold" 
+                    : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]/50"
+                )}
+              >
+                <CreditCard size={24} />
+                <span className="text-sm">Tarjeta</span>
+              </div>
+            </div>
+            {quoteToConfirm && (
+              <div className="mt-6 p-4 rounded-lg bg-[var(--bg)]/50 border border-[var(--border)] flex justify-between items-center">
+                <span className="text-sm text-[var(--text-sec)] font-medium">Total a cobrar:</span>
+                <span className="text-xl font-black text-[var(--text-main)]">${Number(quoteToConfirm.totalAmount).toFixed(2)}</span>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPaymentModalOpen(false)}>Cancelar</Button>
+            <Button 
+              onClick={handleConfirmQuote}
+              disabled={!!confirmingId}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-2"
+            >
+              {confirmingId ? (
+                <><RefreshCcw size={16} className="animate-spin" /> Procesando...</>
+              ) : (
+                <><CheckCircle2 size={16} /> Confirmar Venta</>
               )}
             </Button>
           </DialogFooter>
