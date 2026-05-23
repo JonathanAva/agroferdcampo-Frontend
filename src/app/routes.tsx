@@ -23,6 +23,8 @@ import { Quotes } from "./pages/Quotes";
 import { Purchases } from "./pages/Purchases";
 import { DeliveryNotes } from "./pages/DeliveryNotes";
 import { Credit } from "./pages/Credit";
+import Vehicles from "./pages/Vehicles";
+import DeliveryRoutes from "./pages/DeliveryRoutes";
 
 export const router = createBrowserRouter([
   {
@@ -83,6 +85,14 @@ export const router = createBrowserRouter([
       {
         path: "delivery-notes",
         element: <DeliveryNotes />,
+      },
+      {
+        path: "vehicles",
+        element: <Vehicles />,
+      },
+      {
+        path: "delivery-routes",
+        element: <DeliveryRoutes />,
       },
       {
         path: "finance",

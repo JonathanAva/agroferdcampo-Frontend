@@ -13,6 +13,18 @@ export interface CreateDeliveryNoteDto {
   customerId?: number;
   notes?: string;
   items: DeliveryNoteItemDto[];
+  requiresTransport?: boolean;
+  vehicleId?: number;
+  driverId?: number;
+  deliveryAddress?: string;
+  scheduledAt?: string;
+  dispatchType?: 'TOTAL' | 'PARCIAL';
+}
+
+export interface UpdateDeliveryNoteDto {
+  vehicleId?: number;
+  scheduledAt?: string;
+  notes?: string;
 }
 
 export interface DeliverDeliveryNoteItemDto {
@@ -23,19 +35,25 @@ export interface DeliverDeliveryNoteItemDto {
 export interface DeliverDeliveryNoteDto {
   notes?: string;
   items: DeliverDeliveryNoteItemDto[];
+  clientSignedBy?: string;
 }
 
 export interface DeliveryNoteResponse {
   id: number;
-  branchId: number;
+  fromBranchId: number;
   type: 'CLIENTE' | 'TRASLADO_SUCURSAL';
   status: 'EMITIDO' | 'ENTREGADO' | 'CON_DIFERENCIAS' | 'CANCELADO';
   saleId?: number;
   toBranchId?: number;
   customerId?: number;
   notes?: string;
-  createdAt: string;
-  updatedAt: string;
+  issuedAt: string;
+  vehicleId?: number;
+  driverId?: number;
+  scheduledAt?: string;
+  deliveryAddress?: string;
+  clientSignedBy?: string;
+  deliveredAt?: string;
   customer?: {
     id: number;
     name: string;
@@ -44,6 +62,9 @@ export interface DeliveryNoteResponse {
     id: number;
     name: string;
   };
+  vehicle?: any;
+  driver?: any;
+  route?: any;
   items: Array<{
     id: number;
     productId: number;
@@ -73,6 +94,9 @@ export interface DeliveryNoteFilters {
   customerId?: number;
   startDate?: string;
   endDate?: string;
+  vehicleId?: number;
+  routeId?: number;
+  requiresTransport?: boolean;
 }
 
 export const deliveryNotesService = {
@@ -83,21 +107,49 @@ export const deliveryNotesService = {
     });
   },
 
-  getDeliveryNotes: async (filters: DeliveryNoteFilters = {}): Promise<PaginatedDeliveryNotes> => {
+  getDeliveryNotes: async (filters: DeliveryNoteFilters = {}): Promise<any> => {
     const params = new URLSearchParams();
-    if (filters.page) params.set('page', String(filters.page));
+    if (filters.page)  params.set('page', String(filters.page));
     if (filters.limit) params.set('limit', String(filters.limit));
-    if (filters.status && filters.status !== 'TODOS') params.set('status', filters.status);
-    if (filters.type && filters.type !== 'TODOS') params.set('type', filters.type);
+    if (filters.status && filters.status !== 'all') params.set('status', filters.status);
+    if (filters.type && filters.type !== 'all')     params.set('type', filters.type);
     if (filters.customerId) params.set('customerId', String(filters.customerId));
-    if (filters.startDate) params.set('startDate', filters.startDate);
-    if (filters.endDate) params.set('endDate', filters.endDate);
+    if (filters.startDate) {
+      params.set('startDate', filters.startDate);
+      // Siempre enviar endDate — si no hay rango, usar el mismo día
+      params.set('endDate', filters.endDate || filters.startDate);
+    }
+    if (filters.vehicleId) params.set('vehicleId', String(filters.vehicleId));
+    if (filters.routeId)   params.set('routeId',   String(filters.routeId));
+    if (filters.requiresTransport !== undefined) {
+      params.set('requiresTransport', String(filters.requiresTransport));
+    }
+    return await apiRequest<any>(`/delivery-notes?${params.toString()}`);
+  },
 
-    return await apiRequest<PaginatedDeliveryNotes>(`/delivery-notes?${params.toString()}`);
+  createFromSale: async (saleId: number, payload?: { vehicleId?: number; deliveryAddress?: string; scheduledAt?: string }): Promise<DeliveryNoteResponse> => {
+    return await apiRequest<DeliveryNoteResponse>(`/delivery-notes/from-sale/${saleId}`, {
+      method: 'POST',
+      body: JSON.stringify(payload || {}),
+    });
+  },
+
+  createFromQuote: async (quoteId: number, payload?: { vehicleId?: number; deliveryAddress?: string }): Promise<DeliveryNoteResponse> => {
+    return await apiRequest<DeliveryNoteResponse>(`/delivery-notes/from-quote/${quoteId}`, {
+      method: 'POST',
+      body: JSON.stringify(payload || {}),
+    });
   },
 
   getDeliveryNoteDetail: async (id: number): Promise<DeliveryNoteResponse> => {
     return await apiRequest<DeliveryNoteResponse>(`/delivery-notes/${id}`);
+  },
+
+  updateDeliveryNote: async (id: number, payload: UpdateDeliveryNoteDto): Promise<DeliveryNoteResponse> => {
+    return await apiRequest<DeliveryNoteResponse>(`/delivery-notes/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
   },
 
   confirmDelivery: async (id: number, payload: DeliverDeliveryNoteDto): Promise<DeliveryNoteResponse> => {
@@ -117,6 +169,13 @@ export const deliveryNotesService = {
     return await apiRequest(`/delivery-notes/${id}/resend-email`, {
       method: 'POST',
       body: JSON.stringify({ email }),
+    });
+  },
+
+  closeWithObservation: async (id: number, observation: string): Promise<DeliveryNoteResponse> => {
+    return await apiRequest<DeliveryNoteResponse>(`/delivery-notes/${id}/close-with-observation`, {
+      method: 'POST',
+      body: JSON.stringify({ observation }),
     });
   }
 };

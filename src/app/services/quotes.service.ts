@@ -14,6 +14,11 @@ export interface CreateQuoteDto {
   validDays: number;
   notes?: string;
   items: QuoteItemDto[];
+  requiresTransport?: boolean;
+  vehicleId?: number;
+  driverId?: number;
+  deliveryAddress?: string;
+  scheduledAt?: string;
 }
 
 export interface QuoteResponse {
@@ -27,6 +32,7 @@ export interface QuoteResponse {
   validUntil: string;
   status: 'PENDIENTE' | 'CONFIRMADA' | 'EXPIRADA' | 'CANCELADA';
   createdAt: string;
+  requiresTransport?: boolean;
   customer?: {
     id: number;
     name: string;
@@ -104,10 +110,10 @@ export const quotesService = {
     });
   },
 
-  confirmQuote: async (id: number, paymentMethod: string): Promise<any> => {
+  confirmQuote: async (id: number, payload: { paymentMethod?: string; requiresTransport?: boolean; vehicleId?: number; driverId?: number; deliveryAddress?: string; scheduledAt?: string }): Promise<any> => {
     return await apiRequest(`${BASE}/${id}/confirm`, {
       method: 'POST',
-      body: JSON.stringify({ paymentMethod }),
+      body: JSON.stringify(payload),
     });
   },
 

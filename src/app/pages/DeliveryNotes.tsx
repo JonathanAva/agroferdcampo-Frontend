@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Search, Eye, Filter, Calendar as CalendarIcon, 
-  TruckIcon, CheckCircle2, Trash2, X, PackageCheck, Plus, Mail
+  TruckIcon, CheckCircle2, Trash2, X, PackageCheck, Plus, Mail, MapPin, PenTool, BarChart3
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { deliveryNotesService, DeliveryNoteResponse, DeliverDeliveryNoteDto, CreateDeliveryNoteDto } from '../services/delivery-notes.service';
+import { deliveryNotesService, DeliveryNoteResponse, DeliverDeliveryNoteDto, CreateDeliveryNoteDto, UpdateDeliveryNoteDto } from '../services/delivery-notes.service';
 import { searchProducts } from '../services/sales.service';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -17,6 +17,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '../components/ui/label';
 import { NumberInput } from '../components/ui/number-input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
+import { Switch } from '../components/ui/switch';
+import { Checkbox } from '../components/ui/checkbox';
+import { useVehicles } from '../hooks/useVehicles';
+import { apiRequest } from '../config/api';
 
 export function DeliveryNotes() {
   const [notes, setNotes] = useState<DeliveryNoteResponse[]>([]);
@@ -26,19 +30,21 @@ export function DeliveryNotes() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
+  const [vehicleFilter, setVehicleFilter] = useState('all');
+  const [routeFilter, setRouteFilter] = useState('all');
+  const [withTransportFilter, setWithTransportFilter] = useState<boolean | 'all'>('all');
 
-  const [selectedNote, setSelectedNote] = useState<DeliveryNoteResponse | null>(null);
+  const { vehicles } = useVehicles({ status: 'ALL' });
+  const [routesList, setRoutesList] = useState<any[]>([]);
+
+  const [stats, setStats] = useState({ total: 0, emitidos: 0, entregados: 0, conDiferencias: 0 });
+
+  const [selectedNote, setSelectedNote] = useState<any>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   
   const [deliverModalOpen, setDeliverModalOpen] = useState(false);
   const [deliverForm, setDeliverForm] = useState<DeliverDeliveryNoteDto>({ items: [] });
   const [delivering, setDelivering] = useState(false);
-
-  const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [newNote, setNewNote] = useState<Partial<CreateDeliveryNoteDto>>({ type: 'CLIENTE', items: [] });
-  const [productSearch, setProductSearch] = useState("");
-  const [productResults, setProductResults] = useState<any[]>([]);
-  const [savingNote, setSavingNote] = useState(false);
 
   // Email state
   const [emailModalOpen, setEmailModalOpen] = useState(false);
@@ -46,28 +52,49 @@ export function DeliveryNotes() {
   const [destinationEmail, setDestinationEmail] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
 
+  // Assign Transport state
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [assignForm, setAssignForm] = useState<UpdateDeliveryNoteDto>({});
+  const [assigning, setAssigning] = useState(false);
+
+  // Close with observation state
+  const [closeObservationModalOpen, setCloseObservationModalOpen] = useState(false);
+  const [observationText, setObservationText] = useState('');
+  const [closingNote, setClosingNote] = useState<any>(null);
+  const [closing, setClosing] = useState(false);
+
+  useEffect(() => {
+    fetchRoutes();
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchNotes();
+      fetchStats();
     }, 300);
     return () => clearTimeout(timer);
-  }, [pagination.page, statusFilter, typeFilter, dateFilter]);
+  }, [pagination.page, statusFilter, typeFilter, dateFilter, vehicleFilter, routeFilter, withTransportFilter]);
 
-  useEffect(() => {
-    if (productSearch.length > 2) {
-      const delay = setTimeout(async () => {
-        try {
-          const res = await searchProducts(productSearch, 1, 10);
-          setProductResults(res?.data || []);
-        } catch (e) {
-          console.error(e);
-        }
-      }, 500);
-      return () => clearTimeout(delay);
-    } else {
-      setProductResults([]);
-    }
-  }, [productSearch]);
+  const fetchRoutes = async () => {
+    try {
+      const res = await apiRequest<any>('/delivery-routes?limit=100');
+      const dataObj = res.data || res;
+      setRoutesList(Array.isArray(dataObj) ? dataObj : (dataObj.items || []));
+    } catch(e) {}
+  };
+
+  const fetchStats = async () => {
+    try {
+      const url = dateFilter ? `/delivery-notes/stats?startDate=${dateFilter}&endDate=${dateFilter}` : '/delivery-notes/stats';
+      const res = await apiRequest<any>(url);
+      setStats({
+        total: res.total || 0,
+        emitidos: res.emitidos || 0,
+        entregados: res.entregados || 0,
+        conDiferencias: res.conDiferencias || 0,
+      });
+    } catch(e) {}
+  };
 
   const fetchNotes = async () => {
     setLoading(true);
@@ -76,14 +103,20 @@ export function DeliveryNotes() {
       if (statusFilter !== 'all') filters.status = statusFilter;
       if (typeFilter !== 'all') filters.type = typeFilter;
       if (dateFilter) filters.startDate = dateFilter;
+      if (vehicleFilter !== 'all') filters.vehicleId = Number(vehicleFilter);
+      if (routeFilter !== 'all') filters.routeId = Number(routeFilter);
+      if (withTransportFilter !== 'all') filters.requiresTransport = withTransportFilter;
 
-      const res = await deliveryNotesService.getDeliveryNotes(filters);
-      setNotes(res.data || []);
+      const res = await deliveryNotesService.getDeliveryNotes(filters) as any;
+      
+      // El backend ahora devuelve { data: [...], total, page, limit, totalPages }
+      const items = res.data ?? res.items ?? (Array.isArray(res) ? res : []);
+      setNotes(items);
       setPagination({
         page: res.page || 1,
         limit: res.limit || 20,
-        total: res.total || (res.data || []).length,
-        totalPages: res.totalPages || 1
+        total: res.total || items.length,
+        totalPages: res.totalPages || 1,
       });
     } catch (e) {
       toast.error('Error al cargar albaranes');
@@ -96,6 +129,9 @@ export function DeliveryNotes() {
     setStatusFilter('all');
     setTypeFilter('all');
     setDateFilter('');
+    setVehicleFilter('all');
+    setRouteFilter('all');
+    setWithTransportFilter('all');
     setPagination(p => ({ ...p, page: 1 }));
   };
 
@@ -104,8 +140,9 @@ export function DeliveryNotes() {
       const fullNote = await deliveryNotesService.getDeliveryNoteDetail(note.id);
       setSelectedNote(fullNote);
       setDetailModalOpen(true);
-    } catch (e) {
-      toast.error('Error al cargar detalle');
+    } catch (e: any) {
+      console.error(e);
+      toast.error('Error al cargar detalle: ' + (e.message || 'Desconocido'));
     }
   };
 
@@ -115,6 +152,7 @@ export function DeliveryNotes() {
       await deliveryNotesService.cancelDeliveryNote(id);
       toast.success('Albarán cancelado');
       fetchNotes();
+      fetchStats();
     } catch (e: any) {
       toast.error(e.message || 'Error al cancelar');
     }
@@ -126,9 +164,10 @@ export function DeliveryNotes() {
       setSelectedNote(fullNote);
       setDeliverForm({
         notes: '',
+        clientSignedBy: '',
         items: fullNote.items.map(i => ({
           productId: i.productId,
-          receivedQty: i.quantity // Por defecto todo
+          receivedQty: i.quantity
         }))
       });
       setDeliverModalOpen(true);
@@ -139,12 +178,20 @@ export function DeliveryNotes() {
 
   const handleDeliverSubmit = async () => {
     if (!selectedNote) return;
+    if (selectedNote.requiresTransport && !deliverForm.clientSignedBy) {
+      toast.error('Debe ingresar el nombre de quien recibe');
+      return;
+    }
     setDelivering(true);
     try {
       await deliveryNotesService.confirmDelivery(selectedNote.id, deliverForm);
       toast.success('Entrega confirmada exitosamente');
       setDeliverModalOpen(false);
       fetchNotes();
+      fetchStats();
+      if (detailModalOpen) {
+        handleOpenDetail(selectedNote); // Refresh detail
+      }
     } catch (e: any) {
       toast.error(e.message || 'Error al confirmar entrega');
     } finally {
@@ -152,11 +199,62 @@ export function DeliveryNotes() {
     }
   };
 
+  const handleCloseWithObservation = async () => {
+    if (!closingNote) return;
+    if (!observationText.trim()) {
+      toast.error('Debe ingresar una observación');
+      return;
+    }
+    setClosing(true);
+    try {
+      await deliveryNotesService.closeWithObservation(closingNote.id, observationText);
+      toast.success('Albarán cerrado correctamente');
+      setCloseObservationModalOpen(false);
+      setObservationText('');
+      setClosingNote(null);
+      fetchNotes();
+      fetchStats();
+      if (detailModalOpen) {
+        handleOpenDetail(closingNote);
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Error al cerrar el albarán');
+    } finally {
+      setClosing(false);
+    }
+  };
+
+  const handleOpenAssign = (note: DeliveryNoteResponse) => {
+    setSelectedNote(note);
+    setAssignForm({
+      vehicleId: note.vehicleId || undefined,
+      scheduledAt: note.scheduledAt ? note.scheduledAt.split('T')[0] : undefined,
+    });
+    setAssignModalOpen(true);
+  };
+
+  const handleAssignSubmit = async () => {
+    if (!selectedNote) return;
+    setAssigning(true);
+    try {
+      await deliveryNotesService.updateDeliveryNote(selectedNote.id, assignForm);
+      toast.success('Transporte asignado correctamente');
+      setAssignModalOpen(false);
+      fetchNotes();
+      fetchStats();
+      if (detailModalOpen) {
+        handleOpenDetail(selectedNote); // Refresh detail
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Error al asignar transporte');
+    } finally {
+      setAssigning(false);
+    }
+  };
+
   const handleOpenEmailModal = (note: DeliveryNoteResponse) => {
     setEmailNote(note);
-    // Asumimos que si es de tipo CLIENTE, y tiene un cliente cargado, podemos prellenar el correo
     setDestinationEmail(note.type === 'CLIENTE' ? '' : ''); 
-    // Ideally note.customer.email, but we don't have it in the list by default, so we leave it empty.
     setEmailModalOpen(true);
   };
 
@@ -176,64 +274,6 @@ export function DeliveryNotes() {
     } finally {
       setSendingEmail(false);
     }
-  };
-
-  const handleCreateSubmit = async () => {
-    if (!newNote.items?.length) {
-      toast.error('Agregue al menos un producto');
-      return;
-    }
-    if (newNote.type === 'CLIENTE' && !newNote.customerId) {
-      toast.error('Especifique el ID del cliente');
-      return;
-    }
-    if (newNote.type === 'TRASLADO_SUCURSAL' && !newNote.toBranchId) {
-      toast.error('Especifique el ID de la sucursal destino');
-      return;
-    }
-    setSavingNote(true);
-    try {
-      await deliveryNotesService.createDeliveryNote({
-        type: newNote.type as 'CLIENTE' | 'TRASLADO_SUCURSAL',
-        customerId: newNote.type === 'CLIENTE' ? Number(newNote.customerId) : undefined,
-        toBranchId: newNote.type === 'TRASLADO_SUCURSAL' ? Number(newNote.toBranchId) : undefined,
-        saleId: newNote.saleId ? Number(newNote.saleId) : undefined,
-        notes: newNote.notes,
-        items: newNote.items.map((i: any) => ({
-          productId: i.productId,
-          quantity: i.quantity
-        }))
-      });
-      toast.success('Albarán emitido exitosamente');
-      setCreateModalOpen(false);
-      setNewNote({ type: 'CLIENTE', items: [] });
-      fetchNotes();
-    } catch (e: any) {
-      toast.error(e.message || 'Error al emitir el albarán');
-    } finally {
-      setSavingNote(false);
-    }
-  };
-
-  const addProductToNote = (product: any) => {
-    setNewNote(prev => {
-      const items: any = prev.items || [];
-      const existing = items.find((i: any) => i.productId === product.id);
-      if (existing) {
-        toast.info("El producto ya está en la lista");
-        return prev;
-      }
-      return {
-        ...prev,
-        items: [...items, { 
-          productId: product.id, 
-          productName: product.name, 
-          quantity: 1 
-        }]
-      };
-    });
-    setProductSearch("");
-    setProductResults([]);
   };
 
   const getStatusBadge = (status: string) => {
@@ -258,34 +298,50 @@ export function DeliveryNotes() {
           <p className="text-[var(--text-sec)]">Gestiona los despachos y entregas de mercadería.</p>
         </div>
         <div className="flex">
-          <Button onClick={() => setCreateModalOpen(true)} className="font-bold gap-2" style={{ backgroundColor: 'var(--primary)', color: '#fff' }}>
-            <Plus size={18} /> Nuevo Despacho
-          </Button>
+          <p className="text-xs text-[var(--text-sec)] italic">
+            Los albaranes se generan automáticamente al confirmar ventas 
+            o cotizaciones con envío activado.
+          </p>
         </div>
       </div>
 
-      <Card className="p-4 border-[var(--border)] bg-[var(--card)] shadow-sm">
-        <div className="flex flex-col md:flex-row gap-4 items-end">
-          <div className="flex-1 w-full space-y-1.5">
-            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Tipo</Label>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="bg-[var(--bg)]">
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="CLIENTE">A Cliente</SelectItem>
-                <SelectItem value="TRASLADO_SUCURSAL">Traslado a Sucursal</SelectItem>
-              </SelectContent>
-            </Select>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card className="p-4 border-[var(--border)] bg-[var(--card)] flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold text-[var(--text-sec)] uppercase">Total Documentos</p>
+            <p className="text-2xl font-black">{stats.total || 0}</p>
           </div>
+          <div className="p-3 bg-blue-100 text-blue-600 rounded-xl dark:bg-blue-900/30"><BarChart3 size={20}/></div>
+        </Card>
+        <Card className="p-4 border-[var(--border)] bg-[var(--card)] flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold text-[var(--text-sec)] uppercase">Emitidos Pendientes</p>
+            <p className="text-2xl font-black text-amber-600">{stats.emitidos || 0}</p>
+          </div>
+          <div className="p-3 bg-amber-100 text-amber-600 rounded-xl dark:bg-amber-900/30"><TruckIcon size={20}/></div>
+        </Card>
+        <Card className="p-4 border-[var(--border)] bg-[var(--card)] flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold text-[var(--text-sec)] uppercase">Entregados OK</p>
+            <p className="text-2xl font-black text-emerald-600">{stats.entregados || 0}</p>
+          </div>
+          <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl dark:bg-emerald-900/30"><CheckCircle2 size={20}/></div>
+        </Card>
+        <Card className="p-4 border-[var(--border)] bg-[var(--card)] flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold text-[var(--text-sec)] uppercase">Con Diferencias</p>
+            <p className="text-2xl font-black text-orange-600">{stats.conDiferencias || 0}</p>
+          </div>
+          <div className="p-3 bg-orange-100 text-orange-600 rounded-xl dark:bg-orange-900/30"><PenTool size={20}/></div>
+        </Card>
+      </div>
 
-          <div className="flex-1 w-full space-y-1.5">
+      <Card className="p-4 border-[var(--border)] bg-[var(--card)] shadow-sm">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
+          <div className="space-y-1.5">
             <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Estado</Label>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="bg-[var(--bg)]">
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
+              <SelectTrigger className="bg-[var(--bg)]"><SelectValue placeholder="Todos" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="EMITIDO">Emitido</SelectItem>
@@ -295,20 +351,44 @@ export function DeliveryNotes() {
               </SelectContent>
             </Select>
           </div>
-
-          <div className="flex-1 w-full space-y-1.5">
-            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Fecha Específica</Label>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Transporte</Label>
+            <Select value={withTransportFilter.toString()} onValueChange={(v) => setWithTransportFilter(v === 'all' ? 'all' : v === 'true')}>
+              <SelectTrigger className="bg-[var(--bg)]"><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="true">Con Transporte</SelectItem>
+                <SelectItem value="false">Sin Transporte</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Vehículo</Label>
+            <Select value={vehicleFilter} onValueChange={setVehicleFilter}>
+              <SelectTrigger className="bg-[var(--bg)]"><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {(Array.isArray(vehicles) ? vehicles : []).map(v => <SelectItem key={v.id} value={v.id.toString()}>{v.plate}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Ruta</Label>
+            <Select value={routeFilter} onValueChange={setRouteFilter}>
+              <SelectTrigger className="bg-[var(--bg)]"><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                {(Array.isArray(routesList) ? routesList : []).map(r => <SelectItem key={r.id} value={r.id.toString()}>{r.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Fecha</Label>
             <div className="relative">
               <CalendarIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-sec)]" />
-              <Input 
-                type="date" 
-                value={dateFilter}
-                onChange={e => setDateFilter(e.target.value)}
-                className="pl-9 bg-[var(--bg)]"
-              />
+              <Input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="pl-9 bg-[var(--bg)]" />
             </div>
           </div>
-
           <Button variant="outline" onClick={resetFilters} className="font-bold">
             <Filter size={16} className="mr-2" /> Limpiar
           </Button>
@@ -322,73 +402,112 @@ export function DeliveryNotes() {
               <TableRow>
                 <TableHead>N° Albarán</TableHead>
                 <TableHead>Fecha</TableHead>
-                <TableHead>Tipo</TableHead>
                 <TableHead>Destino</TableHead>
+                <TableHead>Vehículo / Ruta</TableHead>
+                <TableHead>Programado</TableHead>
                 <TableHead className="text-center">Estado</TableHead>
                 <TableHead className="text-center">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-32 text-center text-[var(--text-sec)] animate-pulse">
-                    Cargando albaranes...
-                  </TableCell>
-                </TableRow>
+                <TableRow><TableCell colSpan={7} className="h-32 text-center animate-pulse">Cargando...</TableCell></TableRow>
               ) : notes.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-32 text-center text-[var(--text-sec)] font-medium">
-                    No se encontraron albaranes con estos filtros
-                  </TableCell>
-                </TableRow>
+                <TableRow><TableCell colSpan={7} className="h-32 text-center font-medium">No se encontraron albaranes</TableCell></TableRow>
               ) : (
-                notes.map(note => (
+                notes.map((note: any) => (
                   <TableRow key={note.id} className="group hover:bg-[var(--bg)]/30">
                     <TableCell className="font-bold text-[var(--primary)]">
-                      DN-{new Date(note.createdAt).getFullYear()}-{note.id.toString().padStart(4, '0')}
+                      {note.number}
                     </TableCell>
                     <TableCell className="text-[var(--text-main)] text-sm">
-                      {new Date(note.createdAt).toLocaleDateString()}
+                      {note.issuedAt 
+                        ? new Date(note.issuedAt).toLocaleDateString('es-SV') 
+                        : new Date(note.createdAt).toLocaleDateString('es-SV')}
                     </TableCell>
                     <TableCell>
-                      {getTypeBadge(note.type)}
+                      <div>
+                        <span className="font-bold text-[var(--text-main)] block">
+                          {note.type === 'CLIENTE' 
+                            ? note.customer?.name || (note.saleId ? `Venta #${note.saleId}` : 'Consumidor Final')
+                            : note.toBranch?.name || `Sucursal #${note.toBranchId}`}
+                        </span>
+                        <div className="flex gap-1 mt-1 flex-wrap">
+                          {note.saleId && (
+                            <Badge variant="outline" className="text-[10px] border-blue-400 text-blue-600">
+                              Venta #{note.saleId}
+                            </Badge>
+                          )}
+                          {note.requiresTransport && (
+                            <Badge variant="outline" className="text-[10px] border-[var(--primary)] text-[var(--primary)]">
+                              Transporte
+                            </Badge>
+                          )}
+                          {note.type === 'TRASLADO_SUCURSAL' && (
+                            <Badge variant="outline" className="text-[10px]">Traslado</Badge>
+                          )}
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell>
-                      <span className="font-bold text-[var(--text-main)] block">
-                        {note.type === 'CLIENTE' ? note.customer?.name || `Cliente #${note.customerId}` : note.toBranch?.name || `Sucursal #${note.toBranchId}`}
-                      </span>
-                      {note.saleId && <span className="text-[10px] text-muted-foreground">Venta #{note.saleId}</span>}
+                      {note.vehicle ? (
+                        <div className="text-sm">
+                          <span className="font-bold">{note.vehicle.plate}</span>
+                          {note.vehicle.brand && <span className="text-muted-foreground text-xs ml-1">{note.vehicle.brand}</span>}
+                          <br/>
+                          {note.route?.user?.fullName 
+                            ? <span className="text-xs text-[var(--text-sec)]">
+                                Conductor: {note.route.user.fullName}
+                              </span>
+                            : note.driver?.fullName 
+                              ? <span className="text-xs text-[var(--text-sec)]">
+                                  {note.driver.fullName}
+                                </span>
+                              : <span className="text-xs text-[var(--text-sec)] italic">
+                                  Se asigna en la ruta
+                                </span>
+                          }
+                        </div>
+                      ) : '-'}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {note.scheduledAt ? new Date(note.scheduledAt).toLocaleDateString() : '-'}
                     </TableCell>
                     <TableCell className="text-center">
                       {getStatusBadge(note.status)}
                     </TableCell>
                     <TableCell className="text-center">
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">Opciones</Button>
-                        </DropdownMenuTrigger>
+                        <DropdownMenuTrigger asChild><Button variant="ghost" size="sm">Opciones</Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleOpenDetail(note)} className="font-bold cursor-pointer">
+                          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleOpenDetail(note); }} className="font-bold cursor-pointer">
                             <Eye size={14} className="mr-2 text-[var(--primary)]" /> Ver Detalle
                           </DropdownMenuItem>
-
                           <DropdownMenuItem onClick={() => handleOpenEmailModal(note)} className="font-bold cursor-pointer text-blue-600">
                             <Mail size={14} className="mr-2" /> Enviar Notificación
                           </DropdownMenuItem>
-                          
                           {note.status === 'EMITIDO' && (
                             <>
-                              <DropdownMenuItem 
-                                onClick={() => handleOpenDeliver(note)}
-                                className="font-bold cursor-pointer text-emerald-600"
-                              >
-                                <PackageCheck size={14} className="mr-2" /> Confirmar Entrega
+                              {note.requiresTransport && (
+                                <DropdownMenuItem onClick={() => handleOpenAssign(note)} className="font-bold cursor-pointer text-amber-600">
+                                  <TruckIcon size={14} className="mr-2" /> Asignar Transporte
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem onClick={() => handleOpenDeliver(note)} className="font-bold cursor-pointer text-emerald-600">
+                                <PackageCheck size={14} className="mr-2" /> {note.requiresTransport ? 'Registrar Entrega en Campo' : 'Confirmar Entrega'}
                               </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                onClick={() => handleCancel(note.id)}
-                                className="font-bold cursor-pointer text-destructive"
-                              >
+                              <DropdownMenuItem onClick={() => handleCancel(note.id)} className="font-bold cursor-pointer text-destructive">
                                 <Trash2 size={14} className="mr-2" /> Cancelar
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                          {note.status === 'CON_DIFERENCIAS' && (
+                            <>
+                              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleOpenDetail(note); }} className="font-bold cursor-pointer text-amber-600">
+                                <Eye size={14} className="mr-2" /> Ver Diferencias
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => { setClosingNote(note); setCloseObservationModalOpen(true); }} className="font-bold cursor-pointer text-emerald-600">
+                                <CheckCircle2 size={14} className="mr-2" /> Cerrar con Observación
                               </DropdownMenuItem>
                             </>
                           )}
@@ -401,48 +520,54 @@ export function DeliveryNotes() {
             </TableBody>
           </Table>
         </div>
-
         {pagination.totalPages > 1 && (
-          <div className="p-4 border-t border-[var(--border)] flex items-center justify-between bg-[var(--bg)]/5">
-            <p className="text-xs font-bold text-[var(--text-sec)]">
-              Página {pagination.page} de {pagination.totalPages} ({pagination.total} registros)
-            </p>
+          <div className="p-4 border-t flex items-center justify-between bg-[var(--bg)]/5">
+            <p className="text-xs font-bold text-[var(--text-sec)]">Página {pagination.page} de {pagination.totalPages} ({pagination.total})</p>
             <div className="flex gap-2">
-              <Button 
-                variant="outline" size="sm" 
-                disabled={pagination.page === 1}
-                onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
-              >
-                Anterior
-              </Button>
-              <Button 
-                variant="outline" size="sm" 
-                disabled={pagination.page === pagination.totalPages}
-                onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
-              >
-                Siguiente
-              </Button>
+              <Button variant="outline" size="sm" disabled={pagination.page === 1} onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}>Anterior</Button>
+              <Button variant="outline" size="sm" disabled={pagination.page === pagination.totalPages} onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}>Siguiente</Button>
             </div>
           </div>
         )}
       </div>
 
-      {/* --- MODAL DETALLE --- */}
+      {/* MODAL DETALLE */}
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
         <DialogContent className="max-w-3xl flex flex-col p-0">
           {selectedNote && (
             <>
               <DialogHeader className="p-6 border-b">
                 <DialogTitle className="flex items-center justify-between">
-                  <span>Albarán DN-{new Date(selectedNote.createdAt).getFullYear()}-{selectedNote.id.toString().padStart(4, '0')}</span>
+                  <span>Albarán {selectedNote.number}</span>
                   {getStatusBadge(selectedNote.status)}
                 </DialogTitle>
                 <DialogDescription>
                   Destino: {selectedNote.type === 'CLIENTE' ? selectedNote.customer?.name : selectedNote.toBranch?.name}
-                  {selectedNote.notes && <div className="mt-2 text-xs p-2 bg-muted rounded">Notas: {selectedNote.notes}</div>}
                 </DialogDescription>
               </DialogHeader>
               <div className="p-6 overflow-y-auto space-y-6">
+                
+                {selectedNote.requiresTransport && (
+                  <Card className="p-4 border-[var(--border)] bg-blue-50/50 dark:bg-blue-900/10">
+                    <h3 className="font-bold text-[var(--text-main)] mb-3 flex items-center gap-2"><TruckIcon size={18}/> Información de Transporte</h3>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div><span className="text-[var(--text-sec)]">Vehículo:</span> <span className="font-bold">{selectedNote.vehicle?.plate || 'Pendiente'}</span></div>
+                      <div><span className="text-[var(--text-sec)]">Conductor:</span> <span className="font-bold">{selectedNote.driver?.fullName || 'Sin asignar'}</span></div>
+                      <div><span className="text-[var(--text-sec)]">Ruta:</span> <span className="font-bold">{selectedNote.route?.name || 'Sin ruta'}</span></div>
+                      <div><span className="text-[var(--text-sec)]">Fecha Prog.:</span> <span className="font-bold">{selectedNote.scheduledAt ? new Date(selectedNote.scheduledAt).toLocaleDateString() : '-'}</span></div>
+                      <div><span className="text-[var(--text-sec)]">Despacho:</span> <span className="font-bold">{selectedNote.dispatchType}</span></div>
+                      <div className="col-span-2"><span className="text-[var(--text-sec)]">Dirección:</span> <span className="font-bold">{selectedNote.deliveryAddress}</span></div>
+                      {selectedNote.clientSignedBy && (
+                        <div className="col-span-2 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 rounded-xl mt-2">
+                          <p className="text-emerald-800 dark:text-emerald-300 font-bold">Firma de Recibido:</p>
+                          <p>{selectedNote.clientSignedBy}</p>
+                          <p className="text-xs opacity-70">{new Date(selectedNote.deliveredAt).toLocaleString()}</p>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                )}
+
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -452,71 +577,74 @@ export function DeliveryNotes() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {selectedNote.items?.map(item => (
+                    {selectedNote.items?.map((item: any) => (
                       <TableRow key={item.id}>
-                        <TableCell className="font-bold">{item.product?.name || `Prod #${item.productId}`}</TableCell>
+                        <TableCell className="font-bold">{item.product?.name}</TableCell>
                         <TableCell className="text-center font-bold text-[var(--primary)]">{item.quantity}</TableCell>
-                        <TableCell className="text-center text-emerald-600 font-bold">
-                          {selectedNote.status === 'EMITIDO' ? '-' : item.receivedQty}
-                        </TableCell>
+                        <TableCell className="text-center text-emerald-600 font-bold">{selectedNote.status === 'EMITIDO' ? '-' : item.receivedQty}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </div>
+              <DialogFooter className="p-4 border-t">
+                {selectedNote.status === 'EMITIDO' && selectedNote.requiresTransport && (
+                  <Button onClick={() => { setDetailModalOpen(false); handleOpenDeliver(selectedNote); }} className="bg-emerald-600 text-white">
+                    Registrar Entrega en Campo
+                  </Button>
+                )}
+                <Button variant="outline" onClick={() => setDetailModalOpen(false)}>Cerrar</Button>
+              </DialogFooter>
             </>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* --- MODAL CONFIRMAR ENTREGA --- */}
+      {/* MODAL CONFIRMAR ENTREGA (Signature) */}
       <Dialog open={deliverModalOpen} onOpenChange={setDeliverModalOpen}>
-        <DialogContent className="max-w-2xl flex flex-col p-0">
+        <DialogContent className="max-w-2xl p-0">
           {selectedNote && (
             <>
               <DialogHeader className="p-6 border-b">
-                <DialogTitle className="flex items-center gap-2 text-emerald-600">
-                  <PackageCheck /> Confirmar Entrega Físicamente
-                </DialogTitle>
+                <DialogTitle className="flex items-center gap-2 text-emerald-600"><PackageCheck /> Confirmar Entrega Físicamente</DialogTitle>
                 <DialogDescription>
-                  DN-{new Date(selectedNote.createdAt).getFullYear()}-{selectedNote.id.toString().padStart(4, '0')} a {selectedNote.type === 'CLIENTE' ? selectedNote.customer?.name : selectedNote.toBranch?.name}
+                  {selectedNote.number} a {selectedNote.type === 'CLIENTE' ? selectedNote.customer?.name || 'Consumidor Final' : selectedNote.toBranch?.name}
                 </DialogDescription>
               </DialogHeader>
-              
               <div className="p-6 overflow-y-auto space-y-6">
-                <div className="bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 p-3 text-sm rounded-lg border border-amber-200 dark:border-amber-800/30 font-medium">
-                  Modifica la columna "Cant. Real" si el cliente no recibió o rechazó algunos productos. El sistema marcará diferencias automáticamente.
-                </div>
+                
+                {selectedNote.requiresTransport && (
+                  <div className="space-y-2">
+                    <Label className="text-emerald-700 font-bold">Nombre de quien recibe *</Label>
+                    <Input 
+                      placeholder="Nombre, DPI o Firma del cliente..." 
+                      value={deliverForm.clientSignedBy || ''} 
+                      onChange={e => setDeliverForm({...deliverForm, clientSignedBy: e.target.value})}
+                      className="border-emerald-200 focus-visible:ring-emerald-500"
+                    />
+                  </div>
+                )}
 
                 <div className="border rounded-xl overflow-hidden">
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>Producto</TableHead>
-                        <TableHead className="text-center">Cant. Original</TableHead>
-                        <TableHead className="text-right">Cant. Real</TableHead>
-                      </TableRow>
+                      <TableRow><TableHead>Producto</TableHead><TableHead className="text-center">Cant. Original</TableHead><TableHead className="text-right">Cant. Real</TableHead></TableRow>
                     </TableHeader>
                     <TableBody>
-                      {selectedNote.items?.map((item, idx) => {
+                      {selectedNote.items?.map((item: any) => {
                         const formItem = deliverForm.items.find(i => i.productId === item.productId);
                         return (
                           <TableRow key={item.id}>
                             <TableCell className="font-bold">{item.product?.name}</TableCell>
-                            <TableCell className="text-center font-bold text-[var(--text-sec)]">{item.quantity}</TableCell>
+                            <TableCell className="text-center font-bold">{item.quantity}</TableCell>
                             <TableCell className="text-right flex justify-end">
                               <div className="w-24">
-                                <NumberInput 
-                                  value={formItem?.receivedQty || 0} 
-                                  max={item.quantity}
-                                  min={0}
-                                  onValueChange={(val) => {
-                                    const newItems = [...deliverForm.items];
-                                    const itemIdx = newItems.findIndex(i => i.productId === item.productId);
-                                    if (itemIdx >= 0) newItems[itemIdx].receivedQty = val || 0;
-                                    setDeliverForm({ ...deliverForm, items: newItems });
-                                  }}
-                                />
+                                <NumberInput value={formItem?.receivedQty || 0} max={item.quantity} min={0} onValueChange={(val) => {
+                                  const newItems = [...deliverForm.items];
+                                  const idx = newItems.findIndex(i => i.productId === item.productId);
+                                  if (idx >= 0) newItems[idx].receivedQty = val || 0;
+                                  setDeliverForm({ ...deliverForm, items: newItems });
+                                }}/>
                               </div>
                             </TableCell>
                           </TableRow>
@@ -525,201 +653,93 @@ export function DeliveryNotes() {
                     </TableBody>
                   </Table>
                 </div>
-
                 <div className="space-y-2">
                   <Label>Notas de Entrega (Opcional)</Label>
-                  <Input 
-                    placeholder="Ej. El cliente rechazó 1 producto por caja dañada..."
-                    value={deliverForm.notes || ''}
-                    onChange={(e) => setDeliverForm({ ...deliverForm, notes: e.target.value })}
-                  />
+                  <Input placeholder="Ej. El cliente rechazó 1 producto..." value={deliverForm.notes || ''} onChange={e => setDeliverForm({ ...deliverForm, notes: e.target.value })}/>
                 </div>
               </div>
-
               <DialogFooter className="p-6 border-t bg-[var(--card)]">
                 <Button variant="outline" onClick={() => setDeliverModalOpen(false)}>Cancelar</Button>
-                <Button onClick={handleDeliverSubmit} disabled={delivering} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold">
-                  {delivering ? 'Procesando...' : 'Confirmar Entrega'}
-                </Button>
+                <Button onClick={handleDeliverSubmit} disabled={delivering} className="bg-emerald-600 text-white font-bold">{delivering ? 'Procesando...' : 'Confirmar Entrega'}</Button>
               </DialogFooter>
             </>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* --- MODAL CREAR ALBARÁN --- */}
-      <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
-          <DialogHeader className="p-6 border-b">
-            <DialogTitle className="flex items-center gap-2 text-2xl text-[var(--primary)]">
-              <TruckIcon /> Emitir Nuevo Albarán
-            </DialogTitle>
-            <DialogDescription>Crea un documento de despacho para salida física de mercadería.</DialogDescription>
+      {/* MODAL ASIGNAR TRANSPORTE */}
+      <Dialog open={assignModalOpen} onOpenChange={setAssignModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600"><TruckIcon /> Asignar Transporte</DialogTitle>
+            <DialogDescription>
+              {selectedNote && `Albarán ${selectedNote.number} - Destino: ${selectedNote.type === 'CLIENTE' ? selectedNote.customer?.name || 'Consumidor Final' : selectedNote.toBranch?.name}`}
+            </DialogDescription>
           </DialogHeader>
-
-          <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[var(--bg)]/50">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label>Tipo de Despacho</Label>
-                <Select value={newNote.type} onValueChange={(v: any) => setNewNote({...newNote, type: v})}>
-                  <SelectTrigger className="bg-[var(--card)]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="CLIENTE">A Cliente</SelectItem>
-                    <SelectItem value="TRASLADO_SUCURSAL">Traslado a Sucursal</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>ID de Venta Vinculada (Opcional)</Label>
-                <Input 
-                  type="number"
-                  placeholder="Ej. 890" 
-                  value={newNote.saleId || ''} 
-                  onChange={e => setNewNote({...newNote, saleId: e.target.value ? Number(e.target.value) : undefined})}
-                  className="bg-[var(--card)]"
-                />
-              </div>
-              {newNote.type === 'CLIENTE' ? (
-                <div className="space-y-2">
-                  <Label>ID de Cliente (Destino)</Label>
-                  <Input 
-                    type="number"
-                    placeholder="ID del cliente..." 
-                    value={newNote.customerId || ''} 
-                    onChange={e => setNewNote({...newNote, customerId: e.target.value ? Number(e.target.value) : undefined})}
-                    className="bg-[var(--card)]"
-                  />
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <Label>ID Sucursal Destino</Label>
-                  <Input 
-                    type="number"
-                    placeholder="ID sucursal..." 
-                    value={newNote.toBranchId || ''} 
-                    onChange={e => setNewNote({...newNote, toBranchId: e.target.value ? Number(e.target.value) : undefined})}
-                    className="bg-[var(--card)]"
-                  />
-                </div>
-              )}
-              <div className="space-y-2">
-                <Label>Notas Generales (Opcional)</Label>
-                <Input 
-                  placeholder="Instrucciones de entrega..." 
-                  value={newNote.notes || ''} 
-                  onChange={e => setNewNote({...newNote, notes: e.target.value})}
-                  className="bg-[var(--card)]"
-                />
-              </div>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Vehículo</Label>
+              <Select 
+                value={assignForm.vehicleId ? String(assignForm.vehicleId) : 'none'} 
+                onValueChange={v => setAssignForm({
+                  ...assignForm, 
+                  vehicleId: v === 'none' ? undefined : Number(v)
+                })}
+              >
+                <SelectTrigger><SelectValue placeholder="Seleccione vehículo..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin vehículo</SelectItem>
+                  {vehicles.map(v => (
+                    <SelectItem key={v.id} value={String(v.id)}>
+                      {v.plate} - {v.brand} {v.model}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            <Card className="p-4 border-[var(--border)]">
-              <Label className="mb-2 block">Buscar y Agregar Producto</Label>
-              <div className="relative">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input 
-                  placeholder="Buscar por nombre..." 
-                  value={productSearch}
-                  onChange={e => setProductSearch(e.target.value)}
-                  className="pl-9"
-                />
-                {productResults && productResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--card)] border rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
-                    {productResults.map(p => (
-                      <div 
-                        key={p.id} 
-                        className="p-3 hover:bg-muted cursor-pointer flex justify-between border-b last:border-0"
-                        onClick={() => addProductToNote(p)}
-                      >
-                        <span className="font-bold text-sm">{p.name}</span>
-                        <span className="text-sm text-emerald-600 font-bold">Stock: {p.stock}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </Card>
-
-            {newNote.items && newNote.items.length > 0 && (
-              <div className="rounded-xl border overflow-hidden bg-[var(--card)]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Producto</TableHead>
-                      <TableHead className="w-32 text-center">Cant. a Enviar</TableHead>
-                      <TableHead className="w-12"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {newNote.items.map((item: any, idx) => (
-                      <TableRow key={item.productId}>
-                        <TableCell className="font-bold text-sm">{item.productName}</TableCell>
-                        <TableCell>
-                          <NumberInput 
-                            value={item.quantity} 
-                            min={1}
-                            onValueChange={(val) => {
-                              const newItems = [...newNote.items!];
-                              newItems[idx].quantity = val || 1;
-                              setNewNote({...newNote, items: newItems});
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Button 
-                            variant="ghost" size="icon" 
-                            className="text-destructive"
-                            onClick={() => {
-                              const newItems = newNote.items!.filter((_, i) => i !== idx);
-                              setNewNote({...newNote, items: newItems});
-                            }}
-                          >
-                            <Trash2 size={16} />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
+            <div className="space-y-2">
+              <Label>Fecha Programada (Opcional)</Label>
+              <Input 
+                type="date" 
+                value={assignForm.scheduledAt || ''} 
+                onChange={e => setAssignForm({...assignForm, scheduledAt: e.target.value})} 
+              />
+            </div>
           </div>
-
-          <DialogFooter className="p-6 border-t bg-[var(--card)]">
-            <Button variant="outline" onClick={() => setCreateModalOpen(false)}>Cancelar</Button>
-            <Button onClick={handleCreateSubmit} disabled={savingNote || !newNote.items?.length} style={{ backgroundColor: 'var(--primary)', color: '#fff' }}>
-              {savingNote ? 'Emitiendo...' : 'Emitir Albarán'}
-            </Button>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignModalOpen(false)}>Cancelar</Button>
+            <Button onClick={handleAssignSubmit} disabled={assigning} className="bg-amber-600 text-white hover:bg-amber-700">{assigning ? 'Asignando...' : 'Asignar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* --- MODAL ENVIAR CORREO --- */}
-      <Dialog open={emailModalOpen} onOpenChange={setEmailModalOpen}>
-        <DialogContent className="sm:max-w-[425px]" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+      {/* MODAL CERRAR CON OBSERVACIÓN */}
+      <Dialog open={closeObservationModalOpen} onOpenChange={setCloseObservationModalOpen}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-[var(--text-main)]">
-              <Mail className="text-[var(--primary)]" /> Enviar Albarán por Correo
+            <DialogTitle className="flex items-center gap-2 text-emerald-600">
+              <CheckCircle2 /> Cerrar con Observación
             </DialogTitle>
             <DialogDescription>
-              {emailNote && `Enviando copia del albarán #${emailNote.id}`}
+              {closingNote && `Albarán ${closingNote.number} tiene diferencias. Ingresa una nota para cerrarlo.`}
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <Label htmlFor="email" className="text-[var(--text-main)]">Correo Electrónico Destino</Label>
-            <Input 
-              id="email" 
-              type="email" 
-              placeholder="cliente@ejemplo.com"
-              value={destinationEmail}
-              onChange={(e) => setDestinationEmail(e.target.value)}
-              className="mt-2 bg-[var(--bg)] text-[var(--text-main)]"
-            />
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Observación *</Label>
+              <textarea 
+                className="w-full flex min-h-[80px] rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="Ej. El cliente reportó que faltaban 2 piezas..."
+                value={observationText}
+                onChange={e => setObservationText(e.target.value)}
+              />
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEmailModalOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSendEmail} disabled={sendingEmail || !destinationEmail} style={{ backgroundColor: 'var(--primary)', color: '#fff' }}>
-              {sendingEmail ? 'Enviando...' : 'Enviar Correo'}
+            <Button variant="outline" onClick={() => { setCloseObservationModalOpen(false); setObservationText(''); setClosingNote(null); }}>Cancelar</Button>
+            <Button onClick={handleCloseWithObservation} disabled={closing || !observationText.trim()} className="bg-emerald-600 text-white hover:bg-emerald-700">
+              {closing ? 'Cerrando...' : 'Cerrar Albarán'}
             </Button>
           </DialogFooter>
         </DialogContent>

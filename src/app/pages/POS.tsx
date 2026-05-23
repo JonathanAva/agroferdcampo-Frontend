@@ -42,6 +42,7 @@ import { useAuth } from "../context/AuthContext";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Label } from "../components/ui/label";
 import { SystemConfigData } from "./SystemConfig";
+import { TransportSelector, TransportData } from "../components/transport/TransportSelector";
 
 // --- Types ---
 interface Product {
@@ -83,17 +84,17 @@ function DatePicker({ date, setDate, placeholder }: DatePickerProps) {
         <Button
           variant="outline"
           className={cn(
-            "w-full justify-start text-left font-normal bg-[var(--card)] border-[var(--border)] h-10 px-3 hover:bg-[var(--primary)]/5 transition-all text-sm rounded-xl focus:ring-[var(--primary)]/20",
-            !date && "text-muted-foreground"
+            "w-full justify-start text-left font-normal bg-[var(--bg)] border-[var(--border)] h-10 px-3 hover:bg-[var(--primary)]/10 hover:border-[var(--primary)]/50 hover:text-[var(--text-main)] transition-all text-sm rounded-lg focus:ring-[var(--primary)]/20",
+            !date ? "text-[var(--text-sec)]" : "text-[var(--text-main)]"
           )}
         >
-          <CalendarIcon className="mr-2 h-4 w-4 opacity-50 text-[var(--primary)]" />
+          <CalendarIcon className="mr-2 h-4 w-4 text-[var(--primary)]" />
           {date ? (
-            <span className="font-bold text-[var(--text-main)]">
+            <span className="font-bold">
               {format(date, "dd/MM/yyyy")}
             </span>
           ) : (
-            <span className="opacity-40">{placeholder || "dd/mm/aaaa"}</span>
+            <span>{placeholder || "dd/mm/aaaa"}</span>
           )}
         </Button>
       </PopoverTrigger>
@@ -203,6 +204,9 @@ export function POS() {
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [quoteValidDays, setQuoteValidDays] = useState<number | "">(15);
   const [checkoutDueDate, setCheckoutDueDate] = useState("");
+
+  // Transport State
+  const [transportData, setTransportData] = useState<TransportData | null>(null);
 
   const parseLocalDate = (dateStr: string) => {
     if (!dateStr) return undefined;
@@ -358,6 +362,13 @@ export function POS() {
           quantity: i.quantity,
           unitPrice: i.price,
         })),
+        ...(transportData && transportData.requiresTransport ? {
+          requiresTransport: true,
+          vehicleId: transportData.vehicleId,
+          driverId: transportData.driverId,
+          deliveryAddress: transportData.deliveryAddress,
+          scheduledAt: transportData.scheduledDeliveryAt,
+        } : {})
       });
 
       toast.success("Cotización guardada exitosamente");
@@ -366,6 +377,7 @@ export function POS() {
       searchProducts("");
       setSelectedCustomer(null);
       setShowQuoteModal(false);
+      setTransportData(null);
     } catch (error: any) {
       toast.error(error.message || "Error al guardar la cotización");
       // Si falla, rehabilitar el botón para que el cajero corrija y reintente
@@ -621,14 +633,30 @@ export function POS() {
           quantity: i.quantity,
           unitPrice: i.price,
         })),
+        ...(transportData && transportData.requiresTransport ? {
+          requiresTransport: true,
+          vehicleId: transportData.vehicleId,
+          driverId: transportData.driverId,
+          deliveryAddress: transportData.deliveryAddress,
+          scheduledDeliveryAt: transportData.scheduledDeliveryAt,
+        } : {})
       });
 
       toast.success("Venta registrada exitosamente");
+      if (transportData?.requiresTransport) {
+        toast.success('Albarán de entrega generado automáticamente', {
+          description: transportData.deliveryAddress 
+            ? `Entrega en: ${transportData.deliveryAddress}` 
+            : 'Revisa la página de Albaranes para gestionar el despacho',
+          duration: 5000,
+        });
+      }
       setCart([]);
       setSearchTerm("");
       setProducts([]);
       setSelectedCustomer(null);
       setCheckoutDueDate("");
+      setTransportData(null);
 
     } catch (error: any) {
       const msg = error.message || "Error al procesar la venta. Verifique el stock.";
@@ -656,384 +684,287 @@ export function POS() {
   };
 
   return (
-    <div className="h-[calc(100vh-155px)] flex flex-col gap-4 animate-in fade-in duration-500 overflow-hidden">
+    <div className="h-[calc(100vh-140px)] flex flex-col gap-3 animate-in fade-in duration-300 overflow-hidden">
+      {/* Header Compacto */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1
-            className="text-3xl font-bold tracking-tight"
-            style={{ color: "var(--text-main)" }}
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-[var(--text-main)]">Punto de Venta</h1>
+          <Badge variant="outline" className="border-[var(--primary)]/30 text-[var(--primary)] bg-[var(--primary)]/5 font-bold">
+            <Package size={14} className="mr-1" /> {user?.branch || "Sucursal"}
+          </Badge>
+        </div>
+        {activeShift && (
+          <Button
+            variant="outline" size="sm"
+            className="border-red-200 text-red-500 hover:bg-red-50 font-bold"
+            onClick={handleOpenCloseShiftModal}
           >
-            Punto de Venta
-          </h1>
-          <p className="text-sm text-[var(--text-sec)]">
-            Genera facturas y créditos fiscales al instante.
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl border bg-[var(--card)] border-[var(--border)] text-[var(--text-sec)] shadow-sm">
-            <Package size={16} className="text-[var(--primary)]" />
-            <span className="font-bold">{user?.branch || "Sucursal"}</span>
-          </div>
-          {activeShift && (
-            <Button
-              variant="outline"
-              className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-              onClick={handleOpenCloseShiftModal}
-            >
-              <Lock size={16} className="mr-2" />
-              Cerrar Caja
-            </Button>
-          )}
-        </div>
+            <Lock size={14} className="mr-2" /> Cerrar Caja
+          </Button>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
-        {/* Product List Section */}
-        <div className="lg:col-span-2 flex flex-col min-h-0">
-          <div className="relative w-full group mb-6">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-[var(--text-sec)] group-focus-within:text-[var(--primary)] transition-colors" />
-            <Input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="F1: Buscar productos o escanear código..."
-              className="pl-12 text-lg h-14 bg-[var(--card)] shadow-md border-[var(--border)] rounded-2xl w-full focus-visible:ring-[var(--primary)]/20"
-            />
-            {loading && (
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin h-5 w-5 border-2 border-[var(--primary)] border-t-transparent rounded-full" />
-            )}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0">
+        {/* PANEL IZQUIERDO: PRODUCTOS */}
+        <div className="lg:col-span-7 xl:col-span-8 flex flex-col min-h-0 bg-[var(--card)] rounded-xl border border-[var(--border)] shadow-sm overflow-hidden">
+          {/* Buscador Compacto */}
+          <div className="p-3 border-b border-[var(--border)] bg-[var(--bg)]/50">
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[var(--text-sec)]" />
+              <Input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="F1: Buscar productos, código o categoría..."
+                className="pl-9 h-10 bg-[var(--bg)] border-[var(--border)] rounded-lg w-full text-sm"
+              />
+              {loading && <div className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin h-4 w-4 border-2 border-[var(--primary)] border-t-transparent rounded-full" />}
+            </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar pb-10">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Grid Compacto */}
+          <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
               {products.map((product) => (
-                <Button
+                <div
                   key={product.id}
-                  variant="outline"
-                  onClick={() => addToCart(product)}
-                  disabled={product.stock <= 0}
-                  className="h-auto p-4 rounded-2xl flex flex-col items-stretch text-left transition-all hover:shadow-xl hover:border-[var(--primary)] hover:bg-[var(--primary)]/5 group bg-[var(--card)] border-[var(--border)] active:scale-[0.98]"
+                  onClick={() => product.stock > 0 && addToCart(product)}
+                  className={cn(
+                    "relative p-3 rounded-xl border transition-all flex flex-col cursor-pointer",
+                    product.stock > 0 
+                      ? "bg-[var(--card)] border-[var(--border)] hover:border-[var(--primary)] hover:shadow-md" 
+                      : "bg-[var(--bg)] border-[var(--border)] opacity-60 cursor-not-allowed"
+                  )}
                 >
-                  <div className="flex items-start justify-between mb-2 w-full">
-                    <div className="flex-1">
-                      <p className="font-bold text-lg leading-tight text-[var(--text-main)] group-hover:text-[var(--primary)] transition-colors">
-                        {product.name}
-                      </p>
-                      <p className="text-[10px] font-mono mt-1 opacity-60 text-[var(--text-sec)]">
-                        {product.internalCode} • {product.category.name}
-                      </p>
-                    </div>
-                    <div className="p-3 rounded-xl bg-[var(--primary)]/10 text-[var(--primary)] group-hover:bg-[var(--primary)] group-hover:text-white transition-all shadow-sm">
-                      <Plus size={20} />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between mt-4 w-full">
-                    <span className="text-2xl font-black text-[var(--primary)]">
-                      ${product.price.toFixed(2)}
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-[9px] font-bold uppercase text-[var(--text-sec)] bg-[var(--bg)] px-1.5 py-0.5 rounded border border-[var(--border)]">
+                      {product.category.name}
                     </span>
-                    <Badge
-                      variant={product.stock < 10 ? "destructive" : "secondary"}
-                      className="font-bold text-[10px] uppercase rounded-lg px-2"
-                    >
-                      {product.stock} {product.unit}
+                    <Badge variant={product.stock < 10 ? "destructive" : "secondary"} className="text-[9px] px-1.5 py-0">
+                      {product.stock}
                     </Badge>
                   </div>
-                </Button>
+                  
+                  <h3 className="font-bold text-sm leading-tight text-[var(--text-main)] line-clamp-2 mb-1">
+                    {product.name}
+                  </h3>
+                  <p className="text-[10px] font-mono text-[var(--text-sec)] mb-3">
+                    {product.internalCode}
+                  </p>
+                  
+                  <div className="mt-auto flex items-center justify-between pt-2 border-t border-[var(--border)]">
+                    <span className="text-base font-black text-[var(--primary)]">
+                      ${product.price.toFixed(2)}
+                    </span>
+                    <div className="size-6 rounded bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center">
+                      <Plus size={14} />
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Cart & Customer Section */}
-        <div className="flex flex-col gap-4 min-h-0 h-full">
-          {/* Customer Selector */}
-          <div
-            className="p-4 rounded-2xl border bg-[var(--card)] shadow-md"
-            style={{ borderColor: "var(--border)" }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <h3
-                className="text-sm font-bold flex items-center gap-2"
-                style={{ color: "var(--text-main)" }}
-              >
-                <User size={16} /> Cliente
-              </h3>
-              {!selectedCustomer && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-[10px] gap-1 text-[var(--accent)] hover:bg-[var(--accent)]/10"
-                  onClick={() => setIsQuickCreateOpen(true)}
-                >
-                  <UserPlus size={14} /> Registro Rápido
-                </Button>
-              )}
-            </div>
-
-            {selectedCustomer ? (
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-[var(--primary)]/5 border border-[var(--primary)]/20 animate-in zoom-in-95 duration-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-[var(--primary)] text-white flex items-center justify-center font-bold shadow-lg shadow-[var(--primary)]/20">
-                    {selectedCustomer.name.charAt(0)}
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold leading-tight text-[var(--text-main)]">
-                      {selectedCustomer.name}
-                    </p>
-                    <p className="text-[10px] opacity-60 text-[var(--text-sec)]">
-                      {selectedCustomer.customerType} •{" "}
-                      {selectedCustomer.nit ||
-                        selectedCustomer.documentNumber ||
-                        "Sin Doc"}
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 rounded-full hover:bg-red-50 hover:text-red-500 transition-colors"
-                  onClick={() => setSelectedCustomer(null)}
-                >
-                  <X size={16} />
-                </Button>
-              </div>
-            ) : (
-              <div className="relative">
-                <Search
-                  className="absolute left-3 top-1/2 -translate-y-1/2 opacity-30"
-                  size={16}
-                />
-                <Input
-                  placeholder="Buscar por Nombre o NIT..."
-                  value={customerSearch}
-                  onChange={(e) => setCustomerSearch(e.target.value)}
-                  className="pl-9 h-10 text-sm bg-[var(--bg)]"
-                />
-                {searchingCustomer && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin h-3 w-3 border border-[var(--accent)] border-t-transparent rounded-full" />
-                )}
-
-                {customerResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-2 z-50 rounded-2xl border bg-[var(--card)] shadow-2xl max-h-64 overflow-y-auto divide-y divide-[var(--border)] border-[var(--border)]">
-                    {customerResults.map((c) => (
-                      <button
-                        key={c.id}
-                        className="w-full text-left p-4 hover:bg-[var(--primary)]/5 transition-all flex flex-col group"
-                        onClick={() => {
-                          setSelectedCustomer(c);
-                          setCustomerResults([]);
-                          setCustomerSearch("");
-                        }}
-                      >
-                        <span className="text-sm font-bold text-[var(--text-main)] group-hover:text-[var(--primary)] transition-colors">
-                          {c.name}
-                        </span>
-                        <span className="text-[10px] opacity-60 text-[var(--text-sec)]">
-                          {c.customerType} •{" "}
-                          {c.nit || c.documentNumber || "Final"}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Cart Section */}
-          <div
-            className="flex-1 flex flex-col rounded-2xl border bg-[var(--card)] shadow-xl min-h-0 overflow-hidden"
-            style={{ borderColor: "var(--border)" }}
-          >
-            <div className="p-4 border-b flex items-center justify-between border-[var(--border)]">
-              <div className="flex items-center gap-2">
-                <ShoppingCart size={18} className="text-[var(--primary)]" />
-                <h2 className="font-bold text-[var(--text-main)]">
-                  Resumen de Venta
-                </h2>
-              </div>
-              <Badge variant="secondary" className="font-bold rounded-lg">
+        {/* PANEL DERECHO: CARRITO */}
+        <div className="lg:col-span-5 xl:col-span-4 flex flex-col min-h-0 bg-[var(--card)] rounded-xl border border-[var(--border)] shadow-sm overflow-hidden flex-shrink-0">
+          
+          {/* Header Carrito / Cliente (Compacto) */}
+          <div className="p-3 border-b border-[var(--border)] bg-[var(--bg)]/50 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold text-[var(--text-main)] flex items-center gap-1.5">
+                <ShoppingCart size={16} className="text-[var(--primary)]" /> Venta Actual
+              </h2>
+              <Badge className="bg-[var(--primary)] text-white text-[10px] px-2 rounded-md">
                 {cart.length} items
               </Badge>
             </div>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar">
-              <div className="p-4 space-y-3">
-                {cart.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center opacity-30 text-center py-20">
-                    <ShoppingCart size={48} className="mb-2" />
-                    <p className="text-sm">Carrito vacío</p>
+            {/* Selector Cliente Compacto */}
+            <div>
+              {selectedCustomer ? (
+                <div className="flex items-center justify-between p-2 rounded-lg bg-[var(--primary)]/10 border border-[var(--primary)]/20">
+                  <div className="flex items-center gap-2">
+                    <div className="size-7 rounded bg-[var(--primary)] text-white flex items-center justify-center font-bold text-xs">
+                      {selectedCustomer.name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold leading-none text-[var(--text-main)] truncate max-w-[150px]">{selectedCustomer.name}</p>
+                      <p className="text-[9px] font-bold opacity-70 mt-0.5 text-[var(--text-sec)]">
+                        {selectedCustomer.customerType} • {selectedCustomer.nit || selectedCustomer.documentNumber || "FINAL"}
+                      </p>
+                    </div>
                   </div>
-                ) : (
-                  cart.map((item) => (
-                    <div
-                      key={item.id}
-                      className="p-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] group hover:shadow-md transition-all"
-                    >
-                      <div className="flex justify-between items-start mb-3">
-                        <p className="font-bold text-sm leading-tight text-[var(--text-main)]">
-                          {item.name}
-                        </p>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-red-400 hover:bg-red-50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                          onClick={() => removeFromCart(item.id)}
+                  <Button variant="ghost" size="icon" className="size-6 text-red-500 hover:bg-red-100" onClick={() => setSelectedCustomer(null)}>
+                    <X size={12} />
+                  </Button>
+                </div>
+              ) : (
+                <div className="relative flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-sec)]" size={14} />
+                    <Input
+                      placeholder="Cliente (Nombre o NIT)..."
+                      value={customerSearch}
+                      onChange={(e) => setCustomerSearch(e.target.value)}
+                      className="pl-8 h-9 text-xs bg-[var(--bg)] border-[var(--border)]"
+                    />
+                    {searchingCustomer && (
+                      <div className="absolute right-2.5 top-1/2 -translate-y-1/2 animate-spin size-3 border-2 border-[var(--primary)] border-t-transparent rounded-full" />
+                    )}
+                  </div>
+                  <Button variant="outline" size="icon" className="size-9 shrink-0 text-[var(--primary)]" onClick={() => setIsQuickCreateOpen(true)} title="Nuevo">
+                    <UserPlus size={14} />
+                  </Button>
+
+                  {customerResults.length > 0 && (
+                    <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 rounded-lg border bg-[var(--card)] shadow-lg max-h-48 overflow-y-auto p-1">
+                      {customerResults.map((c) => (
+                        <button
+                          key={c.id}
+                          className="w-full text-left p-2 rounded hover:bg-[var(--primary)]/10 flex flex-col"
+                          onClick={() => { setSelectedCustomer(c); setCustomerResults([]); setCustomerSearch(""); }}
                         >
-                          <X size={14} />
+                          <span className="text-xs font-bold text-[var(--text-main)]">{c.name}</span>
+                          <span className="text-[9px] text-[var(--text-sec)]">{c.customerType} • {c.nit || c.documentNumber || "FINAL"}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Lista Items + Selector Transporte (Scrollable) */}
+          <div className="flex-1 overflow-y-auto p-3 custom-scrollbar bg-[var(--bg)]/10">
+            {cart.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center opacity-40">
+                <ShoppingCart size={32} className="mb-2" />
+                <p className="text-sm font-bold">Carrito vacío</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {cart.map((item) => (
+                  <div key={item.id} className="relative p-2.5 rounded-lg bg-[var(--card)] border border-[var(--border)]">
+                    <div className="flex justify-between items-start mb-2 pr-6">
+                      <p className="font-bold text-xs leading-tight text-[var(--text-main)]">{item.name}</p>
+                      <Button variant="ghost" size="icon" className="absolute right-1 top-1 size-6 text-red-400 hover:bg-red-50 hover:text-red-500" onClick={() => removeFromCart(item.id)}>
+                        <Trash2 size={12} />
+                      </Button>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center bg-[var(--bg)] rounded border border-[var(--border)]">
+                        <Button variant="ghost" size="icon" className="size-6" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
+                          <Minus size={12} />
+                        </Button>
+                        <span className="text-xs font-bold w-6 text-center">{item.quantity}</span>
+                        <Button variant="ghost" size="icon" className="size-6 text-[var(--primary)]" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
+                          <Plus size={12} />
                         </Button>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1 bg-[var(--card)] rounded-xl border border-[var(--border)] p-1 shadow-sm">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() =>
-                              updateQuantity(item.id, item.quantity - 1)
-                            }
-                          >
-                            <Minus size={14} />
-                          </Button>
-                          <span className="text-sm font-bold w-6 text-center">
-                            {item.quantity}
-                          </span>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() =>
-                              updateQuantity(item.id, item.quantity + 1)
-                            }
-                          >
-                            <Plus size={14} />
-                          </Button>
-                        </div>
 
-                        <div className="flex flex-col items-end gap-1">
-                          <div className="flex items-center gap-1 text-[var(--primary)] font-black">
-                            <span className="text-sm">$</span>
-                            <NumberInput
-                              value={item.price === 0 ? "" : item.price}
-                              onValueChange={(val) => updatePrice(item.id, val)}
-                              onBlur={() => {
-                                if (!item.price || item.price <= 0) {
-                                  updatePrice(item.id, item.originalPrice);
-                                }
-                              }}
-                              step={0.01}
-                              className="w-28 h-10 bg-[var(--card)] border-[var(--border)] text-right pr-10 font-bold text-base"
-                            />
-                          </div>
-                          <span className="text-[10px] font-bold opacity-40 uppercase tracking-tighter">
-                            Subtotal: ${item.subtotal.toFixed(2)}
-                          </span>
+                      <div className="flex flex-col items-end gap-1">
+                        <div className="relative flex items-center justify-end w-20">
+                          <span className="absolute left-2 text-xs font-black text-[var(--primary)] pointer-events-none">$</span>
+                          <NumberInput
+                            value={item.price === 0 ? "" : item.price}
+                            onValueChange={(val) => updatePrice(item.id, val)}
+                            onBlur={() => { if (!item.price || item.price <= 0) updatePrice(item.id, item.originalPrice); }}
+                            step={0.01}
+                            hideControls={true}
+                            className="w-full h-7 bg-[var(--bg)] border border-[var(--border)] focus:border-[var(--primary)] rounded text-right pr-2 pl-4 font-black text-[var(--primary)] text-sm shadow-[inset_0_1px_2px_rgba(0,0,0,0.1)] transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none focus-visible:ring-0"
+                          />
                         </div>
+                        <span className="text-[9px] font-bold text-[var(--text-sec)]">Sub: ${item.subtotal.toFixed(2)}</span>
                       </div>
                     </div>
-                  ))
-                )}
+                  </div>
+                ))}
+
+                {/* TRANSPORT SELECTOR DENTRO DEL SCROLL PARA NO QUITAR ESPACIO AL FOOTER */}
+                <div className="pt-2">
+                  <TransportSelector 
+                    customerId={selectedCustomer?.id}
+                    value={transportData}
+                    onChange={setTransportData}
+                    disabled={loading || cart.length === 0}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer Cobro Super Compacto */}
+          <div className="p-3 border-t border-[var(--border)] bg-[var(--card)] flex-shrink-0 space-y-3 shadow-[0_-5px_15px_-10px_rgba(0,0,0,0.1)]">
+            
+            <div className="flex items-end justify-between px-1">
+              <div className="text-xs font-bold text-[var(--text-sec)] flex flex-col">
+                <span>Sub: ${subtotal.toFixed(2)}</span>
+                <span>IVA: ${iva.toFixed(2)}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-2xl font-black text-[var(--primary)] leading-none">${total.toFixed(2)}</span>
               </div>
             </div>
 
-            <div
-              className="p-3 bg-[var(--bg)]/30 border-t space-y-3 flex-shrink-0"
-              style={{ borderColor: "var(--border)" }}
-            >
-              <div className="space-y-1.5 px-1">
-                <div className="flex justify-between font-bold text-[var(--text-sec)]">
-                  <span>Subtotal</span>
-                  <span>${subtotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between font-bold text-[var(--text-sec)]">
-                  <span>IVA ({(vatRate * 100).toFixed(0)}%)</span>
-                  <span>${iva.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-2xl font-black text-[var(--primary)] pt-2 mt-2 border-t-2 border-dashed border-[var(--border)]">
-                  <span>Total</span>
-                  <span>${total.toFixed(2)}</span>
+            <div className="grid grid-cols-4 gap-1.5">
+              {["EFECTIVO", "TARJETA", "TRANSFERENCIA", "CREDITO"]
+                .filter((method) => {
+                  if (method === "CREDITO" && sysConfig?.allowCreditSales === false) return false;
+                  if (!branchPaymentConfig) return true;
+                  if (method === "EFECTIVO" && !branchPaymentConfig.acceptsCash) return false;
+                  if (method === "TARJETA" && !branchPaymentConfig.acceptsCard) return false;
+                  if (method === "TRANSFERENCIA" && !branchPaymentConfig.acceptsTransfer) return false;
+                  if (method === "CREDITO" && !branchPaymentConfig.acceptsCredit) return false;
+                  return true;
+                })
+                .map((method) => (
+                  <Button
+                    key={method}
+                    variant={selectedPayment === method ? "default" : "outline"}
+                    className={cn(
+                      "h-8 text-[9px] font-black tracking-tight px-0",
+                      selectedPayment === method ? "bg-[var(--primary)] text-white shadow-sm" : "bg-[var(--bg)] text-[var(--text-sec)]"
+                    )}
+                    onClick={() => setSelectedPayment(method as any)}
+                  >
+                    {method}
+                  </Button>
+                ))}
+            </div>
+
+            {selectedPayment === "CREDITO" && (
+              <div className="flex items-center justify-between gap-2 p-2 bg-[var(--bg)] border border-[var(--border)] rounded-lg">
+                <Label className="text-[10px] font-bold text-[var(--text-sec)] uppercase">Vencimiento:</Label>
+                <div className="flex-1 max-w-[140px]">
+                  <DatePicker 
+                    date={checkoutDueDate ? parseLocalDate(checkoutDueDate) : undefined}
+                    setDate={handleDateChange}
+                    placeholder="30 días"
+                  />
                 </div>
               </div>
+            )}
 
-              <div className="grid grid-cols-4 gap-1">
-                {["EFECTIVO", "TARJETA", "TRANSFERENCIA", "CREDITO"]
-                  .filter((method) => {
-                    if (method === "CREDITO" && sysConfig?.allowCreditSales === false) return false;
-                    if (!branchPaymentConfig) return true; // Default allow all if config not loaded
-                    
-                    if (method === "EFECTIVO" && !branchPaymentConfig.acceptsCash) return false;
-                    if (method === "TARJETA" && !branchPaymentConfig.acceptsCard) return false;
-                    if (method === "TRANSFERENCIA" && !branchPaymentConfig.acceptsTransfer) return false;
-                    if (method === "CREDITO" && !branchPaymentConfig.acceptsCredit) return false;
-                    
-                    return true;
-                  })
-                  .map(
-                  (method) => (
-                    <Button
-                      key={method}
-                      variant={
-                        selectedPayment === method ? "default" : "outline"
-                      }
-                      size="sm"
-                      onClick={() => setSelectedPayment(method as any)}
-                      className={cn(
-                        "rounded-xl text-[9px] font-black tracking-tighter transition-all h-9 px-0.5",
-                        selectedPayment === method
-                          ? "shadow-lg shadow-[var(--primary)]/20"
-                          : "bg-[var(--card)]",
-                      )}
-                    >
-                      {method}
-                    </Button>
-                  ),
-                )}
-              </div>
-
-              {selectedPayment === "CREDITO" && (
-                <div className="flex items-center justify-between gap-3 p-2 bg-[var(--primary)]/5 border border-[var(--primary)]/10 rounded-xl animate-in slide-in-from-top-2 duration-200">
-                  <Label className="text-[10px] font-bold text-[var(--text-sec)] uppercase tracking-tight flex-shrink-0">
-                    Vencimiento:
-                  </Label>
-                  <div className="flex-1 max-w-[200px]">
-                    <DatePicker 
-                      date={checkoutDueDate ? parseLocalDate(checkoutDueDate) : undefined}
-                      setDate={handleDateChange}
-                      placeholder="Default: 30 días"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  onClick={() => setShowQuoteModal(true)}
-                  disabled={loading || cart.length === 0}
-                  variant="outline"
-                  size="xl"
-                  className="w-full gap-2 border-[var(--primary)] text-[var(--primary)] hover:bg-[var(--primary)] hover:text-white"
-                >
-                  <Save size={20} /> COTIZAR
-                </Button>
-                <Button
-                  ref={checkoutBtnRef}
-                  onPointerDown={() => {
-                    if (!isCheckoutSubmittingGlobal) handleCheckout();
-                  }}
-                  disabled={loading || cart.length === 0}
-                  variant="premium"
-                  size="xl"
-                  className="w-full gap-2"
-                >
-                  {loading ? (
-                    <div className="animate-spin h-6 w-6 border-2 border-white border-t-transparent rounded-full" />
-                  ) : (
-                    <>
-                      <Printer size={20} /> COBRAR
-                    </>
-                  )}
-                </Button>
-              </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                onClick={() => setShowQuoteModal(true)}
+                disabled={loading || cart.length === 0}
+                variant="outline"
+                className="h-12 rounded-xl font-bold text-sm border-[var(--primary)] text-[var(--primary)] hover:bg-[var(--primary)] hover:text-white"
+              >
+                <Save className="mr-2 size-4" /> COTIZAR
+              </Button>
+              <Button
+                ref={checkoutBtnRef}
+                onPointerDown={() => { if (!isCheckoutSubmittingGlobal) handleCheckout(); }}
+                disabled={loading || cart.length === 0}
+                className="h-12 rounded-xl font-black text-sm bg-[var(--primary)] text-white hover:bg-[var(--primary)]/90"
+              >
+                {loading ? <div className="animate-spin size-5 border-2 border-white border-t-transparent rounded-full" /> : <><Printer className="mr-2 size-4" /> COBRAR</>}
+              </Button>
             </div>
           </div>
         </div>
