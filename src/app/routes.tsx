@@ -18,6 +18,7 @@ import { HumanResources } from "./pages/HumanResources";
 import { Catalog } from "./pages/Catalog";
 import { UIComponentsShowcase } from "./pages/UIComponentsShowcase";
 import { SalesHistory } from "./pages/SalesHistory";
+import { SystemConfig } from "./pages/SystemConfig";
 import { Quotes } from "./pages/Quotes";
 import { Purchases } from "./pages/Purchases";
 import { DeliveryNotes } from "./pages/DeliveryNotes";
@@ -106,6 +107,10 @@ export const router = createBrowserRouter([
       {
         path: "settings/branches",
         element: <BranchesPage />,
+      },
+      {
+        path: "settings/global",
+        element: <SystemConfig />,
       },
       {
         path: "rrhh",

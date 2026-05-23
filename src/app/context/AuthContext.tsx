@@ -16,6 +16,7 @@ interface User {
   phone?: string;
   dui?: string;
   branch?: string;
+  branchId?: number;
 }
 
 interface BackendUser {
@@ -82,6 +83,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Al recargar, actualizamos los datos básicos pero mantenemos el rol y la sucursal
         // que ya teníamos en el estado inicial del localStorage para no perder la vista.
+        let decodedBranchId: number | undefined = undefined;
+        try {
+          const payload = JSON.parse(atob(savedToken.split('.')[1]));
+          if (payload && payload.branchId) {
+            decodedBranchId = payload.branchId;
+          }
+        } catch (e) {
+          console.error("Error decoding token in verifySession", e);
+        }
+
         if (backendUser && user) {
           setUser({
             ...user, // Conserva role y branch persistidos
@@ -90,6 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: backendUser.email,
             phone: backendUser.phone,
             dui: backendUser.dui,
+            branchId: decodedBranchId || user.branchId,
           });
         }
       } catch (error) {
@@ -219,6 +231,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const roleId = roleMap[normalizedRole] || undefined;
 
+    let branchId: number | undefined = undefined;
+    try {
+      if (token) {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload && payload.branchId) {
+          branchId = payload.branchId;
+        }
+      }
+    } catch (e) {
+      console.error("Error decoding token", e);
+    }
+
     const mappedUser: User = {
       id: backendUser.id.toString(),
       name: backendUser.fullName,
@@ -228,6 +252,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       phone: backendUser.phone,
       dui: backendUser.dui,
       branch: branchName || "Principal",
+      branchId,
     };
 
     setUser(mappedUser);

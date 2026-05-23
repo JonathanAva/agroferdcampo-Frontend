@@ -114,6 +114,8 @@ export function Inventory() {
   const [isAdjustOpen, setIsAdjustOpen] = useState(false);
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [isNewEntryOpen, setIsNewEntryOpen] = useState(false);
+  const [isMinStockOpen, setIsMinStockOpen] = useState(false);
+  const [isAlertsOpen, setIsAlertsOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [formLoading, setFormLoading] = useState(false);
 
@@ -137,6 +139,11 @@ export function Inventory() {
   const [entryQty, setEntryQty] = useState("");
   const [entryBranchId, setEntryBranchId] = useState("");
   const [entryRef, setEntryRef] = useState("");
+
+  // 6. Min Stock & Alerts
+  const [minStockVal, setMinStockVal] = useState("");
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [loadingAlerts, setLoadingAlerts] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -252,6 +259,51 @@ export function Inventory() {
     }
   };
 
+  const handleUpdateMinStock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedItem) return;
+
+    setFormLoading(true);
+    try {
+      await apiRequest(`/inventory/min-stock/${selectedItem.product.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          branchId: selectedItem.branchId,
+          minStock: Number(minStockVal),
+        }),
+      });
+      toast.success("Stock mínimo actualizado");
+      setIsMinStockOpen(false);
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message || "Error al actualizar stock mínimo");
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const fetchAlerts = async () => {
+    setLoadingAlerts(true);
+    try {
+      const data = await apiRequest<any[]>("/inventory/alerts");
+      setAlerts(data);
+    } catch (error: any) {
+      toast.error("Error al cargar alertas");
+    } finally {
+      setLoadingAlerts(false);
+    }
+  };
+
+  const handleResolveAlert = async (id: number) => {
+    try {
+      await apiRequest(`/inventory/alerts/${id}/resolve`, { method: "PATCH" });
+      toast.success("Alerta marcada como resuelta");
+      fetchAlerts();
+    } catch (error: any) {
+      toast.error(error.message || "Error al resolver alerta");
+    }
+  };
+
   const getProductStatus = (item: InventoryItem) => {
     const qty = Number(item.quantity);
     const min = Number(item.minStock);
@@ -340,14 +392,27 @@ export function Inventory() {
             Ir al Catálogo
           </Button>
           {canAdjust && (
-            <Button
-              onClick={() => setIsNewEntryOpen(true)}
-              variant="default"
-              className="gap-2 font-bold shadow-lg"
-            >
-              <Plus size={18} />
-              Nuevo Ingreso
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  fetchAlerts();
+                  setIsAlertsOpen(true);
+                }}
+                className="gap-2 font-bold relative text-rose-500 border-rose-200 bg-rose-50 hover:bg-rose-100"
+              >
+                <AlertCircle size={18} />
+                Alertas
+              </Button>
+              <Button
+                onClick={() => setIsNewEntryOpen(true)}
+                variant="default"
+                className="gap-2 font-bold shadow-lg"
+              >
+                <Plus size={18} />
+                Nuevo Ingreso
+              </Button>
+            </div>
           )}
         </div>
       </div>
@@ -633,17 +698,33 @@ export function Inventory() {
                   <TableCell>
                     <div className="flex items-center justify-center gap-1">
                       {canAdjust && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setSelectedItem(item);
-                            setIsAdjustOpen(true);
-                          }}
-                          className="h-8 w-8 text-[var(--primary)] hover:bg-[var(--primary)]/10 rounded-lg"
-                        >
-                          <ClipboardList size={18} />
-                        </Button>
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setSelectedItem(item);
+                              setMinStockVal(String(item.minStock));
+                              setIsMinStockOpen(true);
+                            }}
+                            className="h-8 w-8 text-amber-500 hover:bg-amber-50 rounded-lg"
+                            title="Fijar Stock Mínimo"
+                          >
+                            <TrendingDown size={18} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setSelectedItem(item);
+                              setIsAdjustOpen(true);
+                            }}
+                            className="h-8 w-8 text-[var(--primary)] hover:bg-[var(--primary)]/10 rounded-lg"
+                            title="Ajuste de Inventario"
+                          >
+                            <ClipboardList size={18} />
+                          </Button>
+                        </>
                       )}
                       {canTransfer && (
                         <Button
@@ -963,6 +1044,75 @@ export function Inventory() {
               </DialogFooter>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+      {/* Modal Fijar Stock Mínimo */}
+      <Dialog open={isMinStockOpen} onOpenChange={setIsMinStockOpen}>
+        <DialogContent className="sm:max-w-sm w-full" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--text-main)" }}>
+          <form onSubmit={handleUpdateMinStock}>
+            <DialogHeader>
+              <DialogTitle className="text-xl font-black">Stock Mínimo</DialogTitle>
+              <DialogDescription>
+                Define el nivel de alerta para {selectedItem?.product.name}.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-6 space-y-4">
+              <div className="space-y-2">
+                <Label>Cantidad Mínima Requerida</Label>
+                <Input
+                  type="number"
+                  required
+                  value={minStockVal}
+                  onChange={(e) => setMinStockVal(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+            </div>
+            <DialogFooter className="gap-3">
+              <Button type="button" variant="ghost" onClick={() => setIsMinStockOpen(false)}>Cancelar</Button>
+              <Button type="submit" disabled={formLoading} variant="default">Guardar</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bandeja de Alertas */}
+      <Dialog open={isAlertsOpen} onOpenChange={setIsAlertsOpen}>
+        <DialogContent className="sm:max-w-2xl w-full max-h-[80vh] overflow-auto" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--text-main)" }}>
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black text-rose-500 flex items-center gap-2">
+              <AlertCircle /> Bandeja de Alertas
+            </DialogTitle>
+            <DialogDescription>
+              Productos con stock bajo o crítico que requieren atención.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {loadingAlerts ? (
+              <p className="text-center py-8">Cargando alertas...</p>
+            ) : alerts.length === 0 ? (
+              <p className="text-center py-8 text-muted-foreground">No hay alertas activas.</p>
+            ) : (
+              <div className="space-y-3">
+                {alerts.map((alert) => (
+                  <div key={alert.id} className="p-4 rounded-xl border border-rose-200 bg-rose-50 dark:bg-rose-500/10 flex justify-between items-center gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={alert.type === "CRITICAL" ? "destructive" : "warning"}>
+                          {alert.type}
+                        </Badge>
+                        <span className="font-bold text-[var(--text-main)]">{alert.product?.name}</span>
+                      </div>
+                      <p className="text-sm opacity-80 mt-1 text-[var(--text-sec)]">{alert.message}</p>
+                    </div>
+                    <Button onClick={() => handleResolveAlert(alert.id)} variant="outline" size="sm">
+                      Resolver
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

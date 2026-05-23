@@ -258,7 +258,7 @@ export function HumanResources() {
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState<{
-    type: "dept" | "pos" | "sch";
+    type: "dept" | "pos" | "sch" | "lvType";
     open: boolean;
   }>({ type: "dept", open: false });
   const [formLoading, setFormLoading] = useState(false);
@@ -353,23 +353,31 @@ export function HumanResources() {
   };
 
   const loadConfigData = async () => {
-    try {
-      const [depts, pos, sch, lvTypes, empList] = await Promise.all([
-        apiRequest<Department[]>("/departments"),
-        apiRequest<Position[]>("/positions"),
-        apiRequest<WorkSchedule[]>("/work-schedules"),
-        apiRequest<LeaveType[]>("/leave-types"),
-        apiRequest<{ data: Employee[] }>(`/employees?branchId=${selectedBranch?.id}&status=ACTIVO&limit=200`),
-      ]);
-      setDepartments(depts);
-      setPositions(pos);
-      setSchedules(sch);
-      setLeaveTypes(lvTypes);
-      setAllEmployees(empList.data || []);
-    } catch (error) {
-      console.error("Error loading config data:", error);
-    }
+    // Usamos allSettled para que un fallo en una llamada no afecte a las demás
+    const [deptsRes, posRes, schRes, lvTypesRes, empListRes] = await Promise.allSettled([
+      apiRequest<Department[]>("/departments"),
+      apiRequest<Position[]>("/positions"),
+      apiRequest<WorkSchedule[]>("/work-schedules"),
+      apiRequest<LeaveType[]>("/leave-types"),
+      apiRequest<{ data: Employee[] }>(`/employees?branchId=${selectedBranch?.id}&status=ACTIVO&limit=100`),
+    ]);
+
+    if (deptsRes.status === "fulfilled") setDepartments(deptsRes.value);
+    else console.warn("No se pudieron cargar departamentos:", deptsRes.reason);
+
+    if (posRes.status === "fulfilled") setPositions(posRes.value);
+    else console.warn("No se pudieron cargar cargos:", posRes.reason);
+
+    if (schRes.status === "fulfilled") setSchedules(schRes.value);
+    else console.warn("No se pudieron cargar horarios:", schRes.reason);
+
+    if (lvTypesRes.status === "fulfilled") setLeaveTypes(lvTypesRes.value);
+    else console.warn("No se pudieron cargar tipos de permiso:", lvTypesRes.reason);
+
+    if (empListRes.status === "fulfilled") setAllEmployees(empListRes.value?.data || []);
+    else console.warn("No se pudieron cargar empleados para modal:", empListRes.reason);
   };
+
 
   const handleCheckIn = async (employeeId: number) => {
     try {
@@ -618,6 +626,12 @@ export function HumanResources() {
         breakMinutes: Number(formData.get("breakMinutes")),
         workDays: ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES"],
       };
+    } else if (type === "lvType") {
+      endpoint = "/leave-types";
+      body = {
+        name: formData.get("name"),
+        isPaid: formData.get("isPaid") === "true",
+      };
     }
 
     try {
@@ -636,7 +650,7 @@ export function HumanResources() {
   };
 
   const handleDeleteConfig = async (
-    type: "dept" | "pos" | "sch",
+    type: "dept" | "pos" | "sch" | "lvType",
     id: number,
   ) => {
     if (!confirm("¿Estás seguro de eliminar este registro?")) return;
@@ -646,8 +660,17 @@ export function HumanResources() {
           ? `/departments/${id}`
           : type === "pos"
             ? `/positions/${id}`
-            : `/work-schedules/${id}`;
-      await apiRequest(endpoint, { method: "DELETE" });
+            : type === "sch"
+              ? `/work-schedules/${id}`
+              : `/leave-types/${id}`;
+      // In leave-types we should probably just deactivate them, but if there's a DELETE endpoint let's use it, 
+      // or we use PATCH to deactivate if DELETE doesn't exist. Let's do DELETE and if it fails, maybe manual db deletion.
+      // Actually leave-types API only has PATCH for update. Let's use PATCH to set isActive: false
+      if (type === "lvType") {
+        await apiRequest(`/leave-types/${id}`, { method: "PATCH", body: JSON.stringify({ isActive: false }) });
+      } else {
+        await apiRequest(endpoint, { method: "DELETE" });
+      }
       toast.success("Eliminado exitosamente");
       loadConfigData();
     } catch (error: any) {
@@ -1361,7 +1384,7 @@ export function HumanResources() {
 
         {/* --- TAB: CONFIGURACIÓN --- */}
         <TabsContent value="config" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
             {/* Departamentos */}
             <Card className="p-6 border-[var(--border)] bg-[var(--card)] shadow-sm">
               <div className="flex items-center justify-between mb-6">
@@ -1507,6 +1530,55 @@ export function HumanResources() {
                     <AlertCircle className="mx-auto mb-2 opacity-20" />
                     <p className="text-[10px] font-bold uppercase">
                       Sin horarios
+                    </p>
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {/* Tipos de Permiso */}
+            <Card className="p-6 border-[var(--border)] bg-[var(--card)] shadow-sm">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="font-black text-[var(--text-main)] uppercase tracking-tight flex items-center gap-2">
+                  <CalendarIcon size={20} className="text-[var(--primary)]" /> Permisos
+                </h3>
+                <Button
+                  size="icon"
+                  onClick={() => setIsConfigModalOpen({ type: "lvType", open: true })}
+                  className="h-8 w-8 rounded-lg shadow-lg"
+                >
+                  <Plus size={16} />
+                </Button>
+              </div>
+              <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                {leaveTypes.map((lt) => (
+                  <div
+                    key={lt.id}
+                    className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] group hover:border-[var(--primary)]/30 transition-all shadow-sm"
+                  >
+                    <div className="flex flex-col">
+                      <p className="text-sm font-bold text-[var(--text-main)]">
+                        {lt.name}
+                      </p>
+                      <p className="text-[10px] font-black text-[var(--text-sec)] opacity-60 uppercase">
+                        {lt.isPaid ? "Pagado" : "No Pagado"}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDeleteConfig("lvType", lt.id)}
+                      className="h-8 w-8 text-red-500 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                ))}
+                {leaveTypes.length === 0 && (
+                  <div className="text-center py-8 opacity-40">
+                    <AlertCircle className="mx-auto mb-2 opacity-20" />
+                    <p className="text-[10px] font-bold uppercase">
+                      Sin Tipos
                     </p>
                   </div>
                 )}
@@ -2083,7 +2155,9 @@ export function HumanResources() {
                 ? "Nuevo Departamento"
                 : isConfigModalOpen.type === "pos"
                   ? "Nuevo Cargo / Puesto"
-                  : "Nuevo Horario Laboral"}
+                  : isConfigModalOpen.type === "sch"
+                    ? "Nuevo Horario Laboral"
+                    : "Nuevo Tipo de Permiso"}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCreateConfig} className="space-y-5 pt-4">
@@ -2094,6 +2168,7 @@ export function HumanResources() {
               <Input
                 name={isConfigModalOpen.type === "pos" ? "title" : "name"}
                 required
+                placeholder={isConfigModalOpen.type === "lvType" ? "Ej: Vacaciones, Enfermedad..." : ""}
                 className="bg-[var(--bg)] border-[var(--border)] font-bold"
               />
             </div>
@@ -2134,6 +2209,21 @@ export function HumanResources() {
                     className="bg-[var(--bg)] border-[var(--border)] font-bold"
                   />
                 </div>
+              </div>
+            ) : isConfigModalOpen.type === "lvType" ? (
+              <div className="space-y-2">
+                <Label className="text-[10px] uppercase font-black opacity-60 tracking-widest">
+                  ¿Es Permiso Remunerado? (Pagado)
+                </Label>
+                <Select name="isPaid" defaultValue="false">
+                  <SelectTrigger className="bg-[var(--bg)] border-[var(--border)] font-bold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[var(--card)] border-[var(--border)]">
+                    <SelectItem value="false" className="font-bold">No Pagado</SelectItem>
+                    <SelectItem value="true" className="font-bold">Pagado</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             ) : (
               <div className="space-y-2">

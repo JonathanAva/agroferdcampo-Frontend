@@ -30,6 +30,13 @@ import {
 } from "../components/ui/alert-dialog";
 import { ShieldAlert, ShieldCheck } from "lucide-react";
 
+interface PaymentConfig {
+  acceptsCash: boolean;
+  acceptsCard: boolean;
+  acceptsTransfer: boolean;
+  acceptsCredit: boolean;
+}
+
 interface Branch {
   id: number;
   name: string;
@@ -38,6 +45,10 @@ interface Branch {
   phone?: string;
   isActive: boolean;
   createdAt: string;
+  acceptsCash?: boolean;
+  acceptsCard?: boolean;
+  acceptsTransfer?: boolean;
+  acceptsCredit?: boolean;
 }
 
 export function Branches() {
@@ -54,6 +65,12 @@ export function Branches() {
     taxId: "",
     phone: "",
     isActive: true,
+    paymentConfig: {
+      acceptsCash: true,
+      acceptsCard: true,
+      acceptsTransfer: true,
+      acceptsCredit: true,
+    }
   });
 
   const [formLoading, setFormLoading] = useState(false);
@@ -89,6 +106,12 @@ export function Branches() {
         taxId: branch.taxId || "",
         phone: branch.phone || "",
         isActive: branch.isActive,
+        paymentConfig: {
+          acceptsCash: branch.acceptsCash ?? true,
+          acceptsCard: branch.acceptsCard ?? true,
+          acceptsTransfer: branch.acceptsTransfer ?? true,
+          acceptsCredit: branch.acceptsCredit ?? true,
+        }
       });
     } else {
       setEditingBranch(null);
@@ -98,6 +121,12 @@ export function Branches() {
         taxId: "",
         phone: "",
         isActive: true,
+        paymentConfig: {
+          acceptsCash: true,
+          acceptsCard: true,
+          acceptsTransfer: true,
+          acceptsCredit: true,
+        }
       });
     }
     setFormError("");
@@ -114,17 +143,25 @@ export function Branches() {
     setFormError("");
 
     try {
+      const { paymentConfig, ...branchData } = formData;
+      let branchRes;
       if (editingBranch) {
-        await apiRequest(`/branches/${editingBranch.id}`, {
+        branchRes = await apiRequest<{ id: number }>(`/branches/${editingBranch.id}`, {
           method: "PATCH",
-          body: JSON.stringify(formData),
+          body: JSON.stringify(branchData),
         });
       } else {
-        await apiRequest("/branches", {
+        branchRes = await apiRequest<{ id: number }>("/branches", {
           method: "POST",
-          body: JSON.stringify(formData),
+          body: JSON.stringify(branchData),
         });
       }
+
+      // 2. Guardar Payment Config si es necesario
+      await apiRequest(`/branches/${branchRes.id || editingBranch?.id}/payment-config`, {
+        method: "PATCH",
+        body: JSON.stringify(formData.paymentConfig),
+      });
       toast.success(editingBranch ? "Sucursal actualizada" : "Sucursal creada");
       setShowModal(false);
       fetchBranches();
@@ -462,6 +499,47 @@ export function Branches() {
                       value={formData.taxId}
                       onChange={(e) => setFormData({ ...formData, taxId: e.target.value })}
                       className="bg-[var(--bg)] border-[var(--border)] font-bold h-11 pl-10 rounded-xl focus-visible:ring-[var(--primary)]/20 font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Toggles de Configuración de Pagos */}
+              <div className="pt-4 border-t border-[var(--border)]">
+                <Label className="text-[10px] uppercase font-black opacity-60 tracking-widest mb-4 block">
+                  Métodos de Pago Permitidos en Sucursal
+                </Label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex items-center justify-between p-3 rounded-xl border border-[var(--border)] bg-[var(--bg)]/50">
+                    <span className="text-xs font-bold">Efectivo</span>
+                    <Switch 
+                      checked={formData.paymentConfig.acceptsCash}
+                      onCheckedChange={(val) => setFormData(f => ({...f, paymentConfig: {...f.paymentConfig, acceptsCash: val}}))}
+                      className="data-[state=checked]:bg-[var(--primary)]"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-xl border border-[var(--border)] bg-[var(--bg)]/50">
+                    <span className="text-xs font-bold">Tarjeta</span>
+                    <Switch 
+                      checked={formData.paymentConfig.acceptsCard}
+                      onCheckedChange={(val) => setFormData(f => ({...f, paymentConfig: {...f.paymentConfig, acceptsCard: val}}))}
+                      className="data-[state=checked]:bg-[var(--primary)]"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-xl border border-[var(--border)] bg-[var(--bg)]/50">
+                    <span className="text-xs font-bold">Transferencia</span>
+                    <Switch 
+                      checked={formData.paymentConfig.acceptsTransfer}
+                      onCheckedChange={(val) => setFormData(f => ({...f, paymentConfig: {...f.paymentConfig, acceptsTransfer: val}}))}
+                      className="data-[state=checked]:bg-[var(--primary)]"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-xl border border-[var(--border)] bg-[var(--bg)]/50">
+                    <span className="text-xs font-bold">Crédito</span>
+                    <Switch 
+                      checked={formData.paymentConfig.acceptsCredit}
+                      onCheckedChange={(val) => setFormData(f => ({...f, paymentConfig: {...f.paymentConfig, acceptsCredit: val}}))}
+                      className="data-[state=checked]:bg-[var(--primary)]"
                     />
                   </div>
                 </div>

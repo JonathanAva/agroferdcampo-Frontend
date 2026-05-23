@@ -6,6 +6,14 @@ import { ColorSwatches } from '../components/ui/ThemePreview';
 
 const SETTINGS_SECTIONS = [
   {
+    id: 'global',
+    title: 'Configuración Global',
+    description: 'Parámetros maestros (IVA, Crédito, Mora)',
+    icon: SettingsIcon,
+    adminOnly: true,
+    path: '/settings/global',
+  },
+  {
     id: '1',
     title: 'Configuración de Sucursales',
     description: 'Gestionar sucursales, direcciones y datos fiscales',
@@ -102,7 +110,7 @@ export function Settings() {
         )}
 
         {/* Secciones estándar */}
-        {SETTINGS_SECTIONS.map((section) => (
+        {SETTINGS_SECTIONS.filter(s => !s.adminOnly || isAdmin).map((section) => (
           <div
             key={section.id}
             onClick={() => section.path && navigate(section.path)}
