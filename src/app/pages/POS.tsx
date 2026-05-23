@@ -66,6 +66,7 @@ interface Customer {
   customerType: string;
   nit?: string;
   documentNumber?: string;
+  creditLimit: string | number;
   creditBalance: string | number;
 }
 
@@ -578,6 +579,25 @@ export function POS() {
     if (cart.length === 0) return;
     if (isCheckoutSubmittingGlobal) return;
 
+    if (selectedPayment === "CREDITO") {
+      if (!selectedCustomer) {
+        toast.error("Debe seleccionar un cliente para ventas al crédito.");
+        return;
+      }
+      const limit = Number(selectedCustomer.creditLimit) || 0;
+      const balance = Number(selectedCustomer.creditBalance) || 0;
+
+      if (limit === 0) {
+        setCheckoutErrorAlert("El cliente no tiene crédito autorizado ($0.00).");
+        return;
+      }
+
+      if (sysConfig?.blockOnOverLimit && (balance + total) > limit) {
+        setCheckoutErrorAlert(`CRÉDITO INSUFICIENTE. El cliente superaría su límite de crédito (Límite: $${limit.toFixed(2)}, Saldo: $${balance.toFixed(2)}, Venta: $${total.toFixed(2)})`);
+        return;
+      }
+    }
+
     // Bloquear el botón a nivel DOM ANTES de cualquier código asíncrono
     isCheckoutSubmittingGlobal = true;
     isSubmittingRef.current = true;
@@ -917,7 +937,7 @@ export function POS() {
             </div>
 
             <div
-              className="p-4 bg-[var(--bg)]/30 border-t space-y-4 flex-shrink-0"
+              className="p-3 bg-[var(--bg)]/30 border-t space-y-3 flex-shrink-0"
               style={{ borderColor: "var(--border)" }}
             >
               <div className="space-y-1.5 px-1">
@@ -929,7 +949,7 @@ export function POS() {
                   <span>IVA ({(vatRate * 100).toFixed(0)}%)</span>
                   <span>${iva.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-3xl font-black text-[var(--primary)] pt-3 mt-3 border-t-2 border-dashed border-[var(--border)]">
+                <div className="flex justify-between text-2xl font-black text-[var(--primary)] pt-2 mt-2 border-t-2 border-dashed border-[var(--border)]">
                   <span>Total</span>
                   <span>${total.toFixed(2)}</span>
                 </div>
@@ -971,20 +991,17 @@ export function POS() {
               </div>
 
               {selectedPayment === "CREDITO" && (
-                <div className="p-3 bg-[var(--primary)]/5 border border-[var(--primary)]/10 rounded-xl space-y-2 animate-in slide-in-from-top-2 duration-200">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">
-                      Vencimiento de Crédito
-                    </Label>
-                    <span className="text-[10px] text-[var(--primary)] font-bold">
-                      Default: 30 días
-                    </span>
+                <div className="flex items-center justify-between gap-3 p-2 bg-[var(--primary)]/5 border border-[var(--primary)]/10 rounded-xl animate-in slide-in-from-top-2 duration-200">
+                  <Label className="text-[10px] font-bold text-[var(--text-sec)] uppercase tracking-tight flex-shrink-0">
+                    Vencimiento:
+                  </Label>
+                  <div className="flex-1 max-w-[200px]">
+                    <DatePicker 
+                      date={checkoutDueDate ? parseLocalDate(checkoutDueDate) : undefined}
+                      setDate={handleDateChange}
+                      placeholder="Default: 30 días"
+                    />
                   </div>
-                  <DatePicker 
-                    date={checkoutDueDate ? parseLocalDate(checkoutDueDate) : undefined}
-                    setDate={handleDateChange}
-                    placeholder="Seleccionar vencimiento"
-                  />
                 </div>
               )}
 

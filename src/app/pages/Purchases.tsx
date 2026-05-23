@@ -5,6 +5,7 @@ import {
   ArrowDownToLine, DollarSign
 } from 'lucide-react';
 import { SupplierManager } from '../components/suppliers/SupplierManager';
+import { Payables } from './Payables';
 import { purchasesService, PurchaseResponse, CreatePurchaseDto, getSuppliers } from '../services/purchases.service';
 import { searchProducts } from '../services/sales.service';
 import { toast } from 'sonner';
@@ -21,7 +22,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Label } from '../components/ui/label';
 
 export function Purchases() {
-  const [activeTab, setActiveTab] = useState<'compras' | 'proveedores'>('compras');
+  const [activeTab, setActiveTab] = useState<'compras' | 'proveedores' | 'pagar'>('compras');
 
   const [purchases, setPurchases] = useState<PurchaseResponse[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -296,12 +297,24 @@ export function Purchases() {
           >
             Proveedores
           </button>
+          <button 
+            className={`px-4 py-2 rounded-md font-bold text-sm transition-all ${activeTab === 'pagar' ? 'bg-[var(--card)] shadow-sm text-[var(--primary)]' : 'text-[var(--text-sec)] hover:text-[var(--text-main)]'}`}
+            onClick={() => setActiveTab('pagar')}
+          >
+            Cuentas por Pagar
+          </button>
         </div>
       </div>
 
-      {activeTab === 'proveedores' ? (
+      {activeTab === 'proveedores' && (
         <SupplierManager />
-      ) : (
+      )}
+      
+      {activeTab === 'pagar' && (
+        <Payables />
+      )}
+
+      {activeTab === 'compras' && (
         <>
           <div className="flex justify-end">
             <Button onClick={() => setCreateModalOpen(true)} className="font-bold gap-2" variant="premium">
@@ -410,8 +423,8 @@ export function Purchases() {
                       {getStatusBadge(purchase.status)}
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant={purchase.paymentStatus === 'PAGADO' ? 'success' : purchase.paymentStatus === 'PARCIAL' ? 'warning' : 'outline'}>
-                        {purchase.paymentStatus}
+                      <Badge variant={purchase.isPaid ? 'success' : 'outline'}>
+                        {purchase.isPaid ? 'PAGADO' : 'PENDIENTE'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-center">
@@ -628,11 +641,18 @@ export function Purchases() {
           {selectedPurchase && (
             <>
               <DialogHeader className="p-6 border-b">
-                <DialogTitle className="flex items-center justify-between">
+                <DialogTitle className="flex items-center justify-between pr-8">
                   <span>Orden de Compra OC-{selectedPurchase.id.toString().padStart(6, '0')}</span>
                   {getStatusBadge(selectedPurchase.status)}
                 </DialogTitle>
-                <DialogDescription>Proveedor: {selectedPurchase.supplier?.name}</DialogDescription>
+                <DialogDescription className="flex flex-col gap-1">
+                  <span>Proveedor: {selectedPurchase.supplier?.name}</span>
+                  {selectedPurchase.dueDate && (
+                    <span className="text-amber-600 font-bold">
+                      Vencimiento de Pago: {new Date(selectedPurchase.dueDate).toLocaleDateString()}
+                    </span>
+                  )}
+                </DialogDescription>
               </DialogHeader>
               <div className="p-6 overflow-y-auto space-y-6">
                 <Table>

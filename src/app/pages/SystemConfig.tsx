@@ -17,6 +17,7 @@ export interface SystemConfigData {
   defaultCreditLimit: string | number;
   allowCreditSales: boolean;
   blockOnOverdueDays: number;
+  blockOnOverLimit: boolean;
   updatedAt: string;
 }
 

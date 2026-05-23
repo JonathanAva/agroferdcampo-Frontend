@@ -25,10 +25,9 @@ export interface ReceivePurchaseDto {
 }
 
 export interface PayPurchaseDto {
-  amount: number;
-  paymentMethod: 'EFECTIVO' | 'TRANSFERENCIA' | 'CHEQUE' | 'CREDITO';
-  referenceNumber?: string;
-  notes?: string;
+  paymentMethod: 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA';
+  cashSource: 'CAJA_GENERAL' | 'CAJA_CHICA';
+  paymentRef?: string;
 }
 
 export interface PurchaseResponse {
@@ -42,8 +41,11 @@ export interface PurchaseResponse {
   totalAmount: string | number;
   paidAmount: string | number;
   expectedDate?: string;
+  dueDate?: string;
   receivedAt?: string;
   notes?: string;
+  isPaid: boolean;
+  paymentMethod?: string;
   createdAt: string;
   supplier?: {
     id: number;
@@ -86,6 +88,7 @@ export interface PurchaseFilters {
   supplierId?: number;
   startDate?: string;
   endDate?: string;
+  isPaid?: string;
 }
 
 export const purchasesService = {
@@ -104,6 +107,7 @@ export const purchasesService = {
     if (filters.supplierId) params.set('supplierId', String(filters.supplierId));
     if (filters.startDate) params.set('startDate', filters.startDate);
     if (filters.endDate) params.set('endDate', filters.endDate);
+    if (filters.isPaid) params.set('isPaid', filters.isPaid);
 
     return await apiRequest<PaginatedPurchases>(`/purchases?${params.toString()}`);
   },

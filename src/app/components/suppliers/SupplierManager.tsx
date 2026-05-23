@@ -149,9 +149,20 @@ export function SupplierManager() {
                 </div>
               </div>
               
-              {Number(supplier.creditLimit) > 0 && (
-                <div className="mb-4 text-xs bg-[var(--accent)]/10 text-[var(--accent)] p-2 rounded-md font-medium border border-[var(--accent)]/20 text-center">
-                  Límite de Crédito: ${Number(supplier.creditLimit || 0).toFixed(2)} / Plazo: {supplier.creditDays} días
+              {(Number(supplier.creditLimit) > 0 || Number(supplier.creditBalance) > 0) && (
+                <div className="mb-4 text-xs bg-[var(--accent)]/10 text-[var(--accent)] p-3 rounded-xl font-bold border border-[var(--accent)]/20 flex flex-col gap-1">
+                  <div className="flex justify-between items-center">
+                    <span>Límite Autorizado:</span>
+                    <span className="text-sm">${Number(supplier.creditLimit || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-red-500">
+                    <span>Deuda Actual:</span>
+                    <span>${Number(supplier.creditBalance || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center opacity-70 mt-1 pt-1 border-t border-[var(--accent)]/10">
+                    <span>Días de Crédito:</span>
+                    <span>{supplier.creditDays} días</span>
+                  </div>
                 </div>
               )}
               

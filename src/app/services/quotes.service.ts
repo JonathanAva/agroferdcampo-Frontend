@@ -69,6 +69,7 @@ export interface QuoteFilters {
   customerId?: number;
   startDate?: string;
   endDate?: string;
+  search?: string;
 }
 
 export const quotesService = {
@@ -87,6 +88,7 @@ export const quotesService = {
     if (filters.customerId) params.set('customerId', String(filters.customerId));
     if (filters.startDate) params.set('startDate', filters.startDate);
     if (filters.endDate) params.set('endDate', filters.endDate);
+    if (filters.search) params.set('search', filters.search);
 
     return await apiRequest<PaginatedQuotes>(`${BASE}?${params.toString()}`);
   },
@@ -102,9 +104,10 @@ export const quotesService = {
     });
   },
 
-  confirmQuote: async (id: number): Promise<any> => {
+  confirmQuote: async (id: number, paymentMethod: string): Promise<any> => {
     return await apiRequest(`${BASE}/${id}/confirm`, {
       method: 'POST',
+      body: JSON.stringify({ paymentMethod }),
     });
   },
 
