@@ -150,15 +150,23 @@ interface AttendanceRecord {
   } | null;
 }
 
+interface LeaveType {
+  id: number;
+  name: string;
+  isPaid: boolean;
+  isActive: boolean;
+}
+
 interface LeaveRequest {
   id: number;
   employee: Employee;
-  leaveType: { name: string };
+  leaveType: { name: string; isPaid: boolean };
   startDate: string;
   endDate: string;
   totalDays: number;
   reason: string;
   status: "PENDIENTE" | "APROBADO" | "RECHAZADO" | "CANCELADO";
+  requestedAt?: string;
 }
 
 // --- Components ---
@@ -243,14 +251,26 @@ export function HumanResources() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [schedules, setSchedules] = useState<WorkSchedule[]>([]);
+  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]); // Para el selector del modal de permiso
 
   // Modals
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
+  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState<{
     type: "dept" | "pos" | "sch";
     open: boolean;
   }>({ type: "dept", open: false });
   const [formLoading, setFormLoading] = useState(false);
+
+  // Leave request form state
+  const [leaveForm, setLeaveForm] = useState({
+    employeeId: "",
+    leaveTypeId: "",
+    reason: "",
+  });
+  const [leaveStartDate, setLeaveStartDate] = useState<Date | undefined>(undefined);
+  const [leaveEndDate, setLeaveEndDate] = useState<Date | undefined>(undefined);
 
   // Selected Department for Filtering Positions
   const [selectedDeptId, setSelectedDeptId] = useState<string>("");
@@ -334,14 +354,18 @@ export function HumanResources() {
 
   const loadConfigData = async () => {
     try {
-      const [depts, pos, sch] = await Promise.all([
+      const [depts, pos, sch, lvTypes, empList] = await Promise.all([
         apiRequest<Department[]>("/departments"),
         apiRequest<Position[]>("/positions"),
         apiRequest<WorkSchedule[]>("/work-schedules"),
+        apiRequest<LeaveType[]>("/leave-types"),
+        apiRequest<{ data: Employee[] }>(`/employees?branchId=${selectedBranch?.id}&status=ACTIVO&limit=200`),
       ]);
       setDepartments(depts);
       setPositions(pos);
       setSchedules(sch);
+      setLeaveTypes(lvTypes);
+      setAllEmployees(empList.data || []);
     } catch (error) {
       console.error("Error loading config data:", error);
     }
@@ -373,19 +397,57 @@ export function HumanResources() {
     }
   };
 
-  const handleLeaveAction = async (id: number, status: string) => {
+  const handleLeaveAction = async (id: number, status: string, notes?: string) => {
     try {
       await apiRequest(`/leave-requests/${id}/status`, {
         method: "PATCH",
         body: JSON.stringify({
           status,
-          reviewNotes: "Procesado desde panel RRHH",
+          reviewNotes: notes || "Procesado desde panel RRHH",
         }),
       });
-      toast.success(`Solicitud ${status.toLowerCase()}`);
+      toast.success(
+        status === "APROBADO" ? "✅ Solicitud aprobada" :
+        status === "RECHAZADO" ? "❌ Solicitud rechazada" : `Solicitud ${status.toLowerCase()}`
+      );
       loadData();
     } catch (error: any) {
       toast.error(error.message || "Error al procesar solicitud");
+    }
+  };
+
+  const handleCreateLeaveRequest = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!leaveForm.employeeId || !leaveForm.leaveTypeId || !leaveStartDate || !leaveEndDate) {
+      toast.error("Por favor completa todos los campos obligatorios");
+      return;
+    }
+    if (leaveEndDate < leaveStartDate) {
+      toast.error("La fecha de fin debe ser igual o posterior a la fecha de inicio");
+      return;
+    }
+    setFormLoading(true);
+    try {
+      await apiRequest("/leave-requests", {
+        method: "POST",
+        body: JSON.stringify({
+          employeeId: Number(leaveForm.employeeId),
+          leaveTypeId: Number(leaveForm.leaveTypeId),
+          startDate: format(leaveStartDate, "yyyy-MM-dd"),
+          endDate: format(leaveEndDate, "yyyy-MM-dd"),
+          reason: leaveForm.reason || undefined,
+        }),
+      });
+      toast.success("Solicitud de permiso creada exitosamente");
+      setIsLeaveModalOpen(false);
+      setLeaveForm({ employeeId: "", leaveTypeId: "", reason: "" });
+      setLeaveStartDate(undefined);
+      setLeaveEndDate(undefined);
+      loadData();
+    } catch (error: any) {
+      toast.error(error.message || "Error al crear la solicitud de permiso");
+    } finally {
+      setFormLoading(false);
     }
   };
 
@@ -1094,12 +1156,21 @@ export function HumanResources() {
                   Gestiona las solicitudes de ausencia y permisos del personal
                 </p>
               </div>
-              <Badge
-                variant="outline"
-                className="h-7 px-4 font-black text-[10px] uppercase border-[var(--primary)]/30 text-[var(--primary)] bg-[var(--primary)]/5"
-              >
-                {pendingLeaves.length} Pendientes
-              </Badge>
+              <div className="flex items-center gap-3">
+                <Badge
+                  variant="outline"
+                  className="h-7 px-4 font-black text-[10px] uppercase border-[var(--primary)]/30 text-[var(--primary)] bg-[var(--primary)]/5"
+                >
+                  {pendingLeaves.length} Pendientes
+                </Badge>
+                <Button
+                  size="sm"
+                  onClick={() => setIsLeaveModalOpen(true)}
+                  className="h-8 gap-1.5 font-black text-[10px] uppercase tracking-widest shadow-lg rounded-lg"
+                >
+                  <Plus size={14} /> Nueva Solicitud
+                </Button>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -1445,8 +1516,168 @@ export function HumanResources() {
         </TabsContent>
       </Tabs>
 
+      {/* --- MODAL: NUEVA SOLICITUD DE PERMISO --- */}
+      <Dialog open={isLeaveModalOpen} onOpenChange={(open) => {
+        setIsLeaveModalOpen(open);
+        if (!open) {
+          setLeaveForm({ employeeId: "", leaveTypeId: "", reason: "" });
+          setLeaveStartDate(undefined);
+          setLeaveEndDate(undefined);
+        }
+      }}>
+        <DialogContent className="sm:max-w-lg w-[95vw] p-0 overflow-hidden border-[var(--border)] bg-[var(--card)] shadow-2xl">
+          <DialogHeader className="p-6 border-b border-[var(--border)] bg-[var(--bg)]/50">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-2xl bg-[var(--primary)] text-white shadow-xl shadow-[var(--primary)]/20">
+                <CalendarIcon size={22} />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">
+                  Nueva Solicitud de Permiso
+                </DialogTitle>
+                <p className="text-xs text-[var(--text-sec)] mt-0.5 font-bold uppercase tracking-widest opacity-60">
+                  Registra un permiso, vacación o incapacidad
+                </p>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <form onSubmit={handleCreateLeaveRequest}>
+            <div className="p-6 space-y-5 overflow-y-auto max-h-[65vh]">
+
+              {/* Empleado */}
+              <div className="space-y-2">
+                <Label className="text-[11px] font-black uppercase tracking-widest text-[var(--text-sec)]">
+                  Empleado <span className="text-rose-500">*</span>
+                </Label>
+                <Select
+                  value={leaveForm.employeeId}
+                  onValueChange={(v) => setLeaveForm({ ...leaveForm, employeeId: v })}
+                >
+                  <SelectTrigger className="bg-[var(--bg)] border-[var(--border)] h-10">
+                    <SelectValue placeholder="Seleccionar empleado..." />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-60">
+                    {allEmployees.length === 0 ? (
+                      <SelectItem value="-" disabled>No hay empleados activos</SelectItem>
+                    ) : (
+                      allEmployees.map((emp) => (
+                        <SelectItem key={emp.id} value={String(emp.id)}>
+                          <span className="font-bold">{emp.fullName}</span>
+                          <span className="text-[10px] opacity-50 ml-2">{emp.employeeCode}</span>
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Tipo de Permiso */}
+              <div className="space-y-2">
+                <Label className="text-[11px] font-black uppercase tracking-widest text-[var(--text-sec)]">
+                  Tipo de Permiso <span className="text-rose-500">*</span>
+                </Label>
+                <Select
+                  value={leaveForm.leaveTypeId}
+                  onValueChange={(v) => setLeaveForm({ ...leaveForm, leaveTypeId: v })}
+                >
+                  <SelectTrigger className="bg-[var(--bg)] border-[var(--border)] h-10">
+                    <SelectValue placeholder="Seleccionar tipo..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {leaveTypes.length === 0 ? (
+                      <SelectItem value="-" disabled>No hay tipos de permiso configurados</SelectItem>
+                    ) : (
+                      leaveTypes.map((lt) => (
+                        <SelectItem key={lt.id} value={String(lt.id)}>
+                          <span className="font-bold">{lt.name}</span>
+                          {lt.isPaid && (
+                            <span className="ml-2 text-[9px] font-black text-emerald-500 uppercase bg-emerald-500/10 px-1.5 py-0.5 rounded">Pagado</span>
+                          )}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                {leaveTypes.length === 0 && (
+                  <p className="text-[10px] text-amber-500 font-bold flex items-center gap-1">
+                    <Info size={11} /> Ve a Configuración para crear tipos de permiso primero.
+                  </p>
+                )}
+              </div>
+
+              {/* Rango de Fechas */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-[11px] font-black uppercase tracking-widest text-[var(--text-sec)]">
+                    Fecha Inicio <span className="text-rose-500">*</span>
+                  </Label>
+                  <DatePicker
+                    date={leaveStartDate}
+                    setDate={setLeaveStartDate}
+                    placeholder="Inicio del permiso"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[11px] font-black uppercase tracking-widest text-[var(--text-sec)]">
+                    Fecha Fin <span className="text-rose-500">*</span>
+                  </Label>
+                  <DatePicker
+                    date={leaveEndDate}
+                    setDate={setLeaveEndDate}
+                    placeholder="Fin del permiso"
+                  />
+                </div>
+              </div>
+
+              {/* Motivo */}
+              <div className="space-y-2">
+                <Label className="text-[11px] font-black uppercase tracking-widest text-[var(--text-sec)]">
+                  Motivo / Razón (Opcional)
+                </Label>
+                <Textarea
+                  placeholder="Ej: Cita médica programada, reunión familiar..."
+                  value={leaveForm.reason}
+                  onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })}
+                  className="bg-[var(--bg)] border-[var(--border)] resize-none h-20 text-sm"
+                  maxLength={500}
+                />
+                <p className="text-[10px] text-[var(--text-sec)] text-right opacity-50">
+                  {leaveForm.reason.length}/500
+                </p>
+              </div>
+
+            </div>
+
+            <div className="p-6 border-t border-[var(--border)] bg-[var(--bg)]/50 flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsLeaveModalOpen(false)}
+                disabled={formLoading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={formLoading || !leaveForm.employeeId || !leaveForm.leaveTypeId || !leaveStartDate || !leaveEndDate}
+                className="gap-2 shadow-lg"
+              >
+                {formLoading ? (
+                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                ) : (
+                  <CalendarIcon size={16} />
+                )}
+                {formLoading ? "Registrando..." : "Crear Solicitud"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* --- MODAL: NUEVO EMPLEADO (ALINEADO CON LA GUÍA) --- */}
       <Dialog open={isEmployeeModalOpen} onOpenChange={setIsEmployeeModalOpen}>
+
         <DialogContent className="sm:max-w-[1000px] w-[95vw] max-h-[95vh] flex flex-col p-0 overflow-hidden border-[var(--border)] bg-[var(--card)] shadow-2xl">
           <DialogHeader className="p-6 border-b border-[var(--border)] bg-[var(--bg)]/50">
             <div className="flex items-center gap-4">

@@ -24,7 +24,7 @@ export interface QuoteResponse {
   totalAmount: string | number;
   taxAmount: string | number;
   validDays: number;
-  expiresAt: string;
+  validUntil: string;
   status: 'PENDIENTE' | 'CONFIRMADA' | 'EXPIRADA' | 'CANCELADA';
   createdAt: string;
   customer?: {
@@ -33,6 +33,8 @@ export interface QuoteResponse {
     customerType: string;
     nit?: string;
     documentNumber?: string;
+    email?: string;
+    phone?: string;
   };
   user?: {
     id: number;
@@ -93,6 +95,13 @@ export const quotesService = {
     return await apiRequest<QuoteResponse>(`${BASE}/${id}`);
   },
 
+  updateQuote: async (id: number, customerId: number): Promise<QuoteResponse> => {
+    return await apiRequest<QuoteResponse>(`${BASE}/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ customerId }),
+    });
+  },
+
   confirmQuote: async (id: number): Promise<any> => {
     return await apiRequest(`${BASE}/${id}/confirm`, {
       method: 'POST',
@@ -102,6 +111,13 @@ export const quotesService = {
   cancelQuote: async (id: number): Promise<any> => {
     return await apiRequest(`${BASE}/${id}/cancel`, {
       method: 'POST',
+    });
+  },
+
+  resendEmail: async (id: number, email?: string): Promise<any> => {
+    return await apiRequest(`${BASE}/${id}/resend-email`, {
+      method: 'POST',
+      body: JSON.stringify({ email }),
     });
   }
 };

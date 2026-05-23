@@ -21,6 +21,7 @@ import { SalesHistory } from "./pages/SalesHistory";
 import { Quotes } from "./pages/Quotes";
 import { Purchases } from "./pages/Purchases";
 import { DeliveryNotes } from "./pages/DeliveryNotes";
+import { Credit } from "./pages/Credit";
 
 export const router = createBrowserRouter([
   {
@@ -85,6 +86,10 @@ export const router = createBrowserRouter([
       {
         path: "finance",
         element: <Finance />,
+      },
+      {
+        path: "credit",
+        element: <Credit />,
       },
       {
         path: "reports",

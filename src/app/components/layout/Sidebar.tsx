@@ -16,6 +16,8 @@ import {
   TruckIcon,
   X,
   RotateCcw,
+  Wallet,
+  Landmark,
 } from "lucide-react";
 
 const navLinks = [
@@ -28,6 +30,8 @@ const navLinks = [
   { path: "/purchases", icon: TruckIcon, label: "Compras a Prov." },
   { path: "/delivery-notes", icon: TruckIcon, label: "Albaranes" },
   { path: "/customers", icon: Users, label: "Clientes" },
+  { path: "/credit", icon: Landmark, label: "Cuentas por Cobrar" },
+  { path: "/finance", icon: Wallet, label: "Finanzas y Caja" },
   { path: "/users", icon: UserCog, label: "Usuarios", roles: [1, 2] },
   { path: "/rrhh", icon: Briefcase, label: "Recursos Humanos", roles: [1, 2, 3] },
   { path: "/reports", icon: FileText, label: "Reportes" },

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Search, FileText, Eye, CheckCircle2, AlertCircle, Calendar as CalendarIcon, RefreshCcw, Filter, X
+  Search, FileText, Eye, CheckCircle2, AlertCircle, Calendar as CalendarIcon, RefreshCcw, Filter, X,
+  Mail, UserCog, Clock, Send
 } from 'lucide-react';
 import { quotesService, QuoteResponse } from '../services/quotes.service';
 import { toast } from 'sonner';
@@ -11,9 +12,10 @@ import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
 import { Label } from '../components/ui/label';
+import { apiRequest } from '../config/api';
 
 export function Quotes() {
   const [quotes, setQuotes] = useState<QuoteResponse[]>([]);
@@ -29,6 +31,20 @@ export function Quotes() {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [cancelingId, setCancelingId] = useState<number | null>(null);
+
+  // --- Estados para Modales Extras de la Guía ---
+  const [editCustomerModalOpen, setEditCustomerModalOpen] = useState(false);
+  const [editingQuote, setEditingQuote] = useState<QuoteResponse | null>(null);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [customerResults, setCustomerResults] = useState<any[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
+  const [searchingCustomers, setSearchingCustomers] = useState(false);
+  const [updatingCustomer, setUpdatingCustomer] = useState(false);
+
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailQuote, setEmailQuote] = useState<QuoteResponse | null>(null);
+  const [destinationEmail, setDestinationEmail] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -101,14 +117,108 @@ export function Quotes() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch(status) {
-      case 'PENDIENTE': return <Badge variant="warning">Pendiente</Badge>;
-      case 'CONFIRMADA': return <Badge variant="success">Confirmada</Badge>;
-      case 'CANCELADA': return <Badge variant="destructive">Cancelada</Badge>;
-      case 'EXPIRADA': return <Badge variant="outline">Expirada</Badge>;
-      default: return <Badge variant="secondary">{status}</Badge>;
+  // Buscar clientes con debounce
+  const searchCustomers = async (query: string) => {
+    if (!query || query.trim().length < 2) {
+      setCustomerResults([]);
+      return;
     }
+    setSearchingCustomers(true);
+    try {
+      const res = await apiRequest<any>(`/customers/search?q=${encodeURIComponent(query)}`);
+      setCustomerResults(Array.isArray(res) ? res : []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSearchingCustomers(false);
+    }
+  };
+
+  useEffect(() => {
+    const delayDebounce = setTimeout(() => {
+      searchCustomers(customerSearchQuery);
+    }, 300);
+    return () => clearTimeout(delayDebounce);
+  }, [customerSearchQuery]);
+
+  const handleOpenEditCustomer = (quote: QuoteResponse) => {
+    setEditingQuote(quote);
+    setSelectedCustomerId(quote.customerId || null);
+    setCustomerSearchQuery('');
+    setCustomerResults([]);
+    setEditCustomerModalOpen(true);
+  };
+
+  const handleUpdateCustomer = async () => {
+    if (!editingQuote || !selectedCustomerId) {
+      toast.error('Seleccione un cliente válido');
+      return;
+    }
+    setUpdatingCustomer(true);
+    try {
+      await quotesService.updateQuote(editingQuote.id, selectedCustomerId);
+      toast.success('Cliente de la cotización actualizado con éxito');
+      setEditCustomerModalOpen(false);
+      fetchQuotes();
+      if (selectedQuote && selectedQuote.id === editingQuote.id) {
+        const fullQuote = await quotesService.getQuoteDetail(editingQuote.id);
+        setSelectedQuote(fullQuote);
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Error al actualizar cliente');
+    } finally {
+      setUpdatingCustomer(false);
+    }
+  };
+
+  const handleOpenEmailModal = (quote: QuoteResponse) => {
+    setEmailQuote(quote);
+    setDestinationEmail(quote.customer?.email || '');
+    setEmailModalOpen(true);
+  };
+
+  const handleSendEmail = async () => {
+    if (!emailQuote) return;
+    if (!destinationEmail || !destinationEmail.includes('@')) {
+      toast.error('Ingrese un correo electrónico válido');
+      return;
+    }
+    setSendingEmail(true);
+    try {
+      await quotesService.resendEmail(emailQuote.id, destinationEmail);
+      toast.success('Correo de cotización enviado correctamente');
+      setEmailModalOpen(false);
+    } catch (e: any) {
+      toast.error(e.message || 'Error al enviar correo');
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
+  const getStatusBadge = (quote: QuoteResponse) => {
+    if (quote.status === 'EXPIRADA') {
+      return <Badge variant="outline" className="border-red-500/30 text-red-500 bg-red-500/5">Expirada</Badge>;
+    }
+    if (quote.status === 'CANCELADA') {
+      return <Badge variant="destructive">Cancelada</Badge>;
+    }
+    if (quote.status === 'CONFIRMADA') {
+      return <Badge variant="success">Confirmada</Badge>;
+    }
+
+    // Para PENDIENTE: verificar si está próxima a vencer (3 días)
+    const now = new Date();
+    const expiry = new Date(quote.validUntil);
+    const diffTime = expiry.getTime() - now.getTime();
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+
+    if (diffDays < 0) {
+      return <Badge variant="outline" className="border-rose-500 text-rose-500 bg-rose-500/10 font-bold">Vencida</Badge>;
+    }
+    if (diffDays <= 3) {
+      return <Badge variant="warning" className="animate-pulse bg-amber-500/20 border-amber-500/30 text-amber-600 dark:text-amber-400 font-bold">Por vencer ({Math.ceil(diffDays)}d)</Badge>;
+    }
+    return <Badge variant="secondary" className="bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20 font-bold">Vigente</Badge>;
   };
 
   return (
@@ -204,14 +314,14 @@ export function Quotes() {
                       </span>
                       <br/>
                       <span className="text-[10px] text-[var(--text-sec)]">
-                        {new Date(quote.expiresAt).toLocaleDateString()}
+                        {quote.validUntil ? new Date(quote.validUntil).toLocaleDateString() : 'Sin fecha'}
                       </span>
                     </TableCell>
                     <TableCell className="text-right font-black text-[var(--text-main)]">
                       ${Number(quote.totalAmount).toFixed(2)}
                     </TableCell>
                     <TableCell className="text-center">
-                      {getStatusBadge(quote.status)}
+                      {getStatusBadge(quote)}
                     </TableCell>
                     <TableCell className="text-center">
                       <DropdownMenu>
@@ -222,9 +332,21 @@ export function Quotes() {
                           <DropdownMenuItem onClick={() => handleOpenDetail(quote)} className="font-bold cursor-pointer">
                             <Eye size={14} className="mr-2 text-[var(--primary)]" /> Ver Detalle
                           </DropdownMenuItem>
+
+                          <DropdownMenuItem onClick={() => handleOpenEmailModal(quote)} className="font-bold cursor-pointer">
+                            <Mail size={14} className="mr-2 text-indigo-600" /> Enviar por Correo
+                          </DropdownMenuItem>
                           
                           {quote.status === 'PENDIENTE' && (
                             <>
+                              <DropdownMenuItem 
+                                onClick={() => handleOpenEditCustomer(quote)} 
+                                className="font-bold cursor-pointer text-amber-600 focus:text-amber-700"
+                              >
+                                <UserCog size={14} className="mr-2" />
+                                Editar Cliente
+                              </DropdownMenuItem>
+                              
                               <DropdownMenuItem 
                                 onClick={() => handleConfirmQuote(quote)} 
                                 disabled={confirmingId === quote.id}
@@ -288,7 +410,7 @@ export function Quotes() {
 
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
         <DialogContent 
-          className="flex flex-col p-0 overflow-hidden bg-[var(--card)] border-[var(--border)] max-w-3xl"
+          className="flex flex-col p-0 overflow-hidden bg-[var(--card)] border-[var(--border)] sm:max-w-4xl w-full"
         >
           {selectedQuote && (
             <>
@@ -309,14 +431,40 @@ export function Quotes() {
               </div>
               
               <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="bg-[var(--bg)] p-4 rounded-xl border border-[var(--border)]">
                     <p className="text-[10px] font-bold text-[var(--text-sec)] uppercase">Cliente</p>
-                    <p className="font-bold text-[var(--text-main)]">{selectedQuote.customer?.name || 'Consumidor Final'}</p>
+                    <p className="font-bold text-[var(--text-main)] block truncate">
+                      {selectedQuote.customer?.name || 'Consumidor Final'}
+                    </p>
+                    {selectedQuote.customer?.email && (
+                      <span className="text-[10px] text-[var(--text-sec)] block truncate">
+                        {selectedQuote.customer.email}
+                      </span>
+                    )}
                   </div>
+                  
+                  <div className="bg-[var(--bg)] p-4 rounded-xl border border-[var(--border)]">
+                    <p className="text-[10px] font-bold text-[var(--text-sec)] uppercase">Vendedor / Creado por</p>
+                    <p className="font-bold text-[var(--text-main)]">{selectedQuote.user?.fullName || 'Sistema'}</p>
+                    <span className="text-[10px] text-[var(--text-sec)] block">
+                      {new Date(selectedQuote.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+
+                  <div className="bg-[var(--bg)] p-4 rounded-xl border border-[var(--border)]">
+                    <p className="text-[10px] font-bold text-[var(--text-sec)] uppercase">Fecha Límite</p>
+                    <p className="font-bold text-[var(--text-main)]">
+                      {selectedQuote.validUntil ? new Date(selectedQuote.validUntil).toLocaleDateString() : 'Sin fecha'}
+                    </p>
+                    <span className="text-[10px] text-[var(--text-sec)] block">
+                      Vence en {selectedQuote.validDays} días
+                    </span>
+                  </div>
+
                   <div className="bg-[var(--bg)] p-4 rounded-xl border border-[var(--border)]">
                     <p className="text-[10px] font-bold text-[var(--text-sec)] uppercase">Estado</p>
-                    <div className="mt-1">{getStatusBadge(selectedQuote.status)}</div>
+                    <div className="mt-1">{getStatusBadge(selectedQuote)}</div>
                   </div>
                 </div>
 
@@ -340,14 +488,190 @@ export function Quotes() {
                         </TableRow>
                       ))}
                     </TableBody>
-                  </Table>
+                    </Table>
                   <div className="p-4 border-t border-[var(--border)] bg-[var(--bg)] flex justify-end">
                     <p className="text-xl font-black">Total: <span className="text-[var(--primary)]">${Number(selectedQuote.totalAmount).toFixed(2)}</span></p>
                   </div>
                 </div>
               </div>
+
+              {selectedQuote.status === 'PENDIENTE' && (
+                <div className="p-4 border-t border-[var(--border)] bg-[var(--bg)]/30 flex justify-end gap-3 flex-wrap">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      handleOpenEmailModal(selectedQuote);
+                      setDetailModalOpen(false);
+                    }}
+                    className="font-bold"
+                  >
+                    <Mail size={16} className="mr-2 text-indigo-600" /> Enviar por Correo
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      handleOpenEditCustomer(selectedQuote);
+                      setDetailModalOpen(false);
+                    }}
+                    className="font-bold"
+                  >
+                    <UserCog size={16} className="mr-2 text-amber-600" /> Editar Cliente
+                  </Button>
+                  <Button 
+                    variant="destructive" 
+                    onClick={() => {
+                      handleCancelQuote(selectedQuote);
+                      setDetailModalOpen(false);
+                    }}
+                    disabled={cancelingId === selectedQuote.id}
+                    className="font-bold"
+                  >
+                    Cancelar Cotización
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      handleConfirmQuote(selectedQuote);
+                      setDetailModalOpen(false);
+                    }}
+                    disabled={confirmingId === selectedQuote.id}
+                    className="font-bold text-white bg-[var(--primary)] hover:bg-[var(--primary)]/90"
+                  >
+                    Confirmar Venta
+                  </Button>
+                </div>
+              )}
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG DE EDITAR CLIENTE (PATCH) */}
+      <Dialog open={editCustomerModalOpen} onOpenChange={setEditCustomerModalOpen}>
+        <DialogContent className="max-w-md bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCog className="text-amber-500" size={20} />
+              Editar Cliente de Cotización
+            </DialogTitle>
+            <DialogDescription>
+              Asocia un cliente de la base de datos a la cotización #{editingQuote?.id}.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase text-[var(--text-sec)]">Buscar Cliente</Label>
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-sec)]" />
+                <Input 
+                  placeholder="Escribe el nombre o documento..." 
+                  value={customerSearchQuery}
+                  onChange={e => setCustomerSearchQuery(e.target.value)}
+                  className="pl-9 bg-[var(--bg)]"
+                />
+              </div>
+              {searchingCustomers && (
+                <p className="text-xs text-[var(--text-sec)] animate-pulse">Buscando clientes...</p>
+              )}
+            </div>
+
+            {customerResults.length > 0 ? (
+              <div className="max-h-48 overflow-y-auto border rounded-lg divide-y bg-[var(--bg)]/10">
+                {customerResults.map(cust => (
+                  <div 
+                    key={cust.id} 
+                    onClick={() => setSelectedCustomerId(cust.id)}
+                    className={cn(
+                      "p-3 text-sm cursor-pointer transition-colors flex items-center justify-between",
+                      selectedCustomerId === cust.id 
+                        ? "bg-[var(--primary)]/10 font-bold border-l-4 border-[var(--primary)]" 
+                        : "hover:bg-[var(--bg)]/40"
+                    )}
+                  >
+                    <div>
+                      <p className="text-[var(--text-main)] font-semibold">{cust.name}</p>
+                      <p className="text-xs text-[var(--text-sec)]">{cust.documentNumber || cust.nit || 'Sin Documento'}</p>
+                    </div>
+                    {selectedCustomerId === cust.id && (
+                      <CheckCircle2 size={16} className="text-[var(--primary)]" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : customerSearchQuery.trim().length >= 2 ? (
+              <p className="text-sm text-[var(--text-sec)] text-center py-4">No se encontraron clientes</p>
+            ) : null}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditCustomerModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleUpdateCustomer} 
+              disabled={updatingCustomer || !selectedCustomerId}
+              style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
+              className="font-bold"
+            >
+              {updatingCustomer ? 'Guardando...' : 'Asociar Cliente'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG DE ENVIAR CORREO (resend-email) */}
+      <Dialog open={emailModalOpen} onOpenChange={setEmailModalOpen}>
+        <DialogContent className="max-w-md bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="text-indigo-500" size={20} />
+              Enviar Cotización por Correo
+            </DialogTitle>
+            <DialogDescription>
+              La cotización se enviará como un reporte al correo especificado.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase text-[var(--text-sec)]">Correo Destinatario</Label>
+              <div className="relative">
+                <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-sec)]" />
+                <Input 
+                  type="email"
+                  placeholder="ejemplo@correo.com" 
+                  value={destinationEmail}
+                  onChange={e => setDestinationEmail(e.target.value)}
+                  className="pl-9 bg-[var(--bg)]"
+                />
+              </div>
+              {emailQuote?.customer && !emailQuote.customer.email && (
+                <p className="text-xs text-rose-500 font-bold flex items-center gap-1 mt-1">
+                  <AlertCircle size={12} /> El cliente asociado no tiene un correo registrado.
+                </p>
+              )}
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEmailModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleSendEmail} 
+              disabled={sendingEmail || !destinationEmail}
+              style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
+              className="font-bold flex items-center gap-2"
+            >
+              {sendingEmail ? (
+                <>Enviando...</>
+              ) : (
+                <>
+                  <Send size={14} /> Enviar Correo
+                </>
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Search,
   Plus,
@@ -18,8 +18,13 @@ import {
   FileText,
   Lock,
   Unlock,
-  Save
+  Save,
+  Calendar as CalendarIcon
 } from "lucide-react";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
+import { Calendar } from "../components/ui/calendar";
 import { apiRequest } from "../config/api";
 import { createSale, sendFacturaConsumidor, sendCreditoFiscal } from "../services/sales.service";
 import { cashShiftsService, CashShift } from "../services/cash-shifts.service";
@@ -34,6 +39,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { cn } from "../components/ui/utils";
 import { useAuth } from "../context/AuthContext";
 import { ScrollArea } from "../components/ui/scroll-area";
+import { Label } from "../components/ui/label";
 
 // --- Types ---
 interface Product {
@@ -61,7 +67,78 @@ interface Customer {
   creditBalance: string | number;
 }
 
+interface DatePickerProps {
+  date?: Date;
+  setDate: (date?: Date) => void;
+  placeholder?: string;
+}
+
+function DatePicker({ date, setDate, placeholder }: DatePickerProps) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className={cn(
+            "w-full justify-start text-left font-normal bg-[var(--card)] border-[var(--border)] h-10 px-3 hover:bg-[var(--primary)]/5 transition-all text-sm rounded-xl focus:ring-[var(--primary)]/20",
+            !date && "text-muted-foreground"
+          )}
+        >
+          <CalendarIcon className="mr-2 h-4 w-4 opacity-50 text-[var(--primary)]" />
+          {date ? (
+            <span className="font-bold text-[var(--text-main)]">
+              {format(date, "dd/MM/yyyy")}
+            </span>
+          ) : (
+            <span className="opacity-40">{placeholder || "dd/mm/aaaa"}</span>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0 border-[var(--border)] shadow-2xl rounded-2xl overflow-hidden" align="start">
+        <div className="bg-[var(--card)] p-1">
+          <Calendar
+            mode="single"
+            selected={date}
+            onSelect={setDate}
+            initialFocus
+            locale={es}
+            className="p-3"
+            captionLayout="dropdown-buttons"
+            fromYear={new Date().getFullYear()}
+            toYear={new Date().getFullYear() + 2}
+            disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+          />
+          <div className="flex items-center justify-between p-3 border-t border-[var(--border)] bg-[var(--bg)]/50">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setDate(undefined)} 
+              className="text-[10px] font-black uppercase tracking-widest text-rose-500 hover:bg-rose-500/10 hover:text-rose-600"
+            >
+              Borrar
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setDate(new Date())} 
+              className="text-[10px] font-black uppercase tracking-widest text-emerald-500 hover:bg-emerald-500/10 hover:text-emerald-600"
+            >
+              Hoy
+            </Button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+let isCheckoutSubmittingGlobal = false;
+let isQuoteSubmittingGlobal = false;
+
 export function POS() {
+  const isSubmittingRef = useRef(false);
+  const checkoutBtnRef = useRef<HTMLButtonElement>(null);
+  const quoteBtnRef = useRef<HTMLButtonElement>(null);
   const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -96,6 +173,21 @@ export function POS() {
   // Quote States
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [quoteValidDays, setQuoteValidDays] = useState<number | "">(15);
+  const [checkoutDueDate, setCheckoutDueDate] = useState("");
+
+  const parseLocalDate = (dateStr: string) => {
+    if (!dateStr) return undefined;
+    const [year, month, day] = dateStr.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  };
+
+  const handleDateChange = (date?: Date) => {
+    if (date) {
+      setCheckoutDueDate(format(date, "yyyy-MM-dd"));
+    } else {
+      setCheckoutDueDate("");
+    }
+  };
 
   // Initial Load
   useEffect(() => {
@@ -161,11 +253,20 @@ export function POS() {
 
   const handleSaveQuote = async () => {
     if (cart.length === 0) return;
+    if (isQuoteSubmittingGlobal) return;
     if (quoteValidDays === "" || quoteValidDays <= 0) {
       toast.error("Ingrese una validez en días correcta");
       return;
     }
-    
+
+    // Bloquear el botón a nivel DOM ANTES de cualquier código asíncrono
+    isQuoteSubmittingGlobal = true;
+    isSubmittingRef.current = true;
+    if (quoteBtnRef.current) {
+      quoteBtnRef.current.disabled = true;
+      quoteBtnRef.current.style.pointerEvents = 'none';
+      quoteBtnRef.current.style.opacity = '0.6';
+    }
     setProcessingOverlay(true);
     setLoading(true);
 
@@ -183,12 +284,21 @@ export function POS() {
       toast.success("Cotización guardada exitosamente");
       setCart([]);
       setSearchTerm("");
-      searchProducts(""); // reload products
+      searchProducts("");
       setSelectedCustomer(null);
       setShowQuoteModal(false);
     } catch (error: any) {
       toast.error(error.message || "Error al guardar la cotización");
+      // Si falla, rehabilitar el botón para que el cajero corrija y reintente
+      if (quoteBtnRef.current) {
+        quoteBtnRef.current.disabled = false;
+        quoteBtnRef.current.style.pointerEvents = '';
+        quoteBtnRef.current.style.opacity = '';
+      }
     } finally {
+      // Siempre liberar el lock al terminar
+      isQuoteSubmittingGlobal = false;
+      isSubmittingRef.current = false;
       setProcessingOverlay(false);
       setLoading(false);
     }
@@ -370,16 +480,26 @@ export function POS() {
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
+    if (isCheckoutSubmittingGlobal) return;
+
+    // Bloquear el botón a nivel DOM ANTES de cualquier código asíncrono
+    isCheckoutSubmittingGlobal = true;
+    isSubmittingRef.current = true;
+    if (checkoutBtnRef.current) {
+      checkoutBtnRef.current.disabled = true;
+      checkoutBtnRef.current.style.pointerEvents = 'none';
+      checkoutBtnRef.current.style.opacity = '0.6';
+    }
     setProcessingOverlay(true);
     setLoading(true);
 
     try {
-      // Paso 1: Crear venta y descontar stock
       await createSale({
         customerId: selectedCustomer?.id,
         paymentMethod: selectedPayment,
         totalAmount: total,
         taxAmount: iva,
+        dueDate: selectedPayment === "CREDITO" && checkoutDueDate ? checkoutDueDate : undefined,
         items: cart.map((i) => ({
           productId: i.id,
           quantity: i.quantity,
@@ -392,10 +512,20 @@ export function POS() {
       setSearchTerm("");
       setProducts([]);
       setSelectedCustomer(null);
+      setCheckoutDueDate("");
 
     } catch (error: any) {
       toast.error(error.message || "Error al procesar la venta. Verifique el stock.");
+      // Si falla, rehabilitar el botón para que el cajero corrija y reintente
+      if (checkoutBtnRef.current) {
+        checkoutBtnRef.current.disabled = false;
+        checkoutBtnRef.current.style.pointerEvents = '';
+        checkoutBtnRef.current.style.opacity = '';
+      }
     } finally {
+      // Siempre liberar el lock al terminar
+      isCheckoutSubmittingGlobal = false;
+      isSubmittingRef.current = false;
       setProcessingOverlay(false);
       setLoading(false);
     }
@@ -724,6 +854,24 @@ export function POS() {
                 )}
               </div>
 
+              {selectedPayment === "CREDITO" && (
+                <div className="p-3 bg-[var(--primary)]/5 border border-[var(--primary)]/10 rounded-xl space-y-2 animate-in slide-in-from-top-2 duration-200">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">
+                      Vencimiento de Crédito
+                    </Label>
+                    <span className="text-[10px] text-[var(--primary)] font-bold">
+                      Default: 30 días
+                    </span>
+                  </div>
+                  <DatePicker 
+                    date={checkoutDueDate ? parseLocalDate(checkoutDueDate) : undefined}
+                    setDate={handleDateChange}
+                    placeholder="Seleccionar vencimiento"
+                  />
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   onClick={() => setShowQuoteModal(true)}
@@ -735,7 +883,10 @@ export function POS() {
                   <Save size={20} /> COTIZAR
                 </Button>
                 <Button
-                  onClick={handleCheckout}
+                  ref={checkoutBtnRef}
+                  onPointerDown={() => {
+                    if (!isCheckoutSubmittingGlobal) handleCheckout();
+                  }}
                   disabled={loading || cart.length === 0}
                   variant="premium"
                   size="xl"
@@ -923,7 +1074,10 @@ export function POS() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowQuoteModal(false)}>Cancelar</Button>
             <Button
-              onClick={handleSaveQuote}
+              ref={quoteBtnRef}
+              onPointerDown={() => {
+                if (!isQuoteSubmittingGlobal) handleSaveQuote();
+              }}
               disabled={loading || quoteValidDays === ""}
               className="gap-2"
             >
