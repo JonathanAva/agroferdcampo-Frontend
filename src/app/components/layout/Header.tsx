@@ -84,22 +84,36 @@ export function Header({ onMenuClick }: HeaderProps) {
           </div>
         )}
 
-        {/* Theme Toggle - Simplified on mobile */}
-        <Button
+        {/* Minimalist Theme Toggle */}
+        <button
           onClick={toggleTheme}
-          size="lg"
-          className="gap-2 font-semibold shrink-0"
-          style={{
-            backgroundColor: "var(--color-primary)",
-            color: "#ffffff",
-          }}
-          title={theme === "light" ? "Modo Oscuro" : "Modo Claro"}
+          className="relative flex items-center w-16 h-8 rounded-full transition-colors focus:outline-none shrink-0"
+          style={{ backgroundColor: 'var(--bg)', border: '1px solid var(--border)' }}
+          title={theme === "light" ? "Activar Modo Oscuro" : "Activar Modo Claro"}
         >
-          {theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
-          <span className="hidden md:block">
-            {theme === "light" ? "Modo Oscuro" : "Modo Claro"}
-          </span>
-        </Button>
+          {/* Iconos de fondo */}
+          <div className="absolute w-full flex justify-between px-2">
+            <Sun size={14} style={{ color: 'var(--text-sec)' }} />
+            <Moon size={14} style={{ color: 'var(--text-sec)' }} />
+          </div>
+          
+          {/* Círculo deslizante */}
+          <div
+            className={`absolute left-1 w-6 h-6 rounded-full flex items-center justify-center shadow-md transition-transform duration-300 ease-in-out ${
+              theme === "dark" ? "translate-x-8" : "translate-x-0 bg-white"
+            }`}
+            style={{ 
+              backgroundColor: theme === "dark" ? "var(--text-main)" : "white",
+              color: theme === "dark" ? "var(--bg)" : "var(--text-main)"
+            }}
+          >
+            {theme === "dark" ? (
+              <Moon size={12} className="stroke-[3px]" />
+            ) : (
+              <Sun size={12} className="text-amber-500 stroke-[3px]" />
+            )}
+          </div>
+        </button>
 
         {/* User Info & Logout */}
         <div className="flex items-center gap-2 md:gap-3">
