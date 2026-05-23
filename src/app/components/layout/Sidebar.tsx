@@ -60,7 +60,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       <aside
         className={`
           fixed md:relative z-50 md:z-auto
-          w-64 min-h-screen border-r flex flex-col px-6 pt-0 pb-6
+          w-64 h-full border-r flex flex-col px-6 pt-0 pb-6
           transition-transform duration-300 ease-in-out
           ${isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
         `}

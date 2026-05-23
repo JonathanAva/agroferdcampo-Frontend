@@ -975,27 +975,27 @@ export function POS() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-3xl overflow-hidden p-0">
-          <div className="p-6 pb-4 border-b border-[var(--border)] bg-[var(--bg)]/50">
+        <DialogContent className="sm:max-w-3xl p-0 max-h-[90vh] flex flex-col">
+          <div className="p-4 sm:p-6 pb-4 border-b border-[var(--border)] bg-[var(--bg)]/50 shrink-0">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-3 text-2xl font-black text-[var(--text-main)]">
-                <div className="p-2.5 bg-[var(--primary)]/10 rounded-2xl text-[var(--primary)] shadow-sm">
-                  <Unlock size={28} />
+              <DialogTitle className="flex items-center gap-3 text-xl sm:text-2xl font-black text-[var(--text-main)]">
+                <div className="p-2 sm:p-2.5 bg-[var(--primary)]/10 rounded-xl sm:rounded-2xl text-[var(--primary)] shadow-sm">
+                  <Unlock size={24} className="sm:w-7 sm:h-7" />
                 </div>
                 Apertura de Caja
               </DialogTitle>
-              <DialogDescription className="text-base font-medium opacity-80 mt-1">
-                Ingresa el efectivo inicial contando los billetes y monedas disponibles en la gaveta.
+              <DialogDescription className="text-sm sm:text-base font-medium opacity-80 mt-1">
+                Ingresa el efectivo inicial contando los billetes y monedas disponibles.
               </DialogDescription>
             </DialogHeader>
           </div>
 
-          <div className="p-6 pt-4 space-y-6">
+          <div className="p-4 sm:p-6 pt-4 space-y-4 sm:space-y-6 overflow-y-auto flex-1">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
               {/* BILLETES */}
               <div className="bg-[var(--card)] p-5 rounded-2xl border border-[var(--border)] shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex items-center gap-3 mb-5 border-b border-[var(--border)] pb-3">
-                  <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
+                  <div className="p-1.5 bg-emerald-500/10 text-emerald-500 rounded-lg">
                     <DollarSign size={20} className="stroke-[2.5px]" />
                   </div>
                   <h3 className="font-bold text-lg text-[var(--text-main)]">Billetes</h3>
@@ -1030,7 +1030,7 @@ export function POS() {
               {/* MONEDAS */}
               <div className="bg-[var(--card)] p-5 rounded-2xl border border-[var(--border)] shadow-sm hover:shadow-md transition-shadow flex flex-col">
                 <div className="flex items-center gap-3 mb-5 border-b border-[var(--border)] pb-3">
-                  <div className="p-1.5 bg-amber-50 text-amber-600 rounded-lg">
+                  <div className="p-1.5 bg-amber-500/10 text-amber-500 rounded-lg">
                     <div className="w-5 h-5 rounded-full border-[2.5px] border-amber-500 flex items-center justify-center">
                       <div className="w-2 h-2 rounded-full bg-amber-500" />
                     </div>
@@ -1064,22 +1064,22 @@ export function POS() {
             </div>
 
             {/* Total calculado */}
-            <div className="flex justify-between items-center rounded-2xl border-2 border-[var(--primary)]/20 bg-[var(--primary)]/5 px-6 py-4 shadow-inner">
-              <span className="text-sm font-bold text-[var(--primary)] uppercase tracking-widest opacity-80">Total Calculado</span>
-              <span className="text-4xl font-black text-[var(--primary)] tracking-tight">
+            <div className="flex flex-col sm:flex-row justify-between items-center sm:items-center rounded-2xl border-2 border-[var(--primary)]/20 bg-[var(--primary)]/5 px-4 sm:px-6 py-4 shadow-inner gap-2 sm:gap-0">
+              <span className="text-xs sm:text-sm font-bold text-[var(--primary)] uppercase tracking-widest opacity-80">Total Calculado</span>
+              <span className="text-3xl sm:text-4xl font-black text-[var(--primary)] tracking-tight">
                 ${calcBreakdownTotal(openBills, openCoins).toFixed(2)}
               </span>
             </div>
           </div>
 
-          <DialogFooter className="p-6 pt-6 border-t border-[var(--border)] bg-[var(--bg)]/50 flex sm:justify-between w-full">
+          <DialogFooter className="p-4 sm:p-6 border-t border-[var(--border)] bg-[var(--bg)]/50 flex flex-col-reverse sm:flex-row sm:justify-between w-full shrink-0 gap-3 sm:gap-0">
             <Button
               variant="ghost"
               onClick={() => {
                 setShowOpenShiftModal(false);
                 navigate('/dashboard');
               }}
-              className="font-bold text-[var(--text-sec)] hover:bg-slate-100 h-12 px-8"
+              className="w-full sm:w-auto font-bold text-[var(--text-sec)] hover:bg-slate-100 h-12 px-8"
             >
               Cancelar
             </Button>
@@ -1089,7 +1089,7 @@ export function POS() {
                 loadingShift ||
                 calcBreakdownTotal(openBills, openCoins) <= 0
               }
-              className="text-lg h-12 px-12 shadow-lg shadow-[var(--primary)]/20"
+              className="w-full sm:w-auto text-lg h-12 px-12 shadow-lg shadow-[var(--primary)]/20"
             >
               {loadingShift ? "Abriendo..." : "Abrir Caja"}
             </Button>
@@ -1098,40 +1098,40 @@ export function POS() {
       </Dialog>
 
       <Dialog open={showCloseShiftModal} onOpenChange={(open) => !loadingShift && setShowCloseShiftModal(open)}>
-        <DialogContent className="sm:max-w-3xl overflow-hidden p-0">
-          <div className="p-6 pb-4 border-b border-[var(--border)] bg-[var(--bg)]/50">
+        <DialogContent className="sm:max-w-3xl p-0 max-h-[90vh] flex flex-col">
+          <div className="p-4 sm:p-6 pb-4 border-b border-[var(--border)] bg-[var(--bg)]/50 shrink-0">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-3 text-2xl font-black text-rose-500">
-                <div className="p-2.5 bg-rose-500/10 rounded-2xl text-rose-500 shadow-sm">
-                  <Lock size={28} />
+              <DialogTitle className="flex items-center gap-3 text-xl sm:text-2xl font-black text-rose-500">
+                <div className="p-2 sm:p-2.5 bg-rose-500/10 rounded-xl sm:rounded-2xl text-rose-500 shadow-sm">
+                  <Lock size={24} className="sm:w-7 sm:h-7" />
                 </div>
                 Cierre de Caja
               </DialogTitle>
-              <DialogDescription className="text-base font-medium opacity-80 mt-1">
+              <DialogDescription className="text-sm sm:text-base font-medium opacity-80 mt-1">
                 Cuenta los billetes y monedas en la gaveta para cerrar tu turno.
               </DialogDescription>
             </DialogHeader>
           </div>
 
           {closeSummary ? (
-            <div className="p-6 space-y-4">
-              <div className="p-6 rounded-2xl border bg-slate-50 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
+              <div className="p-4 sm:p-6 rounded-2xl border border-[var(--border)] bg-[var(--card)]/50 space-y-4">
                 <div className="flex justify-between items-center text-base">
-                  <span className="text-slate-500 font-medium">Monto Esperado (Sistema):</span>
-                  <span className="font-bold text-xl">${closeSummary.expectedAmount.toFixed(2)}</span>
+                  <span className="text-[var(--text-sec)] font-medium">Monto Esperado (Sistema):</span>
+                  <span className="font-bold text-xl text-[var(--text-main)]">${closeSummary.expectedAmount.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center text-base">
-                  <span className="text-slate-500 font-medium">Monto Contado (Real):</span>
-                  <span className="font-bold text-xl">${closeSummary.countedCash.toFixed(2)}</span>
+                  <span className="text-[var(--text-sec)] font-medium">Monto Contado (Real):</span>
+                  <span className="font-bold text-xl text-[var(--text-main)]">${closeSummary.countedCash.toFixed(2)}</span>
                 </div>
-                <div className="pt-4 border-t flex justify-between items-center">
-                  <span className="font-bold text-lg">Diferencia:</span>
+                <div className="pt-4 border-t border-[var(--border)] flex justify-between items-center">
+                  <span className="font-bold text-lg text-[var(--text-main)]">Diferencia:</span>
                   <span className={cn("font-black text-3xl", closeSummary.difference < 0 ? "text-red-500" : "text-emerald-500")}>
                     {closeSummary.difference > 0 ? "+" : ""}${closeSummary.difference.toFixed(2)}
                   </span>
                 </div>
               </div>
-              <DialogFooter className="pt-2">
+              <DialogFooter className="pt-2 shrink-0">
                 <Button
                   onClick={() => {
                     setShowCloseShiftModal(false);
@@ -1148,20 +1148,20 @@ export function POS() {
               </DialogFooter>
             </div>
           ) : (
-            <div className="p-6 pt-4 space-y-6">
+            <div className="p-4 sm:p-6 pt-4 space-y-4 sm:space-y-6 overflow-y-auto flex-1">
               {closeExpectedTotals && (
-                <div className="bg-blue-50/50 p-5 rounded-2xl border border-blue-100 grid grid-cols-3 gap-6 shadow-sm text-center">
-                  <div className="flex flex-col items-center">
-                    <span className="text-xs text-blue-600/70 font-bold uppercase tracking-widest mb-1.5">Efectivo Esperado</span>
-                    <span className="text-2xl font-black text-blue-700">${closeExpectedTotals.expectedAmount.toFixed(2)}</span>
+                <div className="bg-blue-500/5 p-4 sm:p-5 rounded-2xl border border-blue-500/20 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 shadow-sm text-center">
+                  <div className="flex flex-col items-center bg-[var(--bg)]/50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
+                    <span className="text-[10px] sm:text-xs text-blue-500 font-bold uppercase tracking-widest mb-1.5 opacity-80">Efectivo Esperado</span>
+                    <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">${closeExpectedTotals.expectedAmount.toFixed(2)}</span>
                   </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-xs text-blue-600/70 font-bold uppercase tracking-widest mb-1.5">Tarjeta</span>
-                    <span className="text-2xl font-black text-blue-700">${closeExpectedTotals.expectedTarjeta.toFixed(2)}</span>
+                  <div className="flex flex-col items-center bg-[var(--bg)]/50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
+                    <span className="text-[10px] sm:text-xs text-blue-500 font-bold uppercase tracking-widest mb-1.5 opacity-80">Tarjeta</span>
+                    <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">${closeExpectedTotals.expectedTarjeta.toFixed(2)}</span>
                   </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-xs text-blue-600/70 font-bold uppercase tracking-widest mb-1.5">Transferencia</span>
-                    <span className="text-2xl font-black text-blue-700">${closeExpectedTotals.expectedTransferencia.toFixed(2)}</span>
+                  <div className="flex flex-col items-center bg-[var(--bg)]/50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
+                    <span className="text-[10px] sm:text-xs text-blue-500 font-bold uppercase tracking-widest mb-1.5 opacity-80">Transferencia</span>
+                    <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">${closeExpectedTotals.expectedTransferencia.toFixed(2)}</span>
                   </div>
                 </div>
               )}
@@ -1239,29 +1239,29 @@ export function POS() {
               </div>
 
               {/* Total y Observaciones */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 items-end">
                 <div className="space-y-2 h-full flex flex-col justify-end">
-                  <label className="text-sm font-bold text-slate-500 uppercase tracking-widest">Observaciones (Opcional)</label>
+                  <label className="text-xs sm:text-sm font-bold text-[var(--text-sec)] uppercase tracking-widest">Observaciones (Opcional)</label>
                   <Input
                     value={closeNotes}
                     onChange={(e) => setCloseNotes(e.target.value)}
                     placeholder="Ej. Billete roto..."
-                    className="h-[72px] rounded-2xl text-base px-4"
+                    className="h-12 sm:h-[72px] rounded-xl sm:rounded-2xl text-sm sm:text-base px-4"
                   />
                 </div>
-                <div className="flex justify-between items-center rounded-2xl border-2 border-rose-500/20 bg-rose-500/5 px-6 h-[72px] shadow-inner">
-                  <span className="text-sm font-bold text-rose-500 uppercase tracking-widest opacity-80">Total Contado</span>
-                  <span className="text-4xl font-black text-rose-500 tracking-tight">
+                <div className="flex flex-col sm:flex-row justify-center sm:justify-between items-center rounded-xl sm:rounded-2xl border-2 border-rose-500/20 bg-rose-500/5 px-4 sm:px-6 py-3 sm:py-0 sm:h-[72px] shadow-inner gap-1 sm:gap-0">
+                  <span className="text-[10px] sm:text-sm font-bold text-rose-500 uppercase tracking-widest opacity-80">Total Contado</span>
+                  <span className="text-3xl sm:text-4xl font-black text-rose-500 tracking-tight">
                     ${calcBreakdownTotal(closeBills, closeCoins).toFixed(2)}
                   </span>
                 </div>
               </div>
 
-              <DialogFooter className="pt-4 border-t border-[var(--border)] flex sm:justify-between w-full">
+              <DialogFooter className="pt-4 border-t border-[var(--border)] flex flex-col-reverse sm:flex-row sm:justify-between w-full shrink-0 gap-3 sm:gap-0 mt-4 sm:mt-0">
                 <Button
                   variant="ghost"
                   onClick={() => setShowCloseShiftModal(false)}
-                  className="font-bold text-[var(--text-sec)] hover:bg-slate-100 h-12 px-8"
+                  className="w-full sm:w-auto font-bold text-[var(--text-sec)] hover:bg-slate-100 h-12 px-8"
                 >
                   Cancelar
                 </Button>
@@ -1269,7 +1269,7 @@ export function POS() {
                   onClick={handleCloseShift}
                   disabled={loadingShift || calcBreakdownTotal(closeBills, closeCoins) <= 0}
                   variant="destructive"
-                  className="text-lg h-12 px-12 shadow-lg shadow-rose-500/20"
+                  className="w-full sm:w-auto text-lg h-12 px-12 shadow-lg shadow-rose-500/20"
                 >
                   {loadingShift ? "Cerrando..." : "Confirmar Cierre"}
                 </Button>

@@ -113,7 +113,7 @@ export function Dashboard() {
             Dashboard General
           </h1>
           <p className="text-[var(--text-sec)]">
-            Hola, {user?.name}. Sucursal: <span className="font-semibold text-[var(--text-main)]">{selectedBranch?.name || 'Cargando...'}</span>.
+            Hola, {user?.name}. Sucursal: <span className="font-semibold text-[var(--text-main)]">{selectedBranch?.name || user?.branch || 'Principal'}</span>.
           </p>
         </div>
         <div className="flex items-center gap-3">

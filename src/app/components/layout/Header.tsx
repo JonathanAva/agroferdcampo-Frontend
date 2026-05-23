@@ -64,7 +64,7 @@ export function Header({ onMenuClick }: HeaderProps) {
       {/* Right Section */}
       <div className="flex items-center gap-2 md:gap-4">
         {/* Branch Display (Non-clickable) */}
-        {selectedBranch && (
+        {(selectedBranch || user?.branch) && (
           <div
             className="flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg border"
             style={{
@@ -79,7 +79,7 @@ export function Header({ onMenuClick }: HeaderProps) {
               className="shrink-0"
             />
             <span className="font-medium text-sm hidden sm:block truncate max-w-[150px] md:max-w-none">
-              {selectedBranch.name}
+              {selectedBranch?.name || user?.branch}
             </span>
           </div>
         )}

@@ -8,15 +8,15 @@ export function Layout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       <Sidebar 
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
       />
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 h-full">
         <Header onMenuClick={() => setIsSidebarOpen(true)} />
         <main 
-          className="flex-1 p-4 md:p-8 overflow-auto"
+          className="flex-1 p-4 md:p-8 overflow-y-auto"
           style={{ backgroundColor: 'var(--bg)' }}
         >
           <Outlet />
