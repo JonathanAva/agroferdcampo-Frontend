@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Users2,
   UserPlus,
@@ -30,6 +30,12 @@ import {
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
+import { useSearchParams } from "react-router";
+import { SmartFilter, FilterConfig } from "../components/ui/smart-filter";
+
+const hrFilters: FilterConfig[] = [
+  { id: 'search', label: 'Buscar empleados...', type: 'text', placeholder: 'Nombre, código o DUI...' }
+];
 import { Calendar } from "../components/ui/calendar";
 import { apiRequest } from "../config/api";
 import { useAuth } from "../context/AuthContext";
@@ -290,7 +296,22 @@ export function HumanResources() {
   }>({ employee: null, newStatus: null });
 
   // Filters
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchParams] = useSearchParams();
+  const searchTerm = searchParams.get('search') || '';
+  const statusFilter = searchParams.get('status') || 'all';
+  const departmentFilter = searchParams.get('department') || 'all';
+
+  const hrFilters: FilterConfig[] = useMemo(() => [
+    { id: 'search', label: 'Buscar empleados...', type: 'text', placeholder: 'Nombre, código o DUI...' },
+    { id: 'department', label: 'Departamento', type: 'category', options: departments.map(d => ({ label: d.name, value: d.id.toString() })) },
+    { id: 'status', label: 'Estado', type: 'category', options: [
+      { label: 'Activo', value: 'ACTIVO' },
+      { label: 'Inactivo', value: 'INACTIVO' },
+      { label: 'Suspendido', value: 'SUSPENDIDO' },
+      { label: 'Baja', value: 'BAJA' },
+      { label: 'Permiso', value: 'PERMISO' }
+    ]}
+  ], [departments]);
 
   // Estados para el formulario de registro (DatePicker)
   const [regBirthDate, setRegBirthDate] = useState<Date | undefined>(undefined);
@@ -823,18 +844,9 @@ export function HumanResources() {
 
         {/* --- TAB: EMPLEADOS --- */}
         <TabsContent value="employees" className="space-y-6">
-          <Card className="p-4 border-[var(--border)] bg-[var(--card)] shadow-sm">
-            <div className="flex-1 flex items-center gap-3 px-4 py-1 rounded-xl border border-[var(--border)] bg-[var(--bg)] transition-all focus-within:ring-2 focus-within:ring-[var(--primary)]/20">
-              <Search size={20} className="text-[var(--text-sec)]" />
-              <Input
-                type="text"
-                placeholder="Buscar por nombre, código o DUI..."
-                className="border-none bg-transparent shadow-none focus-visible:ring-0 text-[var(--text-main)] h-9"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-          </Card>
+          <div className="bg-[var(--card)] p-4 rounded-xl border border-[var(--border)] shadow-sm">
+            <SmartFilter config={hrFilters} />
+          </div>
 
           <Card className="rounded-xl border overflow-hidden shadow-sm bg-[var(--card)] border-[var(--border)]">
             <div className="overflow-x-auto">
@@ -859,18 +871,15 @@ export function HumanResources() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {employees
-                    .filter(
-                      (e) =>
-                        e.fullName
-                          .toLowerCase()
-                          .includes(searchTerm.toLowerCase()) ||
-                        e.employeeCode
-                          .toLowerCase()
-                          .includes(searchTerm.toLowerCase()) ||
-                        (e.dui && e.dui.includes(searchTerm)),
-                    )
-                    .map((emp) => (
+                  {employees.filter((e) => {
+                    const matchesSearch = e.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      e.employeeCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      (e.dui && e.dui.includes(searchTerm));
+                    const matchesStatus = statusFilter === 'all' || e.status === statusFilter;
+                    const matchesDept = departmentFilter === 'all' || String(e.departmentId) === departmentFilter;
+                    
+                    return matchesSearch && matchesStatus && matchesDept;
+                  }).map((emp) => (
                       <TableRow
                         key={emp.id}
                         className="group hover:bg-[var(--bg)]/30 transition-colors border-b border-[var(--border)]"

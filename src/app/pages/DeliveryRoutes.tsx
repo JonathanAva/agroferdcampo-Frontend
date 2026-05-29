@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   MapPin, Plus, Search, Filter, Calendar, Truck, User, Play, CheckCircle2, XCircle, Printer, Eye, Trash2, PackageCheck
 } from 'lucide-react';
+import { useSearchParams } from 'react-router';
 
 const getRouteBadgeColors = (status: string) => {
   switch(status) {
@@ -27,11 +28,23 @@ import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Checkbox } from '../components/ui/checkbox';
+import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
+
+const deliveryRoutesFilters: FilterConfig[] = [
+  { id: 'search', label: 'Buscar ruta...', type: 'text', placeholder: 'Nombre o placa...' },
+  { id: 'status', label: 'Estado de Ruta', type: 'category', options: Object.entries(ROUTE_STATUS_LABELS).map(([k, v]) => ({ label: v, value: k })) },
+  { id: 'date', label: 'Fecha Específica', type: 'date_range' }
+];
 
 export default function DeliveryRoutes() {
   const [routes, setRoutes] = useState<DeliveryRoute[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<RouteStatus | 'ALL'>('ALL');
+  
+  const [searchParams] = useSearchParams();
+  const searchFilter = searchParams.get('search') || '';
+  const statusFilter = (searchParams.get('status') as RouteStatus | 'ALL') || 'ALL';
+  const startDateFilter = searchParams.get('startDate') || '';
+  const endDateFilter = searchParams.get('endDate') || '';
   
   // Create Route Form
   const [createData, setCreateData] = useState<{
@@ -63,13 +76,16 @@ export default function DeliveryRoutes() {
         setConductores(Array.isArray(items) ? items : []);
       })
       .catch(console.error);
-  }, [statusFilter]);
+  }, [statusFilter, searchFilter, startDateFilter, endDateFilter]);
 
   const fetchRoutes = async () => {
     setLoading(true);
     try {
       let endpoint = `/delivery-routes?limit=50`;
       if (statusFilter !== 'ALL') endpoint += `&status=${statusFilter}`;
+      if (searchFilter) endpoint += `&search=${encodeURIComponent(searchFilter)}`;
+      if (startDateFilter) endpoint += `&startDate=${startDateFilter}`;
+      if (endDateFilter) endpoint += `&endDate=${endDateFilter}`;
       const res = await apiRequest<any>(endpoint);
       const dataObj = res.data || res;
       setRoutes(Array.isArray(dataObj) ? dataObj : (dataObj.items || []));
@@ -236,24 +252,9 @@ export default function DeliveryRoutes() {
         </TabsList>
 
         <TabsContent value="list" className="flex-1 flex flex-col min-h-0 mt-4 border-0 p-0">
-          <Card className="p-4 border-[var(--border)] bg-[var(--card)] shadow-sm mb-4">
-            <div className="flex items-center gap-4">
-              <div className="flex-1 max-w-xs space-y-1.5">
-                <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Estado de Ruta</Label>
-                <Select value={statusFilter} onValueChange={(v: any) => setStatusFilter(v)}>
-                  <SelectTrigger className="bg-[var(--bg)]">
-                    <SelectValue placeholder="Todos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Todas</SelectItem>
-                    {Object.entries(ROUTE_STATUS_LABELS).map(([k, v]) => (
-                      <SelectItem key={k} value={k}>{v}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </Card>
+          <div className="mb-4 bg-[var(--card)] p-4 rounded-xl border border-[var(--border)] shadow-sm">
+            <SmartFilter config={deliveryRoutesFilters} />
+          </div>
 
           <div className="rounded-xl border overflow-hidden shadow-sm bg-[var(--card)] border-[var(--border)] flex-1 flex flex-col min-h-0">
             <div className="overflow-x-auto flex-1">

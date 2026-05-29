@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, FileText, CheckCircle2, AlertCircle, Eye, Plus, 
   Trash2, RefreshCcw, Filter, Calendar as CalendarIcon, Store, Package, Download, X,
   ArrowDownToLine, DollarSign
 } from 'lucide-react';
+import { useSearchParams } from 'react-router';
 import { SupplierManager } from '../components/suppliers/SupplierManager';
 import { Payables } from './Payables';
 import { purchasesService, PurchaseResponse, CreatePurchaseDto, getSuppliers } from '../services/purchases.service';
@@ -20,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
 import { Label } from '../components/ui/label';
+import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
 
 export function Purchases() {
   const [activeTab, setActiveTab] = useState<'compras' | 'proveedores' | 'pagar'>('compras');
@@ -29,10 +31,21 @@ export function Purchases() {
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
   
-  // Filtros
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [supplierFilter, setSupplierFilter] = useState('all');
-  const [dateFilter, setDateFilter] = useState('');
+  const [searchParams] = useSearchParams();
+  const statusFilter = searchParams.get('status') || 'all';
+  const supplierFilter = searchParams.get('supplier') || 'all';
+  const dateFilter = searchParams.get('date') || '';
+
+  const purchasesFilters: FilterConfig[] = useMemo(() => [
+    { id: 'supplier', label: 'Proveedor', type: 'category', options: suppliers.map(s => ({ label: s.name, value: s.id.toString() })) },
+    { id: 'status', label: 'Estado', type: 'category', options: [
+      { label: 'Borrador', value: 'BORRADOR' },
+      { label: 'Confirmada', value: 'CONFIRMADA' },
+      { label: 'Recibida', value: 'RECIBIDA' },
+      { label: 'Cancelada', value: 'CANCELADA' }
+    ]},
+    { id: 'date', label: 'Fecha Específica', type: 'date_range' }
+  ], [suppliers]);
 
   // Modales
   const [selectedPurchase, setSelectedPurchase] = useState<PurchaseResponse | null>(null);
@@ -113,12 +126,7 @@ export function Purchases() {
     }
   };
 
-  const resetFilters = () => {
-    setStatusFilter('all');
-    setSupplierFilter('all');
-    setDateFilter('');
-    setPagination(p => ({ ...p, page: 1 }));
-  };
+
 
   const handleOpenDetail = async (purchase: PurchaseResponse) => {
     try {
@@ -322,57 +330,9 @@ export function Purchases() {
             </Button>
           </div>
 
-          <Card className="p-4 border-[var(--border)] bg-[var(--card)] shadow-sm">
-        <div className="flex flex-col md:flex-row gap-4 items-end">
-          <div className="flex-1 w-full space-y-1.5">
-            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Proveedor</Label>
-            <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-              <SelectTrigger className="bg-[var(--bg)]">
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                {suppliers.map(s => (
-                  <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="bg-[var(--card)] p-4 rounded-xl border border-[var(--border)] shadow-sm">
+            <SmartFilter config={purchasesFilters} />
           </div>
-
-          <div className="flex-1 w-full space-y-1.5">
-            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Estado</Label>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="bg-[var(--bg)]">
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="BORRADOR">Borrador</SelectItem>
-                <SelectItem value="CONFIRMADA">Confirmada</SelectItem>
-                <SelectItem value="RECIBIDA">Recibida</SelectItem>
-                <SelectItem value="CANCELADA">Cancelada</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex-1 w-full space-y-1.5">
-            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Fecha Específica</Label>
-            <div className="relative">
-              <CalendarIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-sec)]" />
-              <Input 
-                type="date" 
-                value={dateFilter}
-                onChange={e => setDateFilter(e.target.value)}
-                className="pl-9 bg-[var(--bg)]"
-              />
-            </div>
-          </div>
-
-          <Button variant="outline" onClick={resetFilters} className="font-bold">
-            <Filter size={16} className="mr-2" /> Limpiar
-          </Button>
-        </div>
-      </Card>
 
       <div className="rounded-xl border overflow-hidden shadow-sm bg-[var(--card)] border-[var(--border)] flex-1 flex flex-col min-h-0">
         <div className="overflow-x-auto flex-1">

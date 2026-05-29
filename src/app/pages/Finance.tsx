@@ -10,6 +10,7 @@ import {
   pettyCashService, PettyCashStatus, PettyCashMovement, PettyCashReplenishment 
 } from '../services/petty-cash.service';
 import { useAuth } from '../context/AuthContext';
+import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -19,6 +20,22 @@ import { NumberInput } from '../components/ui/number-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
+import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
+
+const financeFilters: FilterConfig[] = [
+  { id: 'type', label: 'Tipo', type: 'category', options: [
+    { label: 'Ingreso', value: 'INGRESO' },
+    { label: 'Egreso', value: 'EGRESO' }
+  ]},
+  { id: 'category', label: 'Categoría', type: 'category', options: [
+    { label: 'Ventas', value: 'VENTAS' },
+    { label: 'Gasto Operativo', value: 'GASTO_OPERATIVO' },
+    { label: 'Pago a Proveedor', value: 'PAGO_PROVEEDOR' },
+    { label: 'Reposición Caja Chica', value: 'REPOSICION_CAJA_CHICA' },
+    { label: 'Otro', value: 'OTRO' }
+  ]},
+  { id: 'date', label: 'Rango de Fechas', type: 'date_range' }
+];
 
 export function Finance() {
   const { user } = useAuth();
@@ -28,8 +45,14 @@ export function Finance() {
   const [generalSummary, setGeneralSummary] = useState<GeneralCashSummary | null>(null);
   const [generalMovements, setGeneralMovements] = useState<GeneralCashEntry[]>([]);
   const [generalLoading, setGeneralLoading] = useState(true);
-  const [generalFilters, setGeneralFilters] = useState({ page: 1, limit: 20, type: 'all', category: 'all', startDate: '', endDate: '' });
+  const [generalFilters, setGeneralFilters] = useState({ page: 1, limit: 20, category: 'all' });
   const [generalPagination, setGeneralPagination] = useState({ total: 0, totalPages: 1 });
+
+  const [searchParams] = useSearchParams();
+  const typeFilter = searchParams.get('type') || 'all';
+  const categoryFilter = searchParams.get('category') || 'all';
+  const startDateFilter = searchParams.get('startDate') || '';
+  const endDateFilter = searchParams.get('endDate') || '';
 
   const [showAddGeneralModal, setShowAddGeneralModal] = useState(false);
   const [newGeneralEntry, setNewGeneralEntry] = useState({
@@ -61,23 +84,23 @@ export function Finance() {
     } else {
       fetchPettyCash();
     }
-  }, [activeTab, generalFilters.page, generalFilters.type, generalFilters.category, generalFilters.startDate, generalFilters.endDate]);
+  }, [activeTab, generalFilters.page, generalFilters.category, typeFilter, categoryFilter, startDateFilter, endDateFilter]);
 
   // --- GENERAL CASH LOGIC ---
   const fetchGeneralCash = async () => {
     setGeneralLoading(true);
     try {
       const summary = await generalCashService.getSummary(
-        generalFilters.startDate || undefined, 
-        generalFilters.endDate || undefined
+        startDateFilter || undefined, 
+        endDateFilter || undefined
       );
       setGeneralSummary(summary);
 
       const filters: any = { page: generalFilters.page, limit: generalFilters.limit };
-      if (generalFilters.type !== 'all') filters.type = generalFilters.type;
-      if (generalFilters.category !== 'all') filters.category = generalFilters.category;
-      if (generalFilters.startDate) filters.startDate = generalFilters.startDate;
-      if (generalFilters.endDate) filters.endDate = generalFilters.endDate;
+      if (typeFilter !== 'all') filters.type = typeFilter;
+      if (categoryFilter !== 'all') filters.category = categoryFilter;
+      if (startDateFilter) filters.startDate = startDateFilter;
+      if (endDateFilter) filters.endDate = endDateFilter;
 
       const res = await generalCashService.findAll(filters);
       setGeneralMovements(res.data);
@@ -274,48 +297,11 @@ export function Finance() {
           </div>
 
           {/* FILTROS Y ACCIONES */}
-          <div className="flex flex-col md:flex-row justify-between gap-4">
-            <div className="flex flex-wrap gap-4 items-center">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-[var(--text-sec)]">Desde:</span>
-                <Input 
-                  type="date" 
-                  className="w-40 bg-[var(--card)]" 
-                  value={generalFilters.startDate} 
-                  onChange={e => setGeneralFilters({...generalFilters, startDate: e.target.value, page: 1})}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-[var(--text-sec)]">Hasta:</span>
-                <Input 
-                  type="date" 
-                  className="w-40 bg-[var(--card)]" 
-                  value={generalFilters.endDate} 
-                  onChange={e => setGeneralFilters({...generalFilters, endDate: e.target.value, page: 1})}
-                />
-              </div>
-              <Select value={generalFilters.type} onValueChange={v => setGeneralFilters({...generalFilters, type: v, page: 1})}>
-                <SelectTrigger className="w-32 bg-[var(--card)]"><SelectValue placeholder="Tipo" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="INGRESO">Ingreso</SelectItem>
-                  <SelectItem value="EGRESO">Egreso</SelectItem>
-                </SelectContent>
-              </Select>
-              
-              {(generalFilters.startDate || generalFilters.endDate || generalFilters.type !== 'all') && (
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={() => setGeneralFilters({ ...generalFilters, startDate: '', endDate: '', type: 'all', page: 1 })}
-                  className="text-[var(--text-sec)] hover:text-rose-500"
-                >
-                  <Filter size={16} className="mr-2" />
-                  Limpiar
-                </Button>
-              )}
+          <div className="flex flex-col md:flex-row justify-between gap-4 items-center">
+            <div className="flex-1 bg-[var(--card)] p-4 rounded-xl border border-[var(--border)] shadow-sm">
+              <SmartFilter config={financeFilters} />
             </div>
-            <Button onClick={() => setShowAddGeneralModal(true)} className="font-bold whitespace-nowrap">
+            <Button onClick={() => setShowAddGeneralModal(true)} className="font-bold whitespace-nowrap h-fit">
               Registrar Movimiento
             </Button>
           </div>

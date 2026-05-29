@@ -24,6 +24,23 @@ import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { InlinePills } from "../components/ui/inline-pills";
+import { useSearchParams } from "react-router";
+import { SmartFilter, FilterConfig } from "../components/ui/smart-filter";
+
+const usersFilters: FilterConfig[] = [
+  { id: 'search', label: 'Buscar usuarios...', type: 'text', placeholder: 'Nombre, código o DUI...' },
+  { id: 'status', label: 'Estado', type: 'category', options: [
+    { label: 'Activo', value: 'ACTIVO' },
+    { label: 'Inactivo', value: 'INACTIVO' }
+  ]},
+  { id: 'roleId', label: 'Rol', type: 'category', options: [
+    { label: 'Propietario', value: '1' },
+    { label: 'Administrador', value: '2' },
+    { label: 'Gerente', value: '3' },
+    { label: 'Cajero', value: '4' },
+    { label: 'Vendedor', value: '5' }
+  ]}
+];
 import {
   Table,
   TableBody,
@@ -78,7 +95,12 @@ export function Users() {
   const [users, setUsers] = useState<User[]>([]);
   const [availableBranches, setAvailableBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
+  
+  const [searchParams] = useSearchParams();
+  const searchTerm = searchParams.get('search') || '';
+  const statusFilter = searchParams.get('status') || 'all';
+  const roleFilter = searchParams.get('roleId') || 'all';
+  
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
@@ -215,12 +237,18 @@ export function Users() {
     }
   };
 
-  const filteredUsers = users.filter(
-    (u) =>
-      (u.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        u.email.toLowerCase().includes(searchTerm.toLowerCase())) &&
-      u.id !== Number(currentUser?.id),
-  );
+  const filteredUsers = users.filter((u) => {
+    const matchesSearch =
+      u.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (u.dui && u.dui.includes(searchTerm));
+    
+    const matchesStatus = statusFilter === 'all' || 
+      (statusFilter === 'ACTIVO' ? u.isActive : !u.isActive);
+    const matchesRole = roleFilter === 'all' || u.roleId.toString() === roleFilter;
+
+    return matchesSearch && matchesStatus && matchesRole && u.id !== Number(currentUser?.id);
+  });
 
   return (
     <div>
@@ -246,19 +274,9 @@ export function Users() {
         </Button>
       </div>
 
-      {/* Search & Filters */}
-      <Card className="p-4 mb-6 border-[var(--border)] bg-[var(--card)] shadow-sm">
-        <div className="flex-1 flex items-center gap-3 px-4 py-1 rounded-xl border border-[var(--border)] bg-[var(--bg)] transition-all focus-within:ring-2 focus-within:ring-[var(--primary)]/20">
-          <Search size={20} className="text-[var(--text-sec)]" />
-          <Input
-            type="text"
-            placeholder="Buscar por nombre, código o DUI..."
-            className="border-none bg-transparent shadow-none focus-visible:ring-0 text-[var(--text-main)] h-9"
-            value={searchTerm}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-          />
-        </div>
-      </Card>
+      <div className="mb-6 bg-[var(--card)] p-4 rounded-xl border border-[var(--border)] shadow-sm">
+        <SmartFilter config={usersFilters} />
+      </div>
 
       {/* Users Table */}
       <Card className="rounded-xl border overflow-hidden shadow-sm bg-[var(--card)] border-[var(--border)]">

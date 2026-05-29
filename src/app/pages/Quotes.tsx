@@ -3,7 +3,7 @@ import {
   Search, FileText, Eye, CheckCircle2, AlertCircle, Calendar as CalendarIcon, RefreshCcw, Filter, X,
   Mail, UserCog, Clock, Send, Plus, Banknote, CreditCard, Smartphone, Trash2, Truck as TruckIcon
 } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { quotesService, QuoteResponse } from '../services/quotes.service';
 import { toast } from 'sonner';
 import { Button } from '../components/ui/button';
@@ -19,16 +19,35 @@ import { Label } from '../components/ui/label';
 import { Switch } from '../components/ui/switch';
 import { apiRequest } from '../config/api';
 import { TransportSelector, TransportData } from '../components/transport/TransportSelector';
+import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
+import { 
+  Command, 
+  CommandInput, 
+  CommandList, 
+  CommandEmpty, 
+  CommandGroup, 
+  CommandItem 
+} from '../components/ui/command';
 
+const quotesFilters: FilterConfig[] = [
+  { id: 'search', label: 'Buscar Cotización', type: 'text', placeholder: 'N°, Cliente, Total...' },
+  { id: 'status', label: 'Estado', type: 'category', options: [
+    { label: 'Pendientes', value: 'PENDIENTE' },
+    { label: 'Confirmadas', value: 'CONFIRMADA' },
+    { label: 'Canceladas', value: 'CANCELADA' },
+    { label: 'Expiradas', value: 'EXPIRADA' }
+  ]},
+  { id: 'date', label: 'Fecha Específica', type: 'date_range' }
+];
 export function Quotes() {
   const [quotes, setQuotes] = useState<QuoteResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
   
-  // Filtros
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [dateFilter, setDateFilter] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchParams] = useSearchParams();
+  const statusFilter = searchParams.get('status') || 'all';
+  const dateFilter = searchParams.get('date') || '';
+  const searchTerm = searchParams.get('search') || '';
 
   const navigate = useNavigate();
 
@@ -80,7 +99,7 @@ export function Quotes() {
       fetchQuotes();
     }, 300);
     return () => clearTimeout(timer);
-  }, [pagination.page, statusFilter, dateFilter]);
+  }, [pagination.page, statusFilter, dateFilter, searchTerm]);
 
   const fetchQuotes = async () => {
     setLoading(true);
@@ -105,12 +124,7 @@ export function Quotes() {
     }
   };
 
-  const resetFilters = () => {
-    setStatusFilter('all');
-    setDateFilter('');
-    setSearchTerm('');
-    setPagination(p => ({ ...p, page: 1 }));
-  };
+
 
   const handleOpenDetail = async (quote: QuoteResponse) => {
     try {
@@ -170,7 +184,7 @@ export function Quotes() {
     if (productSearchCreate.length > 2) {
       const delay = setTimeout(async () => {
         try {
-          const res = await apiRequest<any>(`/products/search?q=${encodeURIComponent(productSearchCreate)}&limit=10`);
+          const res = await apiRequest<any>(`/catalog/products/search?q=${encodeURIComponent(productSearchCreate)}&limit=10`);
           setProductResultsCreate(res.data || res || []);
         } catch (e) { console.error(e); }
       }, 400);
@@ -237,12 +251,7 @@ export function Quotes() {
     return () => clearTimeout(delayDebounce);
   }, [customerSearchQuery]);
 
-  useEffect(() => {
-    const delayDebounce = setTimeout(() => {
-      fetchQuotes();
-    }, 500);
-    return () => clearTimeout(delayDebounce);
-  }, [searchTerm]);
+
 
   const handleOpenEditCustomer = (quote: QuoteResponse) => {
     setEditingQuote(quote);
@@ -336,58 +345,9 @@ export function Quotes() {
         </Button>
       </div>
 
-      <Card className="p-4 border-[var(--border)] bg-[var(--card)] shadow-sm">
-        <div className="flex flex-col md:flex-row gap-4 items-end">
-          <div className="flex-2 w-full md:max-w-xs space-y-1.5">
-            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Buscar Cotización</Label>
-            <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-sec)]" />
-              <Input 
-                type="text" 
-                placeholder="Buscar por N°, Cliente, Total..."
-                value={searchTerm}
-                onChange={e => {
-                  setSearchTerm(e.target.value);
-                  setPagination(p => ({ ...p, page: 1 }));
-                }}
-                className="pl-9 bg-[var(--bg)]"
-              />
-            </div>
-          </div>
-          <div className="flex-1 w-full space-y-1.5">
-            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Estado</Label>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="bg-[var(--bg)]">
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="PENDIENTE">Pendientes</SelectItem>
-                <SelectItem value="CONFIRMADA">Confirmadas</SelectItem>
-                <SelectItem value="CANCELADA">Canceladas</SelectItem>
-                <SelectItem value="EXPIRADA">Expiradas</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex-1 w-full space-y-1.5">
-            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Fecha Específica</Label>
-            <div className="relative">
-              <CalendarIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-sec)]" />
-              <Input 
-                type="date" 
-                value={dateFilter}
-                onChange={e => setDateFilter(e.target.value)}
-                className="pl-9 bg-[var(--bg)]"
-              />
-            </div>
-          </div>
-
-          <Button variant="outline" onClick={resetFilters} className="font-bold">
-            <Filter size={16} className="mr-2" /> Limpiar
-          </Button>
-        </div>
-      </Card>
+      <div className="bg-[var(--card)] p-4 rounded-xl border border-[var(--border)] shadow-sm">
+        <SmartFilter config={quotesFilters} />
+      </div>
 
       <div className="rounded-xl border overflow-hidden shadow-sm bg-[var(--card)] border-[var(--border)] flex-1 flex flex-col min-h-0">
         <div className="overflow-x-auto flex-1">
@@ -894,7 +854,7 @@ export function Quotes() {
       </Dialog>
       {/* MODAL CREAR COTIZACIÓN */}
       <Dialog open={createQuoteModalOpen} onOpenChange={setCreateQuoteModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
+        <DialogContent className="w-full sm:max-w-4xl md:max-w-5xl max-h-[90vh] flex flex-col p-0 bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
           <DialogHeader className="p-6 border-b border-[var(--border)]">
             <DialogTitle className="flex items-center gap-2 text-2xl text-[var(--primary)]">
               <FileText /> Nueva Cotización
@@ -975,86 +935,113 @@ export function Quotes() {
               </div>
             </div>
 
-            {/* Sección de Transporte */}
-            <Card className="p-4 border-l-4 border-l-[var(--primary)] border-[var(--border)] bg-[var(--card)]">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <TruckIcon size={18} className="text-[var(--primary)]" />
-                  <Label className="font-bold">¿Requiere entrega a domicilio?</Label>
-                </div>
-                <Switch
-                  checked={newQuote.requiresTransport}
-                  onCheckedChange={c => setNewQuote(prev => ({ ...prev, requiresTransport: c }))}
-                />
-              </div>
-              {newQuote.requiresTransport && (
-                <div className="mt-4 pt-4 border-t border-[var(--border)] space-y-3 animate-in fade-in">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-bold uppercase text-[var(--text-sec)]">Dirección de Entrega</Label>
-                    <Input
-                      placeholder="Dirección exacta de entrega..."
-                      value={newQuote.deliveryAddress}
-                      onChange={e => setNewQuote(prev => ({ ...prev, deliveryAddress: e.target.value }))}
-                      className="bg-[var(--bg)]"
-                    />
+            {/* Fila 2: Transporte + Notas */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Sección de Transporte */}
+              <Card className="p-4 border-l-4 border-l-[var(--primary)] border-[var(--border)] bg-[var(--card)]">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <TruckIcon size={18} className="text-[var(--primary)]" />
+                    <Label className="font-bold">¿Requiere entrega a domicilio?</Label>
                   </div>
+                  <Switch
+                    checked={newQuote.requiresTransport}
+                    onCheckedChange={c => setNewQuote(prev => ({ ...prev, requiresTransport: c }))}
+                  />
                 </div>
-              )}
-            </Card>
-
-            {/* Notas */}
-            <div className="space-y-2">
-              <Label className="font-bold text-xs uppercase text-[var(--text-sec)]">Notas (Opcional)</Label>
-              <Input
-                placeholder="Condiciones especiales, comentarios..."
-                value={newQuote.notes}
-                onChange={e => setNewQuote(prev => ({ ...prev, notes: e.target.value }))}
-                className="bg-[var(--bg)]"
-              />
-            </div>
-
-            {/* Búsqueda de productos */}
-            <Card className="p-4 border-[var(--border)] bg-[var(--card)]">
-              <Label className="mb-3 block font-bold text-xs uppercase text-[var(--text-sec)]">Agregar Productos</Label>
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-sec)]" />
-                <Input
-                  className="pl-9 bg-[var(--bg)]"
-                  placeholder="Buscar producto por nombre o código..."
-                  value={productSearchCreate}
-                  onChange={e => setProductSearchCreate(e.target.value)}
-                />
-                {productResultsCreate.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
-                    {productResultsCreate.map(p => (
-                      <div
-                        key={p.id}
-                        className="p-3 hover:bg-[var(--bg)]/50 cursor-pointer flex justify-between border-b border-[var(--border)] text-sm"
-                        onClick={() => {
-                          const existing = newQuote.items.find(i => i.productId === p.id);
-                          if (existing) { toast.info('Producto ya agregado'); return; }
-                          const price = p.price || (p.prices?.[0]?.price) || 0;
-                          setNewQuote(prev => ({
-                            ...prev,
-                            items: [...prev.items, {
-                              productId: p.id,
-                              productName: p.name,
-                              quantity: 1,
-                              unitPrice: Number(price),
-                            }]
-                          }));
-                          setProductSearchCreate('');
-                          setProductResultsCreate([]);
-                        }}
-                      >
-                        <span className="font-bold">{p.name}</span>
-                        <span className="text-emerald-600 font-bold text-xs">${Number(p.price || 0).toFixed(2)}</span>
-                      </div>
-                    ))}
+                {newQuote.requiresTransport && (
+                  <div className="mt-4 pt-4 border-t border-[var(--border)] space-y-3 animate-in fade-in">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold uppercase text-[var(--text-sec)]">Dirección de Entrega</Label>
+                      <Input
+                        placeholder="Dirección exacta de entrega..."
+                        value={newQuote.deliveryAddress}
+                        onChange={e => setNewQuote(prev => ({ ...prev, deliveryAddress: e.target.value }))}
+                        className="bg-[var(--bg)]"
+                      />
+                    </div>
                   </div>
                 )}
+              </Card>
+
+              {/* Notas */}
+              <div className="space-y-2">
+                <Label className="font-bold text-xs uppercase text-[var(--text-sec)]">Notas (Opcional)</Label>
+                <Input
+                  placeholder="Condiciones especiales, comentarios..."
+                  value={newQuote.notes}
+                  onChange={e => setNewQuote(prev => ({ ...prev, notes: e.target.value }))}
+                  className="bg-[var(--bg)]"
+                />
               </div>
-            </Card>
+            </div>
+
+            {/* Búsqueda de productos mejorada con soporte de teclado */}
+            <div className="border border-[var(--border)] rounded-xl overflow-hidden bg-[var(--card)] shadow-sm">
+              <Command shouldFilter={false} className="w-full bg-transparent">
+                <CommandInput 
+                  placeholder="Buscar producto por nombre o código... (Usa las flechas y Enter)"
+                  value={productSearchCreate}
+                  onValueChange={setProductSearchCreate}
+                  className="h-12 text-sm"
+                />
+                <CommandList className={cn("transition-all", productSearchCreate.length > 2 ? "max-h-60 border-t border-[var(--border)]" : "max-h-0 hidden")}>
+                  {productSearchCreate.length > 2 && productResultsCreate.length === 0 ? (
+                    <CommandEmpty className="py-6 text-center text-sm text-[var(--text-sec)]">
+                      No se encontraron productos.
+                    </CommandEmpty>
+                  ) : (
+                    <CommandGroup heading="Resultados (Presiona Enter para seleccionar)">
+                      {productResultsCreate.map(p => {
+                        const price = p.price || (p.prices?.[0]?.price) || 0;
+                        const stock = p.inventory?.[0]?.quantity ?? p.stock ?? 'N/A';
+                        return (
+                          <CommandItem
+                            key={p.id}
+                            value={p.id.toString()}
+                            onSelect={() => {
+                              const existing = newQuote.items.find(i => i.productId === p.id);
+                              if (existing) { toast.info('Producto ya agregado'); return; }
+                              
+                              setNewQuote(prev => ({
+                                ...prev,
+                                items: [...prev.items, {
+                                  productId: p.id,
+                                  productName: p.name,
+                                  quantity: 1,
+                                  unitPrice: Number(price),
+                                }]
+                              }));
+                              setProductSearchCreate('');
+                              setProductResultsCreate([]);
+                            }}
+                            className="flex justify-between items-center py-3 cursor-pointer"
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-bold text-[var(--text-main)] text-sm leading-tight">{p.name}</span>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] bg-[var(--bg)] border border-[var(--border)] px-1.5 py-0.5 rounded text-[var(--text-sec)] font-mono">
+                                  {p.internalCode || p.barcode || 'S/C'}
+                                </span>
+                                <span className={cn(
+                                  "text-[10px] font-bold", 
+                                  Number(stock) > 0 ? "text-emerald-600" : "text-rose-500"
+                                )}>
+                                  Stock: {stock}
+                                </span>
+                              </div>
+                            </div>
+                            <span className="text-[var(--primary)] font-black text-sm">
+                              ${Number(price).toFixed(2)}
+                            </span>
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  )}
+                </CommandList>
+              </Command>
+            </div>
 
             {/* Lista de items */}
             {newQuote.items.length > 0 && (

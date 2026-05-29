@@ -6,9 +6,9 @@ import {
 import { cn } from '../components/ui/utils';
 import { apiRequest } from '../config/api';
 import { useAuth } from '../context/AuthContext';
+import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { Button } from '../components/ui/button';
-import { Switch } from '../components/ui/switch';
 import { Label } from '../components/ui/label';
 import { 
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger 
@@ -20,6 +20,17 @@ import { Card } from '../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Badge as UIBadge } from '../components/ui/badge';
 import { InlinePills } from '../components/ui/inline-pills';
+import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
+
+const customerFilters: FilterConfig[] = [
+  { id: 'search', label: 'Buscar clientes...', type: 'text', placeholder: 'Nombre, NIT o NRC...' },
+  { id: 'type', label: 'Tipo de Cliente', type: 'category', options: [
+    { label: 'Consumidor Final', value: 'CONSUMIDOR_FINAL' },
+    { label: 'Contribuyente', value: 'CONTRIBUYENTE' },
+    { label: 'Sujeto Excluido', value: 'SUJETO_EXCLUIDO' }
+  ]},
+  { id: 'showInactive', label: 'Mostrar inactivos', type: 'boolean' }
+];
 
 // --- Types ---
 interface Customer {
@@ -56,18 +67,34 @@ export function Customers() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [pagination, setPagination] = useState<PaginationData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showInactive, setShowInactive] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  
+  const [searchParams] = useSearchParams();
+  const searchTerm = searchParams.get('search') || '';
+  const showInactive = searchParams.get('showInactive') === 'true';
+  const typeFilter = searchParams.get('type') || 'all';
 
   // Modals
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const getBadgeVariant = (type: string) => {
+    switch(type) {
+      case 'CONSUMIDOR_FINAL': return 'secondary';
+      case 'CONTRIBUYENTE': return 'default';
+      case 'SUJETO_EXCLUIDO': return 'outline';
+      default: return 'outline';
+    }
+  };
+
   useEffect(() => {
     fetchCustomers();
-  }, [currentPage, searchTerm, showInactive]);
+  }, [currentPage, searchTerm, showInactive, typeFilter]);
 
   const fetchCustomers = async () => {
     setLoading(true);
@@ -79,6 +106,7 @@ export function Customers() {
       });
 
       if (searchTerm) query.append('search', searchTerm);
+      if (typeFilter !== 'all') query.append('customerType', typeFilter);
 
       const response = await apiRequest<any>(`/customers?${query.toString()}`);
       
@@ -155,31 +183,9 @@ export function Customers() {
       </div>
 
       {/* Search & Filters */}
-      <Card className="p-4 mb-6 border-[var(--border)] bg-[var(--card)] shadow-sm">
-        <div className="flex flex-col md:flex-row items-center gap-4">
-          <div className="flex-1 flex items-center gap-3 px-4 py-1 rounded-xl border border-[var(--border)] bg-[var(--bg)] transition-all focus-within:ring-2 focus-within:ring-[var(--primary)]/20">
-            <Search size={20} className="text-[var(--text-sec)]" />
-            <Input
-              type="text"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Buscar clientes por nombre, NIT o NRC..."
-              className="border-none bg-transparent shadow-none focus-visible:ring-0 text-[var(--text-main)]"
-            />
-          </div>
-
-          <div className="flex items-center gap-3 px-2">
-            <Switch 
-              id="show-inactive" 
-              checked={showInactive} 
-              onCheckedChange={setShowInactive} 
-            />
-            <Label htmlFor="show-inactive" className="text-sm font-bold cursor-pointer opacity-70 text-[var(--text-main)]">
-              Mostrar inactivos
-            </Label>
-          </div>
-        </div>
-      </Card>
+      <div className="mb-6 bg-[var(--card)] p-4 rounded-xl border border-[var(--border)] shadow-sm">
+        <SmartFilter config={customerFilters} />
+      </div>
 
       {/* Customers Table */}
       <div className="rounded-xl border overflow-hidden shadow-sm bg-[var(--card)] border-[var(--border)]">

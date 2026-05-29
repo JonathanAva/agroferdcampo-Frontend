@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiRequest } from '../config/api';
+import { useSearchParams } from 'react-router';
 import { Vehicle, VehicleStatus, VehicleType } from '../types/transport';
 import { VEHICLE_STATUS_LABELS, VEHICLE_TYPE_LABELS, vehicleStatusColor } from '../utils/transport';
 import { Button } from '../components/ui/button';
@@ -16,15 +17,24 @@ import { Card } from '../components/ui/card';
 import { NumberInput } from '../components/ui/number-input';
 import { useAuth } from '../context/AuthContext';
 import { useBranch } from '../context/BranchContext';
+import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
+
+const vehicleFilters: FilterConfig[] = [
+  { id: 'search', label: 'Buscar vehículo...', type: 'text', placeholder: 'Placa, marca, conductor...' },
+  { id: 'type', label: 'Tipo', type: 'category', options: Object.entries(VEHICLE_TYPE_LABELS).map(([k, v]) => ({ label: v, value: k })) },
+  { id: 'status', label: 'Estado', type: 'category', options: Object.entries(VEHICLE_STATUS_LABELS).map(([k, v]) => ({ label: v, value: k })) }
+];
 
 export default function Vehicles() {
   const { user } = useAuth();
   const { branches } = useBranch();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<VehicleStatus | 'ALL'>('ALL');
-  const [typeFilter, setTypeFilter] = useState<VehicleType | 'ALL'>('ALL');
+  
+  const [searchParams] = useSearchParams();
+  const search = searchParams.get('search') || '';
+  const statusFilter = (searchParams.get('status') as VehicleStatus | 'ALL') || 'ALL';
+  const typeFilter = (searchParams.get('type') as VehicleType | 'ALL') || 'ALL';
 
   const [showDialog, setShowDialog] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Partial<Vehicle> | null>(null);
@@ -155,52 +165,9 @@ export default function Vehicles() {
         </Button>
       </div>
 
-      <Card className="p-4 border-[var(--border)] bg-[var(--card)] shadow-sm">
-        <div className="flex flex-col md:flex-row gap-4 items-end">
-          <div className="flex-2 w-full md:max-w-xs space-y-1.5">
-            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Buscar</Label>
-            <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-sec)]" />
-              <Input 
-                placeholder="Placa, marca, conductor..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="pl-9 bg-[var(--bg)]"
-              />
-            </div>
-          </div>
-          
-          <div className="flex-1 w-full space-y-1.5">
-            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Tipo</Label>
-            <Select value={typeFilter} onValueChange={(v: any) => setTypeFilter(v)}>
-              <SelectTrigger className="bg-[var(--bg)]">
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Todos</SelectItem>
-                {Object.entries(VEHICLE_TYPE_LABELS).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>{v}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex-1 w-full space-y-1.5">
-            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Estado</Label>
-            <Select value={statusFilter} onValueChange={(v: any) => setStatusFilter(v)}>
-              <SelectTrigger className="bg-[var(--bg)]">
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Todos</SelectItem>
-                {Object.entries(VEHICLE_STATUS_LABELS).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>{v}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </Card>
+      <div className="bg-[var(--card)] p-4 rounded-xl border border-[var(--border)] shadow-sm">
+        <SmartFilter config={vehicleFilters} />
+      </div>
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">

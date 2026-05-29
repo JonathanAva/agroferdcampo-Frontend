@@ -4,6 +4,7 @@ import {
   CreditCard, DollarSign, AlertCircle, Plus, Eye, History, Users as UsersIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useSearchParams } from 'react-router';
 
 import { creditService, CreditSale, CreditSummary, CreditPayment, RegisterPaymentDto, GroupedCreditCustomer } from '../services/credit.service';
 import { Button } from '../components/ui/button';
@@ -16,6 +17,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '../components/ui/label';
 import { NumberInput } from '../components/ui/number-input';
 import { SemaphoreBanner } from '../components/ui/semaphore-banner';
+import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
+
+const creditFilters: FilterConfig[] = [
+  { id: 'search', label: 'Buscar cliente...', type: 'text', placeholder: 'Nombre del cliente...' },
+  { id: 'status', label: 'Estado', type: 'category', options: [
+    { label: 'Pendiente', value: 'PENDIENTE' },
+    { label: 'Vencido', value: 'VENCIDO' },
+    { label: 'Pagado', value: 'PAGADO' }
+  ]}
+];
 
 let isAbonoSubmittingGlobal = false;
 
@@ -27,8 +38,9 @@ export function Credit() {
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
   
-  // Filters
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [searchParams] = useSearchParams();
+  const statusFilter = searchParams.get('status') || 'all';
+  const searchFilter = searchParams.get('search') || '';
   
   // Modals
   const [selectedGroup, setSelectedGroup] = useState<GroupedCreditCustomer | null>(null);
@@ -68,7 +80,7 @@ export function Credit() {
       fetchCredits();
     }, 300);
     return () => clearTimeout(timer);
-  }, [pagination.page, statusFilter]);
+  }, [pagination.page, statusFilter, searchFilter]);
 
   const fetchSummary = async () => {
     try {
@@ -84,6 +96,7 @@ export function Credit() {
     try {
       const filters: any = { page: pagination.page, limit: pagination.limit };
       if (statusFilter !== 'all') filters.status = statusFilter;
+      if (searchFilter) filters.search = searchFilter;
 
       const res = await creditService.getGroupedCredits(filters);
       setGroupedCredits(res.data || []);
@@ -260,24 +273,9 @@ export function Credit() {
         ]}
       />
 
-      <Card className="p-4 border-[var(--border)] bg-[var(--card)] shadow-sm">
-        <div className="flex flex-col md:flex-row gap-4 items-end">
-          <div className="flex-1 w-full space-y-1.5">
-            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Estado</Label>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="bg-[var(--bg)]">
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="PENDIENTE">Pendiente</SelectItem>
-                <SelectItem value="VENCIDO">Vencido</SelectItem>
-                <SelectItem value="PAGADO">Pagado</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </Card>
+      <div className="bg-[var(--card)] p-4 rounded-xl border border-[var(--border)] shadow-sm">
+        <SmartFilter config={creditFilters} />
+      </div>
 
       <div className="rounded-xl border overflow-hidden shadow-sm bg-[var(--card)] border-[var(--border)] flex-1 flex flex-col min-h-0">
         <div className="overflow-x-auto flex-1">

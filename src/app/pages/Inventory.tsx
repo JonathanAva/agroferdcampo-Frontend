@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Package,
   Search,
@@ -15,7 +15,7 @@ import {
   ArrowDownLeft,
   Plus,
 } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { apiRequest } from "../config/api";
 
 import { useAuth } from "../context/AuthContext";
@@ -23,6 +23,8 @@ import { toast } from "sonner";
 import { cn } from "../components/ui/utils";
 import { Button } from "../components/ui/button";
 import { StateCards } from "../components/ui/state-cards";
+import { SmartFilter, FilterConfig } from "../components/ui/smart-filter";
+
 import { Badge } from "../components/ui/badge";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -106,10 +108,21 @@ export function Inventory() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState<
-    "all" | "active" | "low" | "critical"
-  >("all");
+
+  const [searchParams] = useSearchParams();
+  const searchTerm = searchParams.get('search') || '';
+  const filterStatus = (searchParams.get('status') as "all" | "active" | "low" | "critical") || "all";
+  const filterBranch = searchParams.get('branch') || 'all';
+
+  const inventoryFilters: FilterConfig[] = useMemo(() => [
+    { id: 'search', label: 'Buscar producto...', type: 'text', placeholder: 'Buscar por nombre, código o categoría...' },
+    { id: 'branch', label: 'Sucursal', type: 'category', options: branches.map(b => ({ label: b.name, value: b.id.toString() })) },
+    { id: 'status', label: 'Estado', type: 'category', options: [
+      { label: 'En Stock (Normal)', value: 'active' },
+      { label: 'Stock Bajo', value: 'low' },
+      { label: 'Crítico / Sin Stock', value: 'critical' }
+    ]}
+  ], [branches]);
 
   // 3. Modals state
   const [isAdjustOpen, setIsAdjustOpen] = useState(false);
@@ -324,9 +337,10 @@ export function Inventory() {
         .toLowerCase()
         .includes(searchTerm.toLowerCase());
 
-    const matchesFilter = filterStatus === "all" || status === filterStatus;
+    const matchesStatus = filterStatus === "all" || status === filterStatus;
+    const matchesBranch = filterBranch === "all" || String(item.branchId) === filterBranch;
 
-    return matchesSearch && matchesFilter;
+    return matchesSearch && matchesStatus && matchesBranch;
   });
 
   const totalItemsCount = inventory.length;
@@ -565,37 +579,9 @@ export function Inventory() {
       </div>
 
       {/* Search & Filters */}
-      <Card className="p-4 mb-6 border-[var(--border)] bg-[var(--card)] shadow-sm">
-        <div className="flex flex-col md:flex-row items-center gap-4">
-          <div className="flex-1 flex items-center gap-3 px-4 py-1 rounded-xl border border-[var(--border)] bg-[var(--bg)] transition-all focus-within:ring-2 focus-within:ring-[var(--primary)]/20">
-            <Search size={20} className="text-[var(--text-sec)]" />
-            <Input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por nombre, código o categoría..."
-              className="border-none bg-transparent shadow-none focus-visible:ring-0 text-[var(--text-main)]"
-            />
-          </div>
-
-          <div className="flex items-center gap-3">
-            <Select
-              value={filterStatus}
-              onValueChange={(v: any) => setFilterStatus(v)}
-            >
-              <SelectTrigger className="w-[200px] h-10 rounded-xl bg-[var(--bg)] border-[var(--border)]">
-                <SelectValue placeholder="Filtrar por estado" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los estados</SelectItem>
-                <SelectItem value="active">En Stock (Normal)</SelectItem>
-                <SelectItem value="low">Stock Bajo</SelectItem>
-                <SelectItem value="critical">Crítico / Sin Stock</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </Card>
+      <div className="mb-6 bg-[var(--card)] p-4 rounded-xl border border-[var(--border)] shadow-sm">
+        <SmartFilter config={inventoryFilters} />
+      </div>
 
       {/* Inventory Table */}
       <div

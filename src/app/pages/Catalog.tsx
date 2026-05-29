@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Store,
   Search,
@@ -9,7 +9,7 @@ import {
   ToggleLeft,
   ToggleRight,
 } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { apiRequest } from "../config/api";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
@@ -49,6 +49,7 @@ import { Card } from "../components/ui/card";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { SmartFilter, FilterConfig } from "../components/ui/smart-filter";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface ProductPrice {
@@ -144,10 +145,19 @@ export function Catalog() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showInactive, setShowInactive] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
+  const [searchParams] = useSearchParams();
+
+  const searchTerm = searchParams.get('search') || '';
+  const showInactive = searchParams.get('showInactive') === 'true';
+  const categoryFilter = searchParams.get('category') || 'all';
+
+  const catalogFilters: FilterConfig[] = useMemo(() => [
+    { id: 'search', label: 'Buscar producto...', type: 'text', placeholder: 'Buscar por nombre, código o categoría...' },
+    { id: 'category', label: 'Categoría', type: 'category', options: categories.map(c => ({ label: c.name, value: c.id.toString() })) },
+    { id: 'showInactive', label: 'Ver inactivos', type: 'boolean' }
+  ], [categories]);
 
   // Form state
   const [editingProduct, setEditingProduct] = useState<CatalogProduct | null>(
@@ -389,9 +399,10 @@ export function Catalog() {
 
   const filtered = products.filter(
     (p) =>
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (categoryFilter === 'all' || p.category?.id.toString() === categoryFilter) &&
+      (p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.internalCode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.category?.name.toLowerCase().includes(searchTerm.toLowerCase()),
+      p.category?.name.toLowerCase().includes(searchTerm.toLowerCase())),
   );
 
   if (loading) {
@@ -475,34 +486,9 @@ export function Catalog() {
       </div>
 
       {/* Search & Filters */}
-      <Card className="p-4 mb-6 border-[var(--border)] bg-[var(--card)] shadow-sm">
-        <div className="flex flex-col md:flex-row items-center gap-4">
-          <div className="flex-1 flex items-center gap-3 px-4 py-1 rounded-xl border border-[var(--border)] bg-[var(--bg)] transition-all focus-within:ring-2 focus-within:ring-[var(--primary)]/20">
-            <Search size={20} className="text-[var(--text-sec)]" />
-            <Input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por nombre, código o categoría..."
-              className="border-none bg-transparent shadow-none focus-visible:ring-0 text-[var(--text-main)]"
-            />
-          </div>
-
-          <div className="flex items-center gap-3 bg-[var(--bg)] px-4 py-2 rounded-xl border border-[var(--border)]">
-            <Label
-              htmlFor="show-inactive"
-              className="text-sm font-bold cursor-pointer text-[var(--text-sec)]"
-            >
-              Ver inactivos
-            </Label>
-            <Switch
-              id="show-inactive"
-              checked={showInactive}
-              onCheckedChange={setShowInactive}
-            />
-          </div>
-        </div>
-      </Card>
+      <div className="mb-6 bg-[var(--card)] p-4 rounded-xl border border-[var(--border)] shadow-sm">
+        <SmartFilter config={catalogFilters} />
+      </div>
 
       {/* Table Section */}
       <Table>

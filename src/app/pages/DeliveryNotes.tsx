@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, Eye, Filter, Calendar as CalendarIcon, 
   TruckIcon, CheckCircle2, Trash2, X, PackageCheck, Plus, Mail, MapPin, PenTool, BarChart3
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useSearchParams } from 'react-router';
 
 import { deliveryNotesService, DeliveryNoteResponse, DeliverDeliveryNoteDto, CreateDeliveryNoteDto, UpdateDeliveryNoteDto } from '../services/delivery-notes.service';
 import { searchProducts } from '../services/sales.service';
@@ -22,18 +23,21 @@ import { Switch } from '../components/ui/switch';
 import { Checkbox } from '../components/ui/checkbox';
 import { useVehicles } from '../hooks/useVehicles';
 import { apiRequest } from '../config/api';
+import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
 
 export function DeliveryNotes() {
   const [notes, setNotes] = useState<DeliveryNoteResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
   
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [dateFilter, setDateFilter] = useState('');
-  const [vehicleFilter, setVehicleFilter] = useState('all');
-  const [routeFilter, setRouteFilter] = useState('all');
-  const [withTransportFilter, setWithTransportFilter] = useState<boolean | 'all'>('all');
+  const [searchParams] = useSearchParams();
+  const statusFilter = searchParams.get('status') || 'all';
+  const typeFilter = searchParams.get('type') || 'all';
+  const dateFilter = searchParams.get('date') || '';
+  const vehicleFilter = searchParams.get('vehicle') || 'all';
+  const routeFilter = searchParams.get('route') || 'all';
+  const transportQuery = searchParams.get('transport');
+  const withTransportFilter = transportQuery === 'true' ? true : (transportQuery === 'false' ? false : 'all');
 
   const { vehicles } = useVehicles({ status: 'ALL' });
   const [routesList, setRoutesList] = useState<any[]>([]);
@@ -63,6 +67,22 @@ export function DeliveryNotes() {
   const [observationText, setObservationText] = useState('');
   const [closingNote, setClosingNote] = useState<any>(null);
   const [closing, setClosing] = useState(false);
+
+  const deliveryNotesFilters: FilterConfig[] = useMemo(() => [
+    { id: 'status', label: 'Estado', type: 'category', options: [
+      { label: 'Emitido', value: 'EMITIDO' },
+      { label: 'Entregado', value: 'ENTREGADO' },
+      { label: 'Con Diferencias', value: 'CON_DIFERENCIAS' },
+      { label: 'Cancelado', value: 'CANCELADO' }
+    ]},
+    { id: 'transport', label: 'Transporte', type: 'category', options: [
+      { label: 'Con Transporte', value: 'true' },
+      { label: 'Sin Transporte', value: 'false' }
+    ]},
+    { id: 'vehicle', label: 'Vehículo', type: 'category', options: Array.isArray(vehicles) ? vehicles.map((v: any) => ({ label: v.plate, value: v.id.toString() })) : [] },
+    { id: 'route', label: 'Ruta', type: 'category', options: Array.isArray(routesList) ? routesList.map((r: any) => ({ label: r.name, value: r.id.toString() })) : [] },
+    { id: 'date', label: 'Fecha Específica', type: 'date_range' }
+  ], [vehicles, routesList]);
 
   useEffect(() => {
     fetchRoutes();
@@ -126,15 +146,7 @@ export function DeliveryNotes() {
     }
   };
 
-  const resetFilters = () => {
-    setStatusFilter('all');
-    setTypeFilter('all');
-    setDateFilter('');
-    setVehicleFilter('all');
-    setRouteFilter('all');
-    setWithTransportFilter('all');
-    setPagination(p => ({ ...p, page: 1 }));
-  };
+
 
   const handleOpenDetail = async (note: DeliveryNoteResponse) => {
     try {
@@ -337,64 +349,9 @@ export function DeliveryNotes() {
         />
       </div>
 
-      <Card className="p-4 border-[var(--border)] bg-[var(--card)] shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Estado</Label>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="bg-[var(--bg)]"><SelectValue placeholder="Todos" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="EMITIDO">Emitido</SelectItem>
-                <SelectItem value="ENTREGADO">Entregado</SelectItem>
-                <SelectItem value="CON_DIFERENCIAS">Con Diferencias</SelectItem>
-                <SelectItem value="CANCELADO">Cancelado</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Transporte</Label>
-            <Select value={withTransportFilter.toString()} onValueChange={(v) => setWithTransportFilter(v === 'all' ? 'all' : v === 'true')}>
-              <SelectTrigger className="bg-[var(--bg)]"><SelectValue placeholder="Todos" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="true">Con Transporte</SelectItem>
-                <SelectItem value="false">Sin Transporte</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Vehículo</Label>
-            <Select value={vehicleFilter} onValueChange={setVehicleFilter}>
-              <SelectTrigger className="bg-[var(--bg)]"><SelectValue placeholder="Todos" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                {(Array.isArray(vehicles) ? vehicles : []).map(v => <SelectItem key={v.id} value={v.id.toString()}>{v.plate}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Ruta</Label>
-            <Select value={routeFilter} onValueChange={setRouteFilter}>
-              <SelectTrigger className="bg-[var(--bg)]"><SelectValue placeholder="Todos" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
-                {(Array.isArray(routesList) ? routesList : []).map(r => <SelectItem key={r.id} value={r.id.toString()}>{r.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold text-[var(--text-sec)] uppercase">Fecha</Label>
-            <div className="relative">
-              <CalendarIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-sec)]" />
-              <Input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="pl-9 bg-[var(--bg)]" />
-            </div>
-          </div>
-          <Button variant="outline" onClick={resetFilters} className="font-bold">
-            <Filter size={16} className="mr-2" /> Limpiar
-          </Button>
-        </div>
-      </Card>
+      <div className="mb-4 bg-[var(--card)] p-4 rounded-xl border border-[var(--border)] shadow-sm">
+        <SmartFilter config={deliveryNotesFilters} />
+      </div>
 
       <div className="rounded-xl border overflow-hidden shadow-sm bg-[var(--card)] border-[var(--border)] flex-1 flex flex-col min-h-0">
         <div className="overflow-x-auto flex-1">
