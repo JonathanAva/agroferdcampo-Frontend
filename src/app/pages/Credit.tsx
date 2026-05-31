@@ -6,7 +6,7 @@ import {
 import { toast } from 'sonner';
 import { useSearchParams } from 'react-router';
 
-import { creditService, CreditSale, CreditSummary, CreditPayment, RegisterPaymentDto, GroupedCreditCustomer, CreditDocument, CreditDocumentStatus, CreateCreditDocumentDto } from '../services/credit.service';
+import { creditService, CreditSale, CreditSummary, CreditPayment, RegisterPaymentDto, GroupedCreditCustomer } from '../services/credit.service';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
@@ -51,7 +51,7 @@ export function Credit() {
   const [selectedSpecificCredit, setSelectedSpecificCredit] = useState<CreditSale | null>(null);
   const [specificPayments, setSpecificPayments] = useState<CreditPayment[]>([]);
   const [specificPaymentsPage, setSpecificPaymentsPage] = useState(1);
-  const [specificDetailTab, setSpecificDetailTab] = useState<'abonos' | 'documentos'>('abonos');
+  const [specificDetailTab, setSpecificDetailTab] = useState<'abonos'>('abonos');
 
   // Inner Modal Filters
   const [innerStatusFilter, setInnerStatusFilter] = useState('all');
@@ -76,17 +76,7 @@ export function Credit() {
   });
   const [savingPayment, setSavingPayment] = useState(false);
 
-  // Credit Documents State
-  const [creditDocuments, setCreditDocuments] = useState<CreditDocument[]>([]);
-  const [loadingDocs, setLoadingDocs] = useState(false);
-  const [addDocModalOpen, setAddDocModalOpen] = useState(false);
-  const [newDoc, setNewDoc] = useState<CreateCreditDocumentDto>({
-    documentType: 'DUI',
-    documentName: '',
-    status: 'SOLICITADO',
-    notes: '',
-  });
-  const [savingDoc, setSavingDoc] = useState(false);
+
 
   useEffect(() => {
     fetchSummary();
@@ -146,72 +136,14 @@ export function Credit() {
       setSelectedSpecificCredit(sale);
       setSpecificPayments(Array.isArray(creditPayments) ? creditPayments : []);
       setSpecificPaymentsPage(1);
-      setSpecificDetailTab('abonos');
-      fetchCreditDocuments(sale.id);
+      setSpecificPaymentsPage(1);
       setSpecificDetailModalOpen(true);
     } catch (e) {
       toast.error('Error al cargar detalle del crédito');
     }
   };
 
-  const fetchCreditDocuments = async (creditSaleId: number) => {
-    setLoadingDocs(true);
-    try {
-      const docs = await creditService.getDocuments(creditSaleId);
-      setCreditDocuments(Array.isArray(docs) ? docs : []);
-    } catch {
-      setCreditDocuments([]);
-    } finally {
-      setLoadingDocs(false);
-    }
-  };
 
-  const handleToggleDocStatus = async (doc: CreditDocument) => {
-    const nextStatus: CreditDocumentStatus =
-      doc.status === 'SOLICITADO' ? 'RECIBIDO' :
-      doc.status === 'RECIBIDO' ? 'RECHAZADO' : 'SOLICITADO';
-    try {
-      await creditService.updateDocument(doc.id, {
-        status: nextStatus,
-        receivedAt: nextStatus === 'RECIBIDO' ? new Date().toISOString() : undefined,
-      });
-      toast.success(`Documento marcado como ${nextStatus}`);
-      if (selectedSpecificCredit) fetchCreditDocuments(selectedSpecificCredit.id);
-    } catch {
-      toast.error('Error al actualizar documento');
-    }
-  };
-
-  const handleSaveDoc = async () => {
-    if (!selectedSpecificCredit) return;
-    if (!newDoc.documentName.trim()) {
-      toast.error('El nombre del documento es obligatorio');
-      return;
-    }
-    setSavingDoc(true);
-    try {
-      await creditService.createDocument(selectedSpecificCredit.id, newDoc);
-      toast.success('Documento agregado');
-      setAddDocModalOpen(false);
-      setNewDoc({ documentType: 'DUI', documentName: '', status: 'SOLICITADO', notes: '' });
-      fetchCreditDocuments(selectedSpecificCredit.id);
-    } catch (e: any) {
-      toast.error(e.message || 'Error al guardar documento');
-    } finally {
-      setSavingDoc(false);
-    }
-  };
-
-  const handleDeleteDoc = async (docId: number) => {
-    if (!confirm('¿Eliminar este documento?')) return;
-    try {
-      await creditService.deleteDocument(docId);
-      toast.success('Documento eliminado');
-      if (selectedSpecificCredit) fetchCreditDocuments(selectedSpecificCredit.id);
-    } catch (e: any) {
-      toast.error(e.message || 'No se puede eliminar un documento ya recibido');
-    }
-  };
 
   const handleOpenPayment = (credit: CreditSale) => {
     const remaining = Number(credit.remainingAmount) || 0;
@@ -697,21 +629,10 @@ export function Credit() {
                   <History size={16} />
                   Historial de Abonos
                 </button>
-                <button
-                  className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors flex items-center justify-center gap-2 ${
-                    specificDetailTab === 'documentos'
-                      ? 'border-[var(--primary)] text-[var(--primary)]'
-                      : 'border-transparent text-[var(--text-sec)] hover:text-[var(--text-main)]'
-                  }`}
-                  onClick={() => setSpecificDetailTab('documentos')}
-                >
-                  <FileText size={16} />
-                  Documentos Formales
-                </button>
+
               </div>
 
               <div className="p-6 overflow-y-auto flex-1 custom-scrollbar min-h-0">
-                {specificDetailTab === 'abonos' ? (
                   <div className="border rounded-xl overflow-hidden shadow-sm bg-[var(--card)]">
                     <Table>
                       <TableHeader>
@@ -775,100 +696,6 @@ export function Credit() {
                       </div>
                     )}
                   </div>
-                ) : (
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-bold text-lg flex items-center gap-2">
-                        <FileText size={18} /> Documentos Solicitados
-                      </h3>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setAddDocModalOpen(true)}
-                        className="gap-1 font-bold"
-                      >
-                        <Plus size={14} /> Solicitar Documento
-                      </Button>
-                    </div>
-
-                    {loadingDocs ? (
-                      <p className="text-sm text-[var(--text-sec)] animate-pulse">Cargando documentos...</p>
-                    ) : creditDocuments.length === 0 ? (
-                      <div className="border rounded-xl p-6 text-center text-[var(--text-sec)] bg-[var(--bg)]/50">
-                        <FileText size={28} className="mx-auto mb-2 opacity-30" />
-                        <p className="text-sm font-medium">No hay documentos solicitados para este crédito</p>
-                      </div>
-                    ) : (
-                      <div className="border rounded-xl overflow-hidden shadow-sm bg-[var(--card)]">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Tipo</TableHead>
-                              <TableHead>Nombre</TableHead>
-                              <TableHead>Estado</TableHead>
-                              <TableHead>Notas</TableHead>
-                              <TableHead>Solicitado</TableHead>
-                              <TableHead className="text-center">Acciones</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {creditDocuments.map(doc => (
-                              <TableRow key={doc.id}>
-                                <TableCell>
-                                  <Badge variant="secondary" className="text-xs font-bold">
-                                    {doc.documentType.replace(/_/g, ' ')}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="font-medium text-sm">{doc.documentName}</TableCell>
-                                <TableCell>
-                                  {doc.status === 'RECIBIDO' && (
-                                    <Badge variant="success">Recibido</Badge>
-                                  )}
-                                  {doc.status === 'SOLICITADO' && (
-                                    <Badge variant="warning">Solicitado</Badge>
-                                  )}
-                                  {doc.status === 'RECHAZADO' && (
-                                    <Badge variant="destructive">Rechazado</Badge>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-xs text-[var(--text-sec)] max-w-[160px] truncate">
-                                  {doc.notes || '-'}
-                                </TableCell>
-                                <TableCell className="text-xs text-[var(--text-sec)]">
-                                  {new Date(doc.requestedAt).toLocaleDateString()}
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <div className="flex justify-center gap-1">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      title="Cambiar estado"
-                                      onClick={() => handleToggleDocStatus(doc)}
-                                      className="text-[var(--primary)] hover:bg-[var(--primary)]/10"
-                                    >
-                                      <RefreshCcw size={14} />
-                                    </Button>
-                                    {doc.status === 'SOLICITADO' && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        title="Eliminar"
-                                        onClick={() => handleDeleteDoc(doc.id)}
-                                        className="text-rose-500 hover:bg-rose-500/10"
-                                      >
-                                        <Trash2 size={14} />
-                                      </Button>
-                                    )}
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             </>
           )}
@@ -967,80 +794,7 @@ export function Credit() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL: AGREGAR DOCUMENTO */}
-      <Dialog open={addDocModalOpen} onOpenChange={setAddDocModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Solicitar Documento</DialogTitle>
-            <DialogDescription>
-              Registra un documento requerido para formalizar este crédito.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Tipo de Documento</Label>
-              <Select
-                value={newDoc.documentType}
-                onValueChange={(v: any) => setNewDoc({ ...newDoc, documentType: v })}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="DUI">DUI (Documento Único de Identidad)</SelectItem>
-                  <SelectItem value="NIT">NIT</SelectItem>
-                  <SelectItem value="COMPROBANTE_INGRESOS">Comprobante de Ingresos</SelectItem>
-                  <SelectItem value="RECIBO_SERVICIOS">Recibo de Servicios (luz/agua)</SelectItem>
-                  <SelectItem value="CARTA_TRABAJO">Carta de Trabajo</SelectItem>
-                  <SelectItem value="ESTADO_CUENTA_BANCO">Estado de Cuenta Bancario</SelectItem>
-                  <SelectItem value="ESCRITURA_PROPIEDAD">Escritura de Propiedad</SelectItem>
-                  <SelectItem value="FIADOR">Fiador</SelectItem>
-                  <SelectItem value="REFERENCIA_COMERCIAL">Referencia Comercial</SelectItem>
-                  <SelectItem value="FOTO_NEGOCIO">Foto del Negocio</SelectItem>
-                  <SelectItem value="OTRO">Otro</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Nombre o Descripción del Documento</Label>
-              <Input
-                placeholder="Ej. DUI titular del crédito"
-                value={newDoc.documentName}
-                onChange={e => setNewDoc({ ...newDoc, documentName: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Estado Inicial</Label>
-              <Select
-                value={newDoc.status}
-                onValueChange={(v: any) => setNewDoc({ ...newDoc, status: v })}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="SOLICITADO">Solicitado (pendiente de recibir)</SelectItem>
-                  <SelectItem value="RECIBIDO">Recibido (ya lo tengo)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Notas (Opcional)</Label>
-              <Input
-                placeholder="Ej. Enviar copia y original"
-                value={newDoc.notes || ''}
-                onChange={e => setNewDoc({ ...newDoc, notes: e.target.value })}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddDocModalOpen(false)}>Cancelar</Button>
-            <Button
-              onClick={handleSaveDoc}
-              disabled={savingDoc}
-              style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
-            >
-              {savingDoc ? 'Guardando...' : 'Solicitar Documento'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
     </div>
   );
 }

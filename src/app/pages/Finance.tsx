@@ -9,6 +9,7 @@ import {
 import { 
   pettyCashService, PettyCashStatus, PettyCashMovement, PettyCashReplenishment 
 } from '../services/petty-cash.service';
+import { cashShiftsService } from '../services/cash-shifts.service';
 import { useAuth } from '../context/AuthContext';
 import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
@@ -41,6 +42,24 @@ const financeFilters: FilterConfig[] = [
 export function Finance() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'general' | 'petty'>('general');
+
+  // --- SHIFT STATE ---
+  const [hasActiveShift, setHasActiveShift] = useState(false);
+  const [checkingShift, setCheckingShift] = useState(true);
+
+  useEffect(() => {
+    const checkShift = async () => {
+      try {
+        const shift = await cashShiftsService.getActiveShift();
+        setHasActiveShift(!!shift);
+      } catch {
+        setHasActiveShift(false);
+      } finally {
+        setCheckingShift(false);
+      }
+    };
+    checkShift();
+  }, []);
 
   // --- GENERAL CASH STATE ---
   const [generalSummary, setGeneralSummary] = useState<GeneralCashSummary | null>(null);
@@ -323,7 +342,12 @@ export function Finance() {
             <div className="flex-1 bg-[var(--card)] p-4 rounded-xl border border-[var(--border)] shadow-sm">
               <SmartFilter config={financeFilters} />
             </div>
-            <Button onClick={() => setShowAddGeneralModal(true)} className="font-bold whitespace-nowrap h-fit">
+            <Button 
+              onClick={() => setShowAddGeneralModal(true)} 
+              disabled={checkingShift || !hasActiveShift}
+              title={!hasActiveShift ? "Debes abrir caja para registrar movimientos" : ""}
+              className="font-bold whitespace-nowrap h-fit"
+            >
               Registrar Movimiento
             </Button>
           </div>
