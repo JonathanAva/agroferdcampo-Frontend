@@ -68,7 +68,47 @@ export interface CashSummaryResponse {
   totalDifference: number;
 }
 
+export interface ManagerDashboardResponse {
+  ventas: {
+    totalMes: number;
+    totalMesAnterior: number;
+    trendPct: number;
+    ticketPromedio: number;
+    ticketPromedioAnterior: number;
+    transaccionesMes: number;
+  };
+  cartera: {
+    totalPorCobrar: number;
+    creditosVencidosCount: number;
+    creditosVencidosAmount: number;
+    cobrosHoy: number;
+    cobrosHoyCount: number;
+  };
+  payables: {
+    totalPorPagar: number;
+    comprasPendientesCount: number;
+  };
+  operaciones: {
+    cotizacionesPendientes: number;
+    tasaConversionPct: number;
+    devolucionesMesAmount: number;
+    devolucionesMesCount: number;
+    rutasActivas: number;
+  };
+  rrhh: {
+    empleadosActivos: number;
+    asistenciaHoyPct: number;
+    asistenciaHoyPresentes: number;
+    asistenciaHoyTotal: number;
+    permisosPendientes: number;
+  };
+}
+
 export const reportsService = {
+  getManagerDashboard: async (): Promise<ManagerDashboardResponse> => {
+    return await apiRequest<ManagerDashboardResponse>('/reports/dashboard/manager');
+  },
+
   getDailySales: async (date?: string): Promise<DailySalesResponse> => {
     const params = new URLSearchParams();
     if (date) params.set('date', date);
@@ -112,9 +152,40 @@ export const reportsService = {
     return await apiRequest<CashSummaryResponse>(`/reports/cash/summary?${params.toString()}`);
   },
 
+  getPurchasesByPeriod: async (startDate: string, endDate: string, status?: string): Promise<any[]> => {
+    const params = new URLSearchParams({ startDate, endDate });
+    if (status) params.set('status', status);
+    return await apiRequest<any[]>(`/reports/purchases/period?${params.toString()}`);
+  },
+
+  getInventoryMovements: async (startDate: string, endDate: string, type?: string): Promise<any[]> => {
+    const params = new URLSearchParams({ startDate, endDate });
+    if (type) params.set('type', type);
+    return await apiRequest<any[]>(`/reports/inventory/movements?${params.toString()}`);
+  },
+
+  getSalesByCashier: async (startDate: string, endDate: string): Promise<any[]> => {
+    const params = new URLSearchParams({ startDate, endDate });
+    return await apiRequest<any[]>(`/reports/sales/by-cashier?${params.toString()}`);
+  },
+
+  getReturns: async (startDate: string, endDate: string): Promise<any[]> => {
+    const params = new URLSearchParams({ startDate, endDate });
+    return await apiRequest<any[]>(`/reports/returns/period?${params.toString()}`);
+  },
+
+  getCashDetail: async (startDate: string, endDate: string): Promise<any[]> => {
+    const params = new URLSearchParams({ startDate, endDate });
+    return await apiRequest<any[]>(`/reports/cash/detail?${params.toString()}`);
+  },
+
   downloadReport: async (endpointPath: string, filename: string): Promise<void> => {
     const token = localStorage.getItem('agro-token');
-    const url = `${API_BASE_URL}/reports/${endpointPath}`;
+
+    // Si el path empieza con '../' es una ruta relativa fuera de /reports/
+    const url = endpointPath.startsWith('../')
+      ? `${API_BASE_URL}/${endpointPath.replace('../', '')}`
+      : `${API_BASE_URL}/reports/${endpointPath}`;
 
     const headers: any = {};
     if (token) {
@@ -123,7 +194,8 @@ export const reportsService = {
 
     const response = await fetch(url, { headers });
     if (!response.ok) {
-      throw new Error(`Error al descargar reporte (${response.status}): ${response.statusText}`);
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.message || `Error al descargar reporte (${response.status}): ${response.statusText}`);
     }
 
     const blob = await response.blob();
