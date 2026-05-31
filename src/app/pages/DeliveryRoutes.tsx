@@ -206,10 +206,16 @@ export default function DeliveryRoutes({ hideTitle }: { hideTitle?: boolean } = 
     // --- PÁGINA 1: HOJA DE RUTA PRINCIPAL ---
     pagesHtml += `
       <div class="header">
-        <img src="${logoUrl}" class="header-logo" alt="Logo" />
+        <div class="logo-container">
+          <img src="${logoUrl}" class="header-logo" alt="Logo" />
+          <div class="logo-text">
+            <h2>Agroferr D'Campo</h2>
+            <p>Sistema de Logística y Reparto</p>
+          </div>
+        </div>
         <div class="header-title">
-          <h1 class="text-xl font-black uppercase">Hoja de Ruta</h1>
-          <p class="text-sm text-gray mt-1">Generada el ${new Date().toLocaleDateString('es-SV')} a las ${new Date().toLocaleTimeString('es-SV')}</p>
+          <h1 class="text-xl font-black uppercase" style="color: var(--accent);">Hoja de Ruta</h1>
+          <p class="text-sm text-gray mt-1 font-bold">Generada el ${new Date().toLocaleDateString('es-SV')} a las ${new Date().toLocaleTimeString('es-SV')}</p>
         </div>
       </div>
 
@@ -275,10 +281,16 @@ export default function DeliveryRoutes({ hideTitle }: { hideTitle?: boolean } = 
           <div class="page-break"></div>
           
           <div class="header">
-            <img src="${logoUrl}" class="header-logo" alt="Logo" />
+            <div class="logo-container">
+              <img src="${logoUrl}" class="header-logo" alt="Logo" />
+              <div class="logo-text">
+                <h2>Agroferr D'Campo</h2>
+                <p>Sistema de Facturación y Despacho</p>
+              </div>
+            </div>
             <div class="header-title">
-              <h1 class="text-xl font-black uppercase">${isSale ? 'Factura de Venta' : 'Albarán de Despacho'}</h1>
-              <p class="text-sm text-gray mt-1">Ruta: ${route.name} | Doc: DN-${note.id}</p>
+              <h1 class="text-xl font-black uppercase" style="color: var(--accent);">${isSale ? 'Factura de Venta' : 'Albarán de Despacho'}</h1>
+              <p class="text-sm text-gray mt-1 font-bold">Ruta: ${route.name} | Doc: DN-${note.id}</p>
             </div>
           </div>
 
@@ -360,15 +372,16 @@ export default function DeliveryRoutes({ hideTitle }: { hideTitle?: boolean } = 
         <title>Impresión de Ruta - ${route.name}</title>
         <style>
           :root {
-            --primary: #0f172a;
-            --secondary: #64748b;
-            --accent: #2563eb;
-            --border: #e2e8f0;
+            --primary: #111827;
+            --secondary: #6b7280;
+            --accent: #d97706; /* Amber 600 */
+            --border: #e5e7eb;
+            --bg-light: #fffbeb; /* Amber 50 */
           }
           body { 
             font-family: 'Inter', system-ui, -apple-system, sans-serif; 
             margin: 0; 
-            padding: 15mm 20mm; /* El margen real lo damos al body para que no se corte */
+            padding: 15mm 20mm; 
             color: var(--primary);
             background: white;
             -webkit-print-color-adjust: exact;
@@ -376,7 +389,7 @@ export default function DeliveryRoutes({ hideTitle }: { hideTitle?: boolean } = 
           }
           @page { 
             size: letter; 
-            margin: 0; /* Quita el about:blank y fecha automática del navegador */
+            margin: 0; 
           }
           .page-break { page-break-before: always; }
           
@@ -400,11 +413,18 @@ export default function DeliveryRoutes({ hideTitle }: { hideTitle?: boolean } = 
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 3px solid var(--primary);
+            border-bottom: 3px solid var(--accent);
             padding-bottom: 16px;
             margin-bottom: 24px;
           }
-          .header-logo { height: 50px; object-fit: contain; }
+          .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+          }
+          .header-logo { height: 70px; object-fit: contain; }
+          .logo-text h2 { font-size: 18px; font-weight: 900; color: var(--primary); margin: 0; }
+          .logo-text p { font-size: 11px; color: var(--secondary); margin: 0; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
           .header-title { text-align: right; }
           
           .info-grid {
@@ -413,26 +433,27 @@ export default function DeliveryRoutes({ hideTitle }: { hideTitle?: boolean } = 
             gap: 16px;
             margin-bottom: 32px;
             padding: 16px;
-            background: #f8fafc;
+            background: #fafafa;
             border-radius: 8px;
             border: 1px solid var(--border);
+            border-left: 4px solid var(--accent);
           }
           .info-item { display: flex; flex-direction: column; gap: 4px; }
           .info-label { font-size: 10px; font-weight: 800; color: var(--secondary); text-transform: uppercase; letter-spacing: 0.5px; }
-          .info-value { font-size: 14px; font-weight: 600; }
+          .info-value { font-size: 14px; font-weight: 700; color: var(--primary); }
 
           /* Tables */
           table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 30px; font-size: 13px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
           th { 
-            background: #f1f5f9; 
-            color: var(--primary); 
-            font-weight: 800; 
+            background: #fef3c7; 
+            color: #b45309; 
+            font-weight: 900; 
             text-transform: uppercase; 
-            font-size: 11px;
-            letter-spacing: 0.5px;
+            font-size: 10px;
+            letter-spacing: 1px;
             padding: 12px 14px; 
             text-align: left; 
-            border-bottom: 2px solid var(--border);
+            border-bottom: 2px solid #fcd34d;
           }
           th.right { text-align: right; }
           th.center { text-align: center; }
@@ -465,11 +486,12 @@ export default function DeliveryRoutes({ hideTitle }: { hideTitle?: boolean } = 
           }
           .totals-row:last-child { border-bottom: none; }
           .totals-row.grand-total {
-            background: #f1f5f9;
-            color: var(--primary);
+            background: #fef3c7;
+            color: #b45309;
             font-size: 16px;
             font-weight: 900;
           }
+          .clearfix::after { content: ""; clear: both; display: table; }
 
           /* Signatures */
           .signatures {
@@ -477,22 +499,14 @@ export default function DeliveryRoutes({ hideTitle }: { hideTitle?: boolean } = 
             justify-content: space-around;
             margin-top: 60px;
             page-break-inside: avoid;
-            clear: both;
           }
           .signature-line {
-            width: 200px;
+            width: 250px;
+            border-top: 2px solid var(--primary);
             text-align: center;
-            border-top: 1px solid #94a3b8;
             padding-top: 8px;
-            font-size: 12px;
             font-weight: 700;
-          }
-          
-          /* Clearfix for float */
-          .clearfix::after {
-            content: "";
-            clear: both;
-            display: table;
+            font-size: 12px;
           }
         </style>
       </head>
