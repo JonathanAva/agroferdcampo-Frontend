@@ -28,8 +28,54 @@ import { useVehicles } from '../hooks/useVehicles';
 import { apiRequest } from '../config/api';
 import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
 import { SignaturePad } from '../components/ui/signature/SignaturePad';
+import Vehicles from './Vehicles';
+import DeliveryRoutes from './DeliveryRoutes';
 
 export function DeliveryNotes() {
+  const [activeTab, setActiveTab] = useState<'albaranes' | 'flota' | 'rutas'>('albaranes');
+
+  return (
+    <div className="flex flex-col gap-6 h-full">
+      <div>
+        <h1 className="text-3xl font-bold text-[var(--text-main)]">Logística y Albaranes</h1>
+        <p className="text-[var(--text-sec)]">Gestiona albaranes, flota de vehículos y rutas de reparto.</p>
+      </div>
+
+      <div className="flex border-b border-[var(--border)] -mb-2">
+        <button
+          onClick={() => setActiveTab('albaranes')}
+          className={`px-6 py-3 font-bold text-sm transition-all border-b-2 -mb-[2px] cursor-pointer ${
+            activeTab === 'albaranes' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--text-sec)]'
+          }`}
+        >
+          Albaranes
+        </button>
+        <button
+          onClick={() => setActiveTab('flota')}
+          className={`px-6 py-3 font-bold text-sm transition-all border-b-2 -mb-[2px] cursor-pointer ${
+            activeTab === 'flota' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--text-sec)]'
+          }`}
+        >
+          Flota de Vehículos
+        </button>
+        <button
+          onClick={() => setActiveTab('rutas')}
+          className={`px-6 py-3 font-bold text-sm transition-all border-b-2 -mb-[2px] cursor-pointer ${
+            activeTab === 'rutas' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--text-sec)]'
+          }`}
+        >
+          Rutas de Reparto
+        </button>
+      </div>
+
+      {activeTab === 'albaranes' && <DeliveryNotesList />}
+      {activeTab === 'flota' && <Vehicles hideTitle={true} />}
+      {activeTab === 'rutas' && <DeliveryRoutes hideTitle={true} />}
+    </div>
+  );
+}
+
+function DeliveryNotesList() {
   const [notes, setNotes] = useState<DeliveryNoteResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
@@ -362,11 +408,7 @@ export function DeliveryNotes() {
 
   return (
     <div className="flex flex-col gap-6 h-full">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-[var(--text-main)]">Albaranes de Entrega</h1>
-          <p className="text-[var(--text-sec)]">Gestiona los despachos y entregas de mercadería.</p>
-        </div>
+      <div className="flex flex-col md:flex-row md:items-center justify-end gap-4">
         <div className="flex">
           <p className="text-xs text-[var(--text-sec)] italic">
             Los albaranes se generan automáticamente al confirmar ventas 

@@ -25,7 +25,7 @@ const vehicleFilters: FilterConfig[] = [
   { id: 'status', label: 'Estado', type: 'category', options: Object.entries(VEHICLE_STATUS_LABELS).map(([k, v]) => ({ label: v, value: k })) }
 ];
 
-export default function Vehicles() {
+export default function Vehicles({ hideTitle }: { hideTitle?: boolean } = {}) {
   const { user } = useAuth();
   const { branches } = useBranch();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -150,19 +150,23 @@ export default function Vehicles() {
   return (
     <div className="flex flex-col gap-6 h-full animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-[var(--text-main)]">Flota de Vehículos</h1>
-          <p className="text-[var(--text-sec)]">Gestiona camiones, furgones y pickups para entregas.</p>
+        {!hideTitle && (
+          <div>
+            <h1 className="text-3xl font-bold text-[var(--text-main)]">Flota de Vehículos</h1>
+            <p className="text-[var(--text-sec)]">Gestiona camiones, furgones y pickups para entregas.</p>
+          </div>
+        )}
+        <div className={hideTitle ? "w-full flex justify-end" : ""}>
+          <Button 
+            onClick={() => {
+              setEditingVehicle({ type: 'CAMION', branchId: user?.branchId });
+              setShowDialog(true);
+            }} 
+            className="font-bold gap-2 bg-[var(--primary)] text-white hover:bg-[var(--primary)]/90"
+          >
+            <Plus size={18} /> Agregar Vehículo
+          </Button>
         </div>
-        <Button 
-          onClick={() => {
-            setEditingVehicle({ type: 'CAMION', branchId: user?.branchId });
-            setShowDialog(true);
-          }} 
-          className="font-bold gap-2 bg-[var(--primary)] text-white hover:bg-[var(--primary)]/90"
-        >
-          <Plus size={18} /> Agregar Vehículo
-        </Button>
       </div>
 
       <div className="bg-[var(--card)] p-4 rounded-xl border border-[var(--border)] shadow-sm">

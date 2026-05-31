@@ -30,7 +30,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Checkbox } from '../components/ui/checkbox';
 import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
 
@@ -40,9 +39,10 @@ const deliveryRoutesFilters: FilterConfig[] = [
   { id: 'date', label: 'Fecha Específica', type: 'date_range' }
 ];
 
-export default function DeliveryRoutes() {
+export default function DeliveryRoutes({ hideTitle }: { hideTitle?: boolean } = {}) {
   const [routes, setRoutes] = useState<DeliveryRoute[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'list' | 'plan'>('list');
   
   const [searchParams] = useSearchParams();
   const searchFilter = searchParams.get('search') || '';
@@ -522,18 +522,34 @@ export default function DeliveryRoutes() {
 
   return (
     <div className="flex flex-col gap-6 h-full">
-      <div>
-        <h1 className="text-3xl font-bold text-[var(--text-main)]">Rutas de Reparto</h1>
-        <p className="text-[var(--text-sec)]">Planifica, asigna y controla los despachos diarios.</p>
+      {!hideTitle && (
+        <div>
+          <h1 className="text-3xl font-bold text-[var(--text-main)]">Rutas de Reparto</h1>
+          <p className="text-[var(--text-sec)]">Planifica, asigna y controla los despachos diarios.</p>
+        </div>
+      )}
+
+      <div className="flex border-b border-[var(--border)] mb-4">
+        <button
+          onClick={() => setActiveTab('list')}
+          className={`px-6 py-3 font-bold text-sm transition-all border-b-2 -mb-[1px] cursor-pointer ${
+            activeTab === 'list' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--text-sec)]'
+          }`}
+        >
+          Listado de Rutas
+        </button>
+        <button
+          onClick={() => setActiveTab('plan')}
+          className={`px-6 py-3 font-bold text-sm transition-all border-b-2 -mb-[1px] cursor-pointer ${
+            activeTab === 'plan' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--text-sec)]'
+          }`}
+        >
+          Planificar Nueva Ruta
+        </button>
       </div>
 
-      <Tabs defaultValue="list" className="flex-1 flex flex-col min-h-0">
-        <TabsList className="w-full md:w-auto bg-[var(--card)] border border-[var(--border)] p-1 h-auto">
-          <TabsTrigger value="list" className="py-2.5 px-6 font-bold text-sm">Listado de Rutas</TabsTrigger>
-          <TabsTrigger value="plan" className="py-2.5 px-6 font-bold text-sm">Planificar Nueva Ruta</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="list" className="flex-1 flex flex-col min-h-0 mt-4 border-0 p-0">
+      {activeTab === 'list' && (
+        <div className="flex-1 flex flex-col min-h-0">
           <div className="mb-4 bg-[var(--card)] p-4 rounded-xl border border-[var(--border)] shadow-sm">
             <SmartFilter config={deliveryRoutesFilters} />
           </div>
@@ -599,9 +615,11 @@ export default function DeliveryRoutes() {
               </Table>
             </div>
           </div>
-        </TabsContent>
+        </div>
+      )}
 
-        <TabsContent value="plan" className="mt-4 flex-1 flex flex-col min-h-0">
+      {activeTab === 'plan' && (
+        <div className="flex-1 flex flex-col min-h-0">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
             <Card className="lg:col-span-1 p-6 border-[var(--border)] flex flex-col gap-4 overflow-y-auto">
               <h2 className="text-lg font-black text-[var(--text-main)] border-b pb-2">Datos de la Ruta</h2>
@@ -769,8 +787,8 @@ export default function DeliveryRoutes() {
               </div>
             </Card>
           </div>
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
 
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-w-4xl p-0 flex flex-col bg-[var(--card)] border-[var(--border)]">

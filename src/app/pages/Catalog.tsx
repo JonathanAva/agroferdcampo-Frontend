@@ -137,7 +137,7 @@ function getPublicPrice(prices: ProductPrice[]): string {
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
-export function Catalog() {
+export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -417,22 +417,26 @@ export function Catalog() {
     <div className="animate-in fade-in duration-500">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1
-            className="text-3xl font-bold"
-            style={{ color: "var(--text-main)" }}
-          >
-            Catálogo
-          </h1>
-          <p style={{ color: "var(--text-sec)" }}>
-            Gestión de productos y precios
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate("/inventory")}>
-            <PackagePlus size={16} />
-            Ver Inventario
-          </Button>
+        {!hideTitle && (
+          <div>
+            <h1
+              className="text-3xl font-bold"
+              style={{ color: "var(--text-main)" }}
+            >
+              Catálogo
+            </h1>
+            <p style={{ color: "var(--text-sec)" }}>
+              Gestión de productos y precios
+            </p>
+          </div>
+        )}
+        <div className={hideTitle ? "w-full flex justify-end gap-2" : "flex gap-2"}>
+          {!hideTitle && (
+            <Button variant="outline" onClick={() => navigate("/inventory")}>
+              <PackagePlus size={16} />
+              Ver Inventario
+            </Button>
+          )}
           {canCreate && (
             <div className="flex gap-2">
               <Button

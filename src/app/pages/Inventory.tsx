@@ -94,7 +94,51 @@ interface Branch {
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
+import { Catalog } from './Catalog';
+
 export function Inventory() {
+  const [activeTab, setActiveTab] = useState<'inventario' | 'catalogo'>('inventario');
+
+  return (
+    <div className="flex flex-col gap-6 h-full">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold text-[var(--text-main)]">
+          Inventario y Catálogo
+        </h1>
+        <p className="text-[var(--text-sec)]">
+          Manejo de existencias físicas y catálogo de productos
+        </p>
+      </div>
+
+      <div className="flex border-b border-[var(--border)] -mb-2">
+        <button
+          onClick={() => setActiveTab('inventario')}
+          className={`px-6 py-3 font-bold text-sm transition-all border-b-2 -mb-[2px] cursor-pointer flex items-center gap-2 ${
+            activeTab === 'inventario' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--text-sec)]'
+          }`}
+        >
+          <Package size={18} />
+          Inventario
+        </button>
+        <button
+          onClick={() => setActiveTab('catalogo')}
+          className={`px-6 py-3 font-bold text-sm transition-all border-b-2 -mb-[2px] cursor-pointer flex items-center gap-2 ${
+            activeTab === 'catalogo' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--text-sec)]'
+          }`}
+        >
+          <Store size={18} />
+          Catálogo
+        </button>
+      </div>
+
+      {activeTab === 'inventario' && <InventoryList />}
+      {activeTab === 'catalogo' && <Catalog hideTitle={true} />}
+    </div>
+  );
+}
+
+function InventoryList() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -391,21 +435,9 @@ export function Inventory() {
 
   return (
     <div className="animate-in fade-in duration-500 pb-10">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-[var(--text-main)]">
-            Inventario
-          </h1>
-          <p className="text-[var(--text-sec)]">
-            Manejo de existencias físicas por sucursal
-          </p>
-        </div>
+      {/* Header Actions */}
+      <div className="flex items-center justify-end mb-6">
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate("/catalog")}>
-            <Store size={16} />
-            Ir al Catálogo
-          </Button>
           {canAdjust && (
             <div className="flex gap-2">
               <Button

@@ -11,6 +11,7 @@ import {
   UserCog,
   Briefcase,
   ShoppingCart,
+  ShoppingBag,
   FileText,
   Settings,
   TruckIcon,
@@ -18,25 +19,22 @@ import {
   RotateCcw,
   Wallet,
   Landmark,
-  Route
+  Route,
+  History
 } from "lucide-react";
 
 const navLinks = [
   { path: "/home", icon: Sprout, label: "Inicio" },
   { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { path: "/pos", icon: ShoppingCart, label: "Punto de Venta" },
-  { path: "/sales", icon: FileText, label: "Historial de Ventas" },
+  { path: "/sales", icon: History, label: "Historial de Ventas" },
   { path: "/quotes", icon: FileText, label: "Cotizaciones" },
-  { path: "/catalog", icon: Store, label: "Catálogo", roles: [1, 2] },
   { path: "/inventory", icon: Package, label: "Inventario" },
-  { path: "/purchases", icon: TruckIcon, label: "Compras a Prov." },
+  { path: "/purchases", icon: ShoppingBag, label: "Compras a Prov." },
   { path: "/delivery-notes", icon: TruckIcon, label: "Albaranes" },
-  { path: "/vehicles", icon: TruckIcon, label: "Flota de Vehículos" },
-  { path: "/delivery-routes", icon: Route, label: "Rutas de Reparto" },
   { path: "/customers", icon: Users, label: "Clientes" },
   { path: "/credit", icon: Landmark, label: "Cuentas por Cobrar" },
   { path: "/finance", icon: Wallet, label: "Finanzas y Caja" },
-  { path: "/users", icon: UserCog, label: "Usuarios", roles: [1, 2] },
   { path: "/rrhh", icon: Briefcase, label: "Recursos Humanos", roles: [1, 2, 3] },
   { path: "/reports", icon: FileText, label: "Reportes" },
   { path: "/settings", icon: Settings, label: "Configuración" },
