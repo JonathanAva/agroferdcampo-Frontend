@@ -26,6 +26,7 @@ import { DeliveryNotes } from "./pages/DeliveryNotes";
 import { Credit } from "./pages/Credit";
 import Vehicles from "./pages/Vehicles";
 import DeliveryRoutes from "./pages/DeliveryRoutes";
+import { Audit } from "./pages/Audit";
 
 export const router = createBrowserRouter([
   {
@@ -110,6 +111,10 @@ export const router = createBrowserRouter([
       {
         path: "reports",
         element: <Reports />,
+      },
+      {
+        path: "audit",
+        element: <Audit />,
       },
       {
         path: "settings",

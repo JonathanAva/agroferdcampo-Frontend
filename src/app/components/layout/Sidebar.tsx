@@ -20,7 +20,8 @@ import {
   Wallet,
   Landmark,
   Route,
-  History
+  History,
+  ShieldAlert
 } from "lucide-react";
 
 const navLinks = [
@@ -37,6 +38,7 @@ const navLinks = [
   { path: "/finance", icon: Wallet, label: "Finanzas y Caja" },
   { path: "/rrhh", icon: Briefcase, label: "Recursos Humanos", roles: [1, 2, 3] },
   { path: "/reports", icon: FileText, label: "Reportes" },
+  { path: "/audit", icon: ShieldAlert, label: "Auditoría", roles: [1, 2] },
   { path: "/settings", icon: Settings, label: "Configuración" },
 ];
 
