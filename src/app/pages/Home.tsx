@@ -62,7 +62,7 @@ export function Home() {
             />
             <QuickAccessCard 
               icon={Landmark} title="Cuentas por cobrar" subtitle="Saldos pendientes de clientes" 
-              badge="Finanzas" onClick={() => navigate('/finance')} badgeColor="bg-rose-500/10 text-rose-600 border-rose-500/20"
+              badge="Crédito" onClick={() => navigate('/credit')} badgeColor="bg-rose-500/10 text-rose-600 border-rose-500/20"
             />
             <QuickAccessCard 
               icon={FileText} title="Reporte de ventas" subtitle="Resumen del período actual" 
@@ -77,11 +77,7 @@ export function Home() {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <QuickAccessCard 
               icon={Route} title="Rutas de reparto" subtitle="Ver entregas del día" 
-              badge="Reparto" onClick={() => navigate('/delivery-routes')} badgeColor="bg-sky-500/10 text-sky-600 border-sky-500/20"
-            />
-            <QuickAccessCard 
-              icon={Wallet} title="Apertura de caja" subtitle="Registrar monto inicial" 
-              badge="Finanzas y Caja" onClick={() => navigate('/finance')} badgeColor="bg-blue-500/10 text-blue-600 border-blue-500/20"
+              badge="Reparto" onClick={() => navigate('/delivery-notes')} badgeColor="bg-sky-500/10 text-sky-600 border-sky-500/20"
             />
             <QuickAccessCard 
               icon={Package} title="Traslado de inventario" subtitle="Mover stock entre sucursales" 
