@@ -231,8 +231,8 @@ function DeliveryNotesList() {
         clientSignature: '',
         proofPhoto: '',
         items: fullNote.items.map(i => ({
-          productId: i.productId,
-          receivedQty: i.quantity
+          productId: Number(i.productId),
+          receivedQty: Number(i.quantity)
         }))
       });
       setDeliverModalOpen(true);
@@ -300,13 +300,21 @@ function DeliveryNotesList() {
     }
     setDelivering(true);
     try {
-      await deliveryNotesService.confirmDelivery(selectedNote.id, deliverForm);
+      // Asegurar que items tengan valores numéricos
+      const payload = {
+        ...deliverForm,
+        items: deliverForm.items.map(i => ({
+          productId: Number(i.productId),
+          receivedQty: Number(i.receivedQty)
+        }))
+      };
+      await deliveryNotesService.confirmDelivery(selectedNote.id, payload);
       toast.success('Entrega confirmada exitosamente');
       setDeliverModalOpen(false);
       fetchNotes();
       fetchStats();
       if (detailModalOpen) {
-        handleOpenDetail(selectedNote); // Refresh detail
+        handleOpenDetail(selectedNote);
       }
     } catch (e: any) {
       toast.error(e.message || 'Error al confirmar entrega');
