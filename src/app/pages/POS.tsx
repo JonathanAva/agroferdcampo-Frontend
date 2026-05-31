@@ -701,7 +701,7 @@ export function POS() {
         {activeShift && (
           <Button
             variant="outline" size="sm"
-            className="border-red-200 text-red-500 hover:bg-red-50 font-bold"
+            className="border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 font-bold hover:border-red-300"
             onClick={handleOpenCloseShiftModal}
           >
             <Lock size={14} className="mr-2" /> Cerrar Caja
