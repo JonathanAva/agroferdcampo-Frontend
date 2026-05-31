@@ -83,7 +83,7 @@ export type CreditDocumentType =
 
 export interface CreditDocument {
   id: number;
-  creditSaleId: number;
+  customerId: number;
   documentType: CreditDocumentType;
   documentName: string;
   status: CreditDocumentStatus;
@@ -158,11 +158,11 @@ export const creditService = {
     });
   },
 
-  getDocuments: (creditSaleId: number) =>
-    apiRequest<CreditDocument[]>(`/credit/${creditSaleId}/documents`),
+  getDocuments: (customerId: number) =>
+    apiRequest<CreditDocument[]>(`/credit/customer/${customerId}/documents`),
 
-  createDocument: (creditSaleId: number, data: CreateCreditDocumentDto) =>
-    apiRequest<CreditDocument>(`/credit/${creditSaleId}/documents`, {
+  createDocument: (customerId: number, data: CreateCreditDocumentDto) =>
+    apiRequest<CreditDocument>(`/credit/customer/${customerId}/documents`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),
