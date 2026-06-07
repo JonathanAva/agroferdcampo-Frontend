@@ -52,10 +52,12 @@ export interface QuoteResponse {
     quantity: number;
     unitPrice: string | number;
     totalPrice: string | number;
+    costPrice?: string | number;
     product?: {
       id: number;
       name: string;
       internalCode?: string;
+      costPrice?: string | number;
     };
   }>;
 }

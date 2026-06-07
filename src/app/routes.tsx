@@ -22,6 +22,7 @@ import { UIComponentsShowcase } from "./pages/UIComponentsShowcase";
 import { SalesHistory } from "./pages/SalesHistory";
 import { SystemConfig } from "./pages/SystemConfig";
 import { Quotes } from "./pages/Quotes";
+import { NewQuote } from "./pages/NewQuote";
 import { Purchases } from "./pages/Purchases";
 import { DeliveryNotes } from "./pages/DeliveryNotes";
 import { Credit } from "./pages/Credit";
@@ -67,6 +68,10 @@ export const router = createBrowserRouter([
       {
         path: "quotes",
         element: <Quotes />,
+      },
+      {
+        path: "quotes/new",
+        element: <NewQuote />,
       },
       {
         path: "catalog",

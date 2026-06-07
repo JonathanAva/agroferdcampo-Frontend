@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSearchParams } from 'react-router';
+import { Printer } from 'lucide-react';
 
 import { deliveryNotesService, DeliveryNoteResponse, DeliverDeliveryNoteDto, CreateDeliveryNoteDto, UpdateDeliveryNoteDto } from '../services/delivery-notes.service';
 import { searchProducts } from '../services/sales.service';
@@ -98,7 +99,7 @@ function DeliveryNotesList() {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   
   const [deliverModalOpen, setDeliverModalOpen] = useState(false);
-  const [deliverForm, setDeliverForm] = useState<DeliverDeliveryNoteDto>({ items: [] });
+  const [deliverForm, setDeliverForm] = useState<DeliverDeliveryNoteDto>({ items: [], proofPhotos: [] });
   const [delivering, setDelivering] = useState(false);
 
   // Email state
@@ -229,7 +230,7 @@ function DeliveryNotesList() {
         notes: '',
         clientSignedBy: '',
         clientSignature: '',
-        proofPhoto: '',
+        proofPhotos: [],
         items: fullNote.items.map(i => ({
           productId: Number(i.productId),
           receivedQty: Number(i.quantity)
@@ -285,11 +286,22 @@ function DeliveryNotesList() {
         ctx?.drawImage(img, 0, 0, width, height);
 
         const base64 = canvas.toDataURL('image/jpeg', 0.7);
-        setDeliverForm(prev => ({ ...prev, proofPhoto: base64 }));
+        setDeliverForm(prev => ({ 
+          ...prev, 
+          proofPhotos: [...(prev.proofPhotos || []), base64] 
+        }));
       };
       img.src = event.target?.result as string;
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleRemovePhoto = (index: number) => {
+    setDeliverForm(prev => ({
+      ...prev,
+      proofPhotos: (prev.proofPhotos || []).filter((_, i) => i !== index)
+    }));
   };
 
   const handleDeliverSubmit = async () => {
@@ -397,6 +409,298 @@ function DeliveryNotesList() {
       toast.error(e.message || 'Error al enviar correo');
     } finally {
       setSendingEmail(false);
+    }
+  };
+
+  const printDeliveryNote = async (noteItem: DeliveryNoteResponse) => {
+    try {
+      // Necesitamos el detalle completo de la nota
+      const note = await deliveryNotesService.getDeliveryNoteDetail(noteItem.id);
+      
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+
+      const iframeDoc = iframe.contentWindow?.document;
+      if (!iframeDoc) {
+        toast.error('Error al iniciar la impresión');
+        document.body.removeChild(iframe);
+        return;
+      }
+
+      const formatDate = (dateString?: Date | string) => {
+        if (!dateString) return '';
+        return new Date(dateString).toLocaleDateString('es-SV', {
+          year: 'numeric', month: 'long', day: 'numeric'
+        });
+      };
+      
+      const formatMoney = (amount?: string | number) => {
+        if (amount === undefined || amount === null) return '$0.00';
+        return new Intl.NumberFormat('es-SV', { style: 'currency', currency: 'USD' }).format(Number(amount));
+      };
+
+      const isSale = !!note.sale;
+      const items = isSale ? note.sale.items : note.items;
+      const totalAmount = isSale ? note.sale.totalAmount : null;
+      const logoUrl = '/icon.png';
+      
+      const pagesHtml = `
+        <div class="header">
+          <div class="logo-container">
+            <img src="${logoUrl}" class="header-logo" alt="Logo" onerror="this.style.display='none'" />
+            <div class="logo-text">
+              <h2>Agroferr D'Campo</h2>
+              <p>Sistema de Facturación y Despacho</p>
+            </div>
+          </div>
+          <div class="header-title">
+            <h1 class="text-xl font-black uppercase" style="color: var(--accent);">${isSale ? 'Factura de Venta' : 'Albarán de Despacho'}</h1>
+            <p class="text-sm text-gray mt-1 font-bold">Doc: DN-${note.id}</p>
+          </div>
+        </div>
+
+        <div class="info-grid">
+          <div class="info-item">
+            <span class="info-label">${isSale ? 'Número de Venta' : 'Número de Documento'}</span>
+            <span class="info-value text-lg font-bold">${isSale ? `Venta #${note.sale.id}` : `DN-${note.id}`}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Fecha de Emisión</span>
+            <span class="info-value">${formatDate(note.issuedAt)}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">${isSale ? 'Cliente' : 'Destinatario'}</span>
+            <span class="info-value font-bold">${note.customer?.name || note.toBranch?.name || 'Consumidor Final'}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Dirección de Entrega</span>
+            <span class="info-value">${note.deliveryAddress || 'Retiro en tienda'}</span>
+          </div>
+        </div>
+
+        <h2 class="text-lg font-bold mb-4 uppercase">Detalle de Productos</h2>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 60px;">Cód.</th>
+              <th>Descripción del Producto</th>
+              <th class="center" style="width: 80px;">Cant.</th>
+              ${isSale ? '<th class="right" style="width: 100px;">Precio U.</th>' : ''}
+              ${isSale ? '<th class="right" style="width: 100px;">Subtotal</th>' : ''}
+            </tr>
+          </thead>
+          <tbody>
+            ${(items || []).map((item: any) => `
+              <tr>
+                <td class="text-sm text-gray">${item.product?.id || '-'}</td>
+                <td class="font-bold">${item.product?.name || 'Producto Desconocido'}</td>
+                <td class="center font-black text-lg">${Number(item.quantity)}</td>
+                ${isSale ? `<td class="right">${formatMoney(item.unitPrice)}</td>` : ''}
+                ${isSale ? `<td class="right font-bold">${formatMoney(item.totalPrice)}</td>` : ''}
+              </tr>
+            `).join('')}
+            ${(!items || items.length === 0) ? `<tr><td colspan="5" class="center">Sin productos detallados</td></tr>` : ''}
+          </tbody>
+        </table>
+        
+        <div class="clearfix">
+          ${isSale ? `
+            <div class="totals-box">
+              <div class="totals-row">
+                <span>Subtotal:</span>
+                <span>${formatMoney(Number(totalAmount) - Number(note.sale.taxAmount || 0))}</span>
+              </div>
+              <div class="totals-row">
+                <span>Impuestos:</span>
+                <span>${formatMoney(note.sale.taxAmount || 0)}</span>
+              </div>
+              <div class="totals-row grand-total">
+                <span>TOTAL:</span>
+                <span>${formatMoney(totalAmount)}</span>
+              </div>
+            </div>
+          ` : ''}
+        </div>
+
+        <div class="signatures" style="margin-top: ${isSale ? '20px' : '60px'};">
+          <div class="signature-line">Entregado por<br><span style="font-weight:400; font-size:10px; color:#666;">(Firma del Conductor/Despacho)</span></div>
+          <div class="signature-line">Recibido por<br><span style="font-weight:400; font-size:10px; color:#666;">(Nombre y Firma del Cliente)</span></div>
+        </div>
+      `;
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Albarán DN-${note.id}</title>
+          <style>
+            :root {
+              --primary: #111827;
+              --secondary: #6b7280;
+              --accent: #d97706; /* Amber 600 */
+              --border: #e5e7eb;
+              --bg-light: #fffbeb; /* Amber 50 */
+            }
+            body { 
+              font-family: 'Inter', system-ui, -apple-system, sans-serif; 
+              margin: 0; 
+              padding: 15mm 20mm; 
+              color: var(--primary);
+              background: white;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            @page { 
+              size: letter; 
+              margin: 0; 
+            }
+            
+            /* Typography & Utilities */
+            h1, h2, h3, p { margin: 0; }
+            .text-sm { font-size: 12px; }
+            .text-base { font-size: 14px; }
+            .text-lg { font-size: 16px; }
+            .text-xl { font-size: 24px; }
+            .font-bold { font-weight: 700; }
+            .font-black { font-weight: 900; }
+            .text-gray { color: var(--secondary); }
+            .text-right { text-align: right; }
+            .uppercase { text-transform: uppercase; }
+            .mb-2 { margin-bottom: 8px; }
+            .mb-4 { margin-bottom: 16px; }
+            .mt-1 { margin-top: 4px; }
+
+            /* Layout Components */
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              border-bottom: 3px solid var(--accent);
+              padding-bottom: 16px;
+              margin-bottom: 24px;
+            }
+            .logo-container {
+              display: flex;
+              align-items: center;
+              gap: 16px;
+            }
+            .header-logo { height: 70px; object-fit: contain; }
+            .logo-text h2 { font-size: 18px; font-weight: 900; color: var(--primary); margin: 0; }
+            .logo-text p { font-size: 11px; color: var(--secondary); margin: 0; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
+            .header-title { text-align: right; }
+            
+            .info-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 16px;
+              margin-bottom: 32px;
+              padding: 16px;
+              background: #fafafa;
+              border-radius: 8px;
+              border: 1px solid var(--border);
+              border-left: 4px solid var(--accent);
+            }
+            .info-item { display: flex; flex-direction: column; gap: 4px; }
+            .info-label { font-size: 10px; font-weight: 800; color: var(--secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+            .info-value { font-size: 14px; font-weight: 700; color: var(--primary); }
+
+            /* Tables */
+            table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 30px; font-size: 13px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+            th { 
+              background: #fef3c7; 
+              color: #b45309; 
+              font-weight: 900; 
+              text-transform: uppercase; 
+              font-size: 10px;
+              letter-spacing: 1px;
+              padding: 12px 14px; 
+              text-align: left; 
+              border-bottom: 2px solid #fcd34d;
+            }
+            th.right { text-align: right; }
+            th.center { text-align: center; }
+            td { 
+              padding: 12px 14px; 
+              border-bottom: 1px solid var(--border); 
+              vertical-align: middle;
+            }
+            tr:last-child td { border-bottom: none; }
+            td.right { text-align: right; }
+            td.center { text-align: center; }
+            tr:nth-child(even) td { background: #fafaf9; }
+            
+            /* Totals */
+            .totals-box {
+              width: 300px;
+              float: right;
+              border: 1px solid var(--border);
+              border-radius: 8px;
+              overflow: hidden;
+              margin-bottom: 40px;
+            }
+            .totals-row {
+              display: flex;
+              justify-content: space-between;
+              padding: 10px 16px;
+              border-bottom: 1px solid var(--border);
+              font-size: 13px;
+              font-weight: 600;
+            }
+            .totals-row:last-child { border-bottom: none; }
+            .totals-row.grand-total {
+              background: #fef3c7;
+              color: #b45309;
+              font-size: 16px;
+              font-weight: 900;
+            }
+            .clearfix::after { content: ""; clear: both; display: table; }
+
+            /* Signatures */
+            .signatures {
+              display: flex;
+              justify-content: space-around;
+              margin-top: 60px;
+              page-break-inside: avoid;
+            }
+            .signature-line {
+              width: 250px;
+              border-top: 2px solid var(--primary);
+              text-align: center;
+              padding-top: 8px;
+              font-weight: 700;
+              font-size: 12px;
+            }
+          </style>
+        </head>
+        <body>
+          ${pagesHtml}
+          <script>
+            window.onload = () => {
+              setTimeout(() => {
+                window.print();
+              }, 300);
+            };
+          </script>
+        </body>
+        </html>
+      `;
+      iframeDoc.open();
+      iframeDoc.write(html);
+      iframeDoc.close();
+
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 60000);
+    } catch (error: any) {
+      toast.error('Error al generar la impresión');
     }
   };
 
@@ -511,6 +815,11 @@ function DeliveryNotesList() {
                           {note.type === 'TRASLADO_SUCURSAL' && (
                             <Badge variant="outline" className="text-[10px]">Traslado</Badge>
                           )}
+                          {note.isSupplierCredit && (
+                            <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-600 border-purple-200">
+                              Crédito a Proveedor
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     </TableCell>
@@ -547,6 +856,9 @@ function DeliveryNotesList() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleOpenDetail(note); }} className="font-bold cursor-pointer">
                             <Eye size={14} className="mr-2 text-[var(--primary)]" /> Ver Detalle
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => printDeliveryNote(note)} className="font-bold cursor-pointer text-[var(--primary)]">
+                            <Printer size={14} className="mr-2" /> Imprimir Documento
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleOpenEmailModal(note)} className="font-bold cursor-pointer text-blue-600">
                             <Mail size={14} className="mr-2" /> Enviar Notificación
@@ -770,32 +1082,39 @@ function DeliveryNotesList() {
                   )}
 
                   <div className="space-y-3">
-                    <Label className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">Evidencia Fotográfica</Label>
-                    {!deliverForm.proofPhoto ? (
-                      <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-[var(--border)] rounded-2xl cursor-pointer hover:bg-[var(--bg)] transition-all group hover:border-emerald-500/50">
-                        <div className="flex flex-col items-center justify-center pt-5 pb-6 text-[var(--text-sec)] group-hover:text-emerald-500 transition-colors">
-                          <div className="p-4 bg-[var(--bg)] rounded-full mb-3 group-hover:bg-emerald-500/10 transition-colors shadow-sm">
-                            <Camera className="w-8 h-8" />
+                    <Label className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">Evidencias Fotográficas</Label>
+                    
+                    {(deliverForm.proofPhotos?.length || 0) > 0 && (
+                      <div className="grid grid-cols-2 gap-2 mb-3">
+                        {deliverForm.proofPhotos?.map((photo, index) => (
+                          <div key={index} className="relative rounded-xl overflow-hidden border border-[var(--border)] shadow-sm group">
+                            <img src={photo} alt={`Evidencia ${index + 1}`} className="w-full h-24 object-cover" />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
+                              <Button 
+                                size="sm" 
+                                variant="destructive" 
+                                className="rounded-full px-3 py-1 h-auto text-xs font-bold shadow-lg"
+                                onClick={() => handleRemovePhoto(index)}
+                              >
+                                <Trash2 size={14} className="mr-1"/> Eliminar
+                              </Button>
+                            </div>
                           </div>
-                          <p className="text-sm font-bold">Capturar o Subir Foto</p>
-                          <p className="text-xs mt-1 opacity-70">Opcional • JPG o PNG</p>
+                        ))}
+                      </div>
+                    )}
+
+                    {(!deliverForm.proofPhotos || deliverForm.proofPhotos.length < 5) && (
+                      <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-[var(--border)] rounded-2xl cursor-pointer hover:bg-[var(--bg)] transition-all group hover:border-emerald-500/50">
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6 text-[var(--text-sec)] group-hover:text-emerald-500 transition-colors">
+                          <div className="p-3 bg-[var(--bg)] rounded-full mb-2 group-hover:bg-emerald-500/10 transition-colors shadow-sm">
+                            <Camera className="w-6 h-6" />
+                          </div>
+                          <p className="text-sm font-bold">Agregar Foto</p>
+                          <p className="text-xs mt-1 opacity-70">Hasta 5 fotos</p>
                         </div>
                         <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoCapture} />
                       </label>
-                    ) : (
-                      <div className="relative rounded-2xl overflow-hidden border border-[var(--border)] shadow-sm group">
-                        <img src={deliverForm.proofPhoto} alt="Evidencia" className="w-full h-48 object-cover" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
-                          <Button 
-                            size="sm" 
-                            variant="destructive" 
-                            className="rounded-full px-5 py-2 h-auto text-sm font-bold shadow-lg"
-                            onClick={() => setDeliverForm({...deliverForm, proofPhoto: undefined})}
-                          >
-                            <Trash2 size={16} className="mr-2"/> Eliminar Foto
-                          </Button>
-                        </div>
-                      </div>
                     )}
                   </div>
                 </div>

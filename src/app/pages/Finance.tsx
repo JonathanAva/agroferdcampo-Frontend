@@ -32,7 +32,8 @@ const financeFilters: FilterConfig[] = [
     { label: 'Ventas', value: 'VENTAS' },
     { label: 'Gasto Operativo', value: 'GASTO_OPERATIVO' },
     { label: 'Pago a Proveedor', value: 'PAGO_PROVEEDOR' },
-    { label: 'Reposición Caja Chica', value: 'REPOSICION_CAJA_CHICA' },
+    { label: 'Reposición Caja Fuerte', value: 'REPOSICION_CAJA_CHICA' },
+    { label: 'Transferencia a Caja Fuerte', value: 'TRANSFERENCIA_CAJA_FUERTE' },
     { label: 'Otro', value: 'OTRO' }
   ]},
   { id: 'date', label: 'Rango de Fechas', type: 'date_range' }
@@ -107,6 +108,12 @@ export function Finance() {
   const [shiftsLoading, setShiftsLoading] = useState(false);
   const [shiftsPagination, setShiftsPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
 
+  const [adminCloseShiftId, setAdminCloseShiftId] = useState<number | null>(null);
+  const [adminCloseTotals, setAdminCloseTotals] = useState<any>(null);
+  const [adminCloseLoading, setAdminCloseLoading] = useState(false);
+  const [adminCloseCash, setAdminCloseCash] = useState<number | ''>('');
+  const [adminCloseNotes, setAdminCloseNotes] = useState("");
+
   useEffect(() => {
     if (activeTab === 'general') {
       fetchGeneralCash();
@@ -116,6 +123,13 @@ export function Finance() {
       fetchShiftsHistory();
     }
   }, [activeTab, generalFilters.page, generalFilters.category, typeFilter, categoryFilter, startDateFilter, endDateFilter, shiftsPagination.page]);
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'shifts' || tab === 'petty' || tab === 'general') {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (newGeneralEntry.category === 'PAGO_PROVEEDOR') {
@@ -162,8 +176,8 @@ export function Finance() {
     if (!newGeneralEntry.amount || Number(newGeneralEntry.amount) <= 0) {
       toast.error('Monto inválido'); return;
     }
-    if (!newGeneralEntry.description) {
-      toast.error('La descripción es requerida'); return;
+    if (newGeneralEntry.type === 'EGRESO' && !newGeneralEntry.description.trim()) {
+      toast.error('La descripción es requerida para los egresos'); return;
     }
 
     try {
@@ -239,6 +253,40 @@ export function Finance() {
     }
   };
 
+  const handleOpenAdminCloseShift = async (id: number) => {
+    try {
+      setAdminCloseLoading(true);
+      setAdminCloseShiftId(id);
+      const totals = await cashShiftsService.getExpectedTotalsById(id);
+      setAdminCloseTotals(totals);
+      setAdminCloseCash(totals.expectedAmount); // Sugerir el esperado
+    } catch (error: any) {
+      toast.error(error.message);
+      setAdminCloseShiftId(null);
+    } finally {
+      setAdminCloseLoading(false);
+    }
+  };
+
+  const handleConfirmAdminCloseShift = async () => {
+    if (!adminCloseShiftId) return;
+    try {
+      setAdminCloseLoading(true);
+      await cashShiftsService.closeShiftById(adminCloseShiftId, {
+        countedCash: Number(adminCloseCash),
+        notes: adminCloseNotes
+      });
+      toast.success('Cierre de caja aprobado exitosamente');
+      setAdminCloseShiftId(null);
+      setAdminCloseTotals(null);
+      fetchShiftsHistory();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setAdminCloseLoading(false);
+    }
+  };
+
   const handleSetupPettyCash = async () => {
     try {
       await pettyCashService.setup({
@@ -256,6 +304,9 @@ export function Finance() {
   const handleRegisterExpense = async () => {
     if (!newExpense.amount || Number(newExpense.amount) <= 0) {
       toast.error('Monto inválido'); return;
+    }
+    if (!newExpense.description.trim()) {
+      toast.error('La descripción es requerida'); return;
     }
     try {
       await pettyCashService.registerExpense({
@@ -332,7 +383,7 @@ export function Finance() {
             activeTab === 'petty' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--text-sec)]'
           }`}
         >
-          Caja Chica
+          Caja Fuerte
         </button>
         <button
           onClick={() => setActiveTab('shifts')}
@@ -443,16 +494,16 @@ export function Finance() {
         <div className="flex flex-col gap-6">
           {pettyLoading ? (
             <div className="flex items-center justify-center h-40 text-[var(--text-sec)]">
-              Cargando caja chica...
+              Cargando caja fuerte...
             </div>
           ) : !pettyStatus ? (
             <Card className="p-8 text-center flex flex-col items-center gap-4 bg-[var(--card)] border-[var(--border)] shadow-sm">
               <Wallet size={48} className="text-[var(--text-sec)] opacity-50" />
               <div>
-                <h3 className="text-xl font-bold text-[var(--text-main)]">Caja Chica no configurada</h3>
-                <p className="text-[var(--text-sec)]">El fondo de caja chica de esta sucursal no ha sido inicializado.</p>
+                <h3 className="text-xl font-bold text-[var(--text-main)]">Caja Fuerte no configurada</h3>
+                <p className="text-[var(--text-sec)]">El fondo de caja fuerte de esta sucursal no ha sido inicializado.</p>
               </div>
-              <Button onClick={() => setShowSetupModal(true)}>Configurar Caja Chica</Button>
+              <Button onClick={() => setShowSetupModal(true)}>Configurar Caja Fuerte</Button>
             </Card>
           ) : (
             <>
@@ -591,6 +642,8 @@ export function Finance() {
                           <div className="text-emerald-600 font-bold whitespace-nowrap">Ap: {new Date(s.openedAt).toLocaleString()}</div>
                           {s.closedAt ? (
                             <div className="text-rose-600 font-bold whitespace-nowrap">Ci: {new Date(s.closedAt).toLocaleString()}</div>
+                          ) : s.closeRequested ? (
+                            <div className="text-amber-500 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200 mt-1 inline-block">Cierre Solicitado</div>
                           ) : (
                             <div className="text-amber-500 font-bold">En curso</div>
                           )}
@@ -615,6 +668,8 @@ export function Finance() {
                                 <FileSpreadsheet size={18} className="text-emerald-500" />
                               </Button>
                             </div>
+                          ) : s.closeRequested ? (
+                            <Button size="sm" className="bg-rose-500 hover:bg-rose-600 text-white" onClick={() => handleOpenAdminCloseShift(s.id)}>Aprobar Cierre</Button>
                           ) : (
                             <span className="text-xs text-[var(--text-sec)]">Pendiente</span>
                           )}
@@ -681,7 +736,8 @@ export function Finance() {
                     <SelectItem value="VENTAS">Ventas</SelectItem>
                     <SelectItem value="GASTO_OPERATIVO">Gasto Operativo</SelectItem>
                     <SelectItem value="PAGO_PROVEEDOR">Pago Proveedor</SelectItem>
-                    <SelectItem value="REPOSICION_CAJA_CHICA">Reposición Caja Chica</SelectItem>
+                    <SelectItem value="REPOSICION_CAJA_CHICA">Reposición Caja Fuerte</SelectItem>
+                    <SelectItem value="TRANSFERENCIA_CAJA_FUERTE">Transferencia a Caja Fuerte</SelectItem>
                     <SelectItem value="OTRO">Otro</SelectItem>
                   </SelectContent>
                 </Select>
@@ -692,7 +748,9 @@ export function Finance() {
               <NumberInput value={newGeneralEntry.amount} onValueChange={v => setNewGeneralEntry({...newGeneralEntry, amount: v as any})} />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-bold">Descripción</label>
+              <label className="text-sm font-bold">
+                Descripción {newGeneralEntry.type === 'EGRESO' && <span className="text-rose-500">*</span>}
+              </label>
               <Input value={newGeneralEntry.description} onChange={e => setNewGeneralEntry({...newGeneralEntry, description: e.target.value})} placeholder="Ej. Pago de luz" />
             </div>
             <div className="space-y-2">
@@ -744,11 +802,11 @@ export function Finance() {
         </DialogContent>
       </Dialog>
 
-      {/* Registrar Gasto Caja Chica */}
+      {/* Registrar Gasto Caja Fuerte */}
       <Dialog open={showExpenseModal} onOpenChange={setShowExpenseModal}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Registrar Gasto de Caja Chica</DialogTitle>
+            <DialogTitle>Registrar Gasto de Caja Fuerte</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -756,7 +814,9 @@ export function Finance() {
               <NumberInput value={newExpense.amount} onValueChange={v => setNewExpense({...newExpense, amount: v as any})} />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-bold">Descripción</label>
+              <label className="text-sm font-bold">
+                Descripción <span className="text-rose-500">*</span>
+              </label>
               <Input value={newExpense.description} onChange={e => setNewExpense({...newExpense, description: e.target.value})} />
             </div>
           </div>
@@ -767,11 +827,11 @@ export function Finance() {
         </DialogContent>
       </Dialog>
 
-      {/* Setup Caja Chica */}
+      {/* Setup Caja Fuerte */}
       <Dialog open={showSetupModal} onOpenChange={setShowSetupModal}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Configurar Caja Chica</DialogTitle>
+            <DialogTitle>Configurar Caja Fuerte</DialogTitle>
             <DialogDescription>Establece los límites iniciales del fondo</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -814,6 +874,118 @@ export function Finance() {
         </DialogContent>
       </Dialog>
 
+      {/* ADMIN CLOSE SHIFT MODAL */}
+      <Dialog open={adminCloseShiftId !== null} onOpenChange={(open) => {
+        if (!open) {
+          setAdminCloseShiftId(null);
+          setAdminCloseTotals(null);
+        }
+      }}>
+        <DialogContent className="sm:max-w-2xl bg-[var(--card)] border-[var(--border)] max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Aprobar Cierre de Caja</DialogTitle>
+            <DialogDescription>
+              Revisa los montos y confirma el cierre físico del turno del cajero.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-6 mt-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Left Column: Totals and Inputs */}
+              <div className="flex flex-col gap-4">
+                {adminCloseTotals && (
+                  <div className="p-4 bg-[var(--bg)] border rounded-xl space-y-3">
+                    <h4 className="font-bold text-sm text-[var(--text-main)] mb-2 border-b border-[var(--border)] pb-2">Valores del Sistema</h4>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[var(--text-sec)]">Efectivo Esperado:</span>
+                      <span className="font-bold">${Number(adminCloseTotals.expectedAmount).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[var(--text-sec)]">Tarjeta Esperada:</span>
+                      <span className="font-bold">${Number(adminCloseTotals.expectedTarjeta).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[var(--text-sec)]">Transferencia Esperada:</span>
+                      <span className="font-bold">${Number(adminCloseTotals.expectedTransferencia).toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
+                <div className="p-4 bg-blue-50/50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 rounded-xl space-y-4">
+                  <div>
+                    <label className="text-sm font-bold text-blue-900 dark:text-blue-300">Efectivo Real Contado por ti ($)</label>
+                    <p className="text-xs text-[var(--text-sec)] mb-2">Ingresa el total físico de efectivo entregado.</p>
+                    <NumberInput
+                      value={adminCloseCash}
+                      onValueChange={(v) => setAdminCloseCash(v as number)}
+                      className="bg-white dark:bg-black"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-bold text-blue-900 dark:text-blue-300">Notas Adicionales (Opcional)</label>
+                    <Input
+                      value={adminCloseNotes}
+                      onChange={(e) => setAdminCloseNotes(e.target.value)}
+                      placeholder="Escribe alguna observación sobre la diferencia..."
+                      className="bg-white dark:bg-black"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Cashier's reported breakdown */}
+              <div className="flex flex-col gap-4">
+                {adminCloseTotals?.closingBreakdown ? (
+                  <div className="p-4 bg-[var(--bg)] border rounded-xl h-full flex flex-col">
+                    <h4 className="font-bold text-sm text-[var(--text-main)] mb-2 border-b border-[var(--border)] pb-2">Desglose Reportado por el Cajero</h4>
+                    <p className="text-xs text-[var(--text-sec)] mb-4">
+                      Total reportado: <span className="font-bold text-emerald-600 text-sm">${Number(adminCloseTotals.countedAmount).toFixed(2)}</span>
+                    </p>
+                    
+                    <div className="grid grid-cols-2 gap-4 text-xs flex-1">
+                      <div>
+                        <span className="font-bold text-[var(--text-sec)] mb-2 block">Billetes</span>
+                        <ul className="space-y-1">
+                          <li className="flex justify-between"><span>$100:</span> <span>{adminCloseTotals.closingBreakdown.bills?.d100 || 0}</span></li>
+                          <li className="flex justify-between"><span>$50:</span> <span>{adminCloseTotals.closingBreakdown.bills?.d50 || 0}</span></li>
+                          <li className="flex justify-between"><span>$20:</span> <span>{adminCloseTotals.closingBreakdown.bills?.d20 || 0}</span></li>
+                          <li className="flex justify-between"><span>$10:</span> <span>{adminCloseTotals.closingBreakdown.bills?.d10 || 0}</span></li>
+                          <li className="flex justify-between"><span>$5:</span> <span>{adminCloseTotals.closingBreakdown.bills?.d5 || 0}</span></li>
+                          <li className="flex justify-between"><span>$1:</span> <span>{adminCloseTotals.closingBreakdown.bills?.d1 || 0}</span></li>
+                        </ul>
+                      </div>
+                      <div>
+                        <span className="font-bold text-[var(--text-sec)] mb-2 block">Monedas</span>
+                        <ul className="space-y-1">
+                          <li className="flex justify-between"><span>$0.25:</span> <span>{adminCloseTotals.closingBreakdown.coins?.c25 || 0}</span></li>
+                          <li className="flex justify-between"><span>$0.10:</span> <span>{adminCloseTotals.closingBreakdown.coins?.c10 || 0}</span></li>
+                          <li className="flex justify-between"><span>$0.05:</span> <span>{adminCloseTotals.closingBreakdown.coins?.c5 || 0}</span></li>
+                          <li className="flex justify-between"><span>$0.01:</span> <span>{adminCloseTotals.closingBreakdown.coins?.c1 || 0}</span></li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-[var(--bg)] border rounded-xl h-full flex flex-col justify-center items-center text-center opacity-70">
+                    <p className="text-sm font-bold text-[var(--text-sec)]">Sin desglose reportado</p>
+                    <p className="text-xs text-[var(--text-sec)] mt-1">El cajero no envió detalle de billetes o monedas.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="mt-4 pt-4 border-t border-[var(--border)] shrink-0">
+            <Button variant="outline" onClick={() => setAdminCloseShiftId(null)}>Cancelar</Button>
+            <Button 
+              className="bg-rose-500 hover:bg-rose-600 text-white shadow-lg shadow-rose-500/20" 
+              onClick={handleConfirmAdminCloseShift}
+              disabled={adminCloseLoading || adminCloseCash === ''}
+            >
+              {adminCloseLoading ? "Cerrando..." : "Confirmar Cierre"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

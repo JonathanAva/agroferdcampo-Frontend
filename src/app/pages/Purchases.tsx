@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, FileText, CheckCircle2, AlertCircle, Eye, Plus, 
   Trash2, RefreshCcw, Filter, Calendar as CalendarIcon, Store, Package, Download, X,
-  ArrowDownToLine, DollarSign
+  ArrowDownToLine, DollarSign, Printer
 } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { SupplierManager } from '../components/suppliers/SupplierManager';
@@ -284,7 +284,11 @@ export function Purchases() {
           productId: product.id, 
           productName: product.name, 
           quantity: 1, 
-          unitCost: product.price // Defaulting to price, user should adjust to cost
+          unitCost: product.price, // Defaulting to price, user should adjust to cost
+          unitType: product.unit,
+          unitFactor: 1,
+          baseUnit: product.unit,
+          productUnits: product.units || []
         }]
       };
     });
@@ -299,6 +303,421 @@ export function Purchases() {
       case 'RECIBIDA': return <Badge variant="success">Recibida</Badge>;
       case 'CANCELADA': return <Badge variant="destructive">Cancelada</Badge>;
       default: return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  const printPurchaseOrder = async (purchaseItem: PurchaseResponse) => {
+    try {
+      const fullPurchase = await purchasesService.getPurchaseDetail(purchaseItem.id);
+      
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+
+      const iframeDoc = iframe.contentWindow?.document;
+      if (!iframeDoc) {
+        toast.error('Error al iniciar la impresión');
+        document.body.removeChild(iframe);
+        return;
+      }
+
+      const formatDate = (dateString?: Date | string) => {
+        if (!dateString) return '';
+        return new Date(dateString).toLocaleDateString('es-SV', {
+          year: 'numeric', month: 'long', day: 'numeric'
+        });
+      };
+      
+      const formatMoney = (amount?: string | number) => {
+        if (amount === undefined || amount === null) return '$0.00';
+        return new Intl.NumberFormat('es-SV', { style: 'currency', currency: 'USD' }).format(Number(amount));
+      };
+
+      const logoUrl = '/icon.png';
+      
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Orden de Abastecimiento OC-${fullPurchase.id}</title>
+          <style>
+            :root {
+              --primary: #111827;
+              --secondary: #6b7280;
+              --accent: #d97706; /* Amber 600 */
+              --border: #e5e7eb;
+            }
+            body { 
+              font-family: 'Inter', system-ui, -apple-system, sans-serif; 
+              margin: 0; 
+              padding: 15mm 20mm; 
+              color: var(--primary);
+              background: white;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            @page { size: letter; margin: 0; }
+            h1, h2, h3, p { margin: 0; }
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              border-bottom: 3px solid var(--accent);
+              padding-bottom: 16px;
+              margin-bottom: 24px;
+            }
+            .logo-container {
+              display: flex;
+              align-items: center;
+              gap: 16px;
+            }
+            .header-logo { height: 70px; object-fit: contain; }
+            .logo-text h2 { font-size: 18px; font-weight: 900; color: var(--primary); margin: 0; }
+            .logo-text p { font-size: 11px; color: var(--secondary); margin: 0; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
+            .header-title { text-align: right; }
+            .info-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 16px;
+              margin-bottom: 32px;
+              padding: 16px;
+              background: #fafafa;
+              border-radius: 8px;
+              border: 1px solid var(--border);
+              border-left: 4px solid var(--accent);
+            }
+            .info-item { display: flex; flex-direction: column; gap: 4px; }
+            .info-label { font-size: 10px; font-weight: 800; color: var(--secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+            .info-value { font-size: 14px; font-weight: 700; color: var(--primary); }
+            table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 30px; font-size: 13px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+            th { 
+              background: #fef3c7; 
+              color: #b45309; 
+              font-weight: 900; 
+              text-transform: uppercase; 
+              font-size: 10px;
+              letter-spacing: 1px;
+              padding: 12px 14px; 
+              text-align: left; 
+              border-bottom: 2px solid #fcd34d;
+            }
+            th.right { text-align: right; }
+            th.center { text-align: center; }
+            td { 
+              padding: 12px 14px; 
+              border-bottom: 1px solid var(--border); 
+              vertical-align: middle;
+            }
+            tr:last-child td { border-bottom: none; }
+            td.right { text-align: right; }
+            td.center { text-align: center; }
+            tr:nth-child(even) td { background: #fafaf9; }
+            .totals-box {
+              width: 300px;
+              float: right;
+              border: 1px solid var(--border);
+              border-radius: 8px;
+              overflow: hidden;
+              margin-bottom: 40px;
+            }
+            .totals-row {
+              display: flex;
+              justify-content: space-between;
+              padding: 10px 16px;
+              border-bottom: 1px solid var(--border);
+              font-size: 13px;
+              font-weight: 600;
+            }
+            .totals-row:last-child { border-bottom: none; }
+            .totals-row.grand-total {
+              background: #fef3c7;
+              color: #b45309;
+              font-size: 16px;
+              font-weight: 900;
+            }
+            .clearfix::after { content: ""; clear: both; display: table; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo-container">
+              <img src="${logoUrl}" class="header-logo" alt="Logo" onerror="this.style.display='none'" />
+              <div class="logo-text">
+                <h2>Agroferr D'Campo</h2>
+                <p>Orden de Abastecimiento</p>
+              </div>
+            </div>
+            <div class="header-title">
+              <h1 style="color: var(--accent); font-size: 24px; font-weight: 900; text-transform: uppercase;">Orden de Compra</h1>
+              <p style="font-size: 14px; font-weight: 700; color: var(--secondary); margin-top: 4px;">OC-${fullPurchase.id.toString().padStart(6, '0')}</p>
+            </div>
+          </div>
+
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">Proveedor</span>
+              <span class="info-value" style="font-size: 18px;">${fullPurchase.supplier?.name}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Fecha de Emisión</span>
+              <span class="info-value">${formatDate(fullPurchase.createdAt)}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Estado</span>
+              <span class="info-value">${fullPurchase.status}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Notas</span>
+              <span class="info-value" style="font-weight: normal; font-size: 12px;">${fullPurchase.notes || 'N/A'}</span>
+            </div>
+          </div>
+
+          <h2 style="font-size: 16px; font-weight: 700; margin-bottom: 16px; text-transform: uppercase;">Detalle de Productos</h2>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 60px;">Cód.</th>
+                <th>Descripción del Producto</th>
+                <th class="center" style="width: 80px;">Cant.</th>
+                <th class="right" style="width: 100px;">Costo U.</th>
+                <th class="right" style="width: 100px;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${(fullPurchase.items || []).map((item: any) => `
+                <tr>
+                  <td style="font-size: 12px; color: var(--secondary);">${item.product?.id || '-'}</td>
+                  <td style="font-weight: 700;">${item.product?.name || 'Producto Desconocido'}</td>
+                  <td class="center" style="font-weight: 900; font-size: 16px;">${item.quantity}</td>
+                  <td class="right">${formatMoney(item.unitCost)}</td>
+                  <td class="right" style="font-weight: 700;">${formatMoney(item.totalCost)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          
+          <div class="clearfix">
+            <div class="totals-box">
+              <div class="totals-row grand-total">
+                <span>TOTAL:</span>
+                <span>${formatMoney(fullPurchase.totalAmount)}</span>
+              </div>
+            </div>
+          </div>
+          
+          <script>
+            window.onload = () => {
+              setTimeout(() => {
+                window.print();
+              }, 300);
+            };
+          </script>
+        </body>
+        </html>
+      `;
+      iframeDoc.open();
+      iframeDoc.write(html);
+      iframeDoc.close();
+
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 60000);
+    } catch (error: any) {
+      toast.error('Error al generar la impresión');
+    }
+  };
+
+  const printPaymentReceipt = async (purchaseItem: PurchaseResponse) => {
+    try {
+      const fullPurchase = await purchasesService.getPurchaseDetail(purchaseItem.id);
+      
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+
+      const iframeDoc = iframe.contentWindow?.document;
+      if (!iframeDoc) {
+        toast.error('Error al iniciar la impresión');
+        document.body.removeChild(iframe);
+        return;
+      }
+
+      const formatDate = (dateString?: Date | string) => {
+        if (!dateString) return '';
+        return new Date(dateString).toLocaleDateString('es-SV', {
+          year: 'numeric', month: 'long', day: 'numeric'
+        });
+      };
+      
+      const formatMoney = (amount?: string | number) => {
+        if (amount === undefined || amount === null) return '$0.00';
+        return new Intl.NumberFormat('es-SV', { style: 'currency', currency: 'USD' }).format(Number(amount));
+      };
+
+      const logoUrl = '/icon.png';
+      
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Recibo de Pago Proveedor - OC-${fullPurchase.id}</title>
+          <style>
+            :root {
+              --primary: #111827;
+              --secondary: #6b7280;
+              --accent: #059669; /* Emerald 600 */
+              --border: #e5e7eb;
+            }
+            body { 
+              font-family: 'Inter', system-ui, -apple-system, sans-serif; 
+              margin: 0; 
+              padding: 15mm 20mm; 
+              color: var(--primary);
+              background: white;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            @page { size: letter; margin: 0; }
+            h1, h2, h3, p { margin: 0; }
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              border-bottom: 3px solid var(--accent);
+              padding-bottom: 16px;
+              margin-bottom: 30px;
+            }
+            .logo-container {
+              display: flex;
+              align-items: center;
+              gap: 16px;
+            }
+            .header-logo { height: 70px; object-fit: contain; }
+            .logo-text h2 { font-size: 18px; font-weight: 900; color: var(--primary); margin: 0; }
+            .logo-text p { font-size: 11px; color: var(--secondary); margin: 0; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
+            .header-title { text-align: right; }
+            .receipt-amount {
+              text-align: center;
+              padding: 30px;
+              background: #ecfdf5;
+              border: 2px dashed #34d399;
+              border-radius: 16px;
+              margin-bottom: 40px;
+            }
+            .receipt-amount p {
+              font-size: 14px;
+              color: #065f46;
+              font-weight: 700;
+              text-transform: uppercase;
+              margin-bottom: 8px;
+            }
+            .receipt-amount h2 {
+              font-size: 48px;
+              font-weight: 900;
+              color: #047857;
+            }
+            .info-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 20px;
+              margin-bottom: 60px;
+            }
+            .info-item { display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+            .info-label { font-size: 12px; font-weight: 700; color: var(--secondary); text-transform: uppercase; }
+            .info-value { font-size: 16px; font-weight: 700; color: var(--primary); }
+            
+            .signatures {
+              display: flex;
+              justify-content: space-around;
+              margin-top: 100px;
+            }
+            .signature-line {
+              width: 250px;
+              border-top: 2px solid var(--primary);
+              text-align: center;
+              padding-top: 8px;
+              font-weight: 700;
+              font-size: 14px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo-container">
+              <img src="${logoUrl}" class="header-logo" alt="Logo" onerror="this.style.display='none'" />
+              <div class="logo-text">
+                <h2>Agroferr D'Campo</h2>
+                <p>Comprobante de Pago a Proveedor</p>
+              </div>
+            </div>
+            <div class="header-title">
+              <h1 style="color: var(--accent); font-size: 24px; font-weight: 900; text-transform: uppercase;">Recibo de Pago</h1>
+              <p style="font-size: 14px; font-weight: 700; color: var(--secondary); margin-top: 4px;">Generado el ${new Date().toLocaleDateString('es-SV')}</p>
+            </div>
+          </div>
+
+          <div class="receipt-amount">
+            <p>Monto Pagado</p>
+            <h2>${formatMoney(fullPurchase.totalAmount)}</h2>
+          </div>
+
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">Proveedor</span>
+              <span class="info-value">${fullPurchase.supplier?.name}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Fecha de Orden</span>
+              <span class="info-value">${formatDate(fullPurchase.createdAt)}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Orden Relacionada</span>
+              <span class="info-value">OC-${fullPurchase.id.toString().padStart(6, '0')}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Documento Referencia</span>
+              <span class="info-value">${fullPurchase.referenceDoc || 'N/A'}</span>
+            </div>
+          </div>
+
+          <div class="signatures">
+            <div class="signature-line">Entregado por<br><span style="font-weight:400; font-size:12px; color:#666;">(Agroferr D'Campo)</span></div>
+            <div class="signature-line">Recibido por<br><span style="font-weight:400; font-size:12px; color:#666;">(Nombre y Firma del Proveedor)</span></div>
+          </div>
+          
+          <script>
+            window.onload = () => {
+              setTimeout(() => {
+                window.print();
+              }, 300);
+            };
+          </script>
+        </body>
+        </html>
+      `;
+      iframeDoc.open();
+      iframeDoc.write(html);
+      iframeDoc.close();
+
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 60000);
+    } catch (error: any) {
+      toast.error('Error al generar la impresión');
     }
   };
 
@@ -413,6 +832,16 @@ export function Purchases() {
                           <DropdownMenuItem onClick={() => handleOpenDetail(purchase)} className="font-bold cursor-pointer">
                             <Eye size={14} className="mr-2 text-[var(--primary)]" /> Ver Detalle
                           </DropdownMenuItem>
+
+                          <DropdownMenuItem onClick={() => printPurchaseOrder(purchase)} className="font-bold cursor-pointer text-[var(--primary)]">
+                            <Printer size={14} className="mr-2" /> Imprimir Orden
+                          </DropdownMenuItem>
+                          
+                          {purchase.isPaid && (
+                            <DropdownMenuItem onClick={() => printPaymentReceipt(purchase)} className="font-bold cursor-pointer text-emerald-600">
+                              <DollarSign size={14} className="mr-2" /> Imprimir Recibo Pago
+                            </DropdownMenuItem>
+                          )}
                           
                           {purchase.status === 'BORRADOR' && (
                             <>
@@ -551,7 +980,36 @@ export function Purchases() {
                   <TableBody>
                     {newPurchase.items.map((item: any, idx) => (
                       <TableRow key={item.productId}>
-                        <TableCell className="font-bold text-sm">{item.productName}</TableCell>
+                        <TableCell className="font-bold text-sm">
+                          <p>{item.productName}</p>
+                          {item.productUnits && item.productUnits.length > 0 ? (
+                            <Select 
+                              value={item.unitType} 
+                              onValueChange={(val) => {
+                                const selectedUnit = item.productUnits.find((u: any) => u.unit === val);
+                                const factor = selectedUnit ? selectedUnit.factor : 1;
+                                const newItems = [...newPurchase.items!];
+                                newItems[idx].unitType = val;
+                                newItems[idx].unitFactor = factor;
+                                setNewPurchase({...newPurchase, items: newItems});
+                              }}
+                            >
+                              <SelectTrigger className="h-6 w-fit text-[10px] p-1 mt-1 bg-[var(--bg)] border-[var(--border)]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value={item.baseUnit}>{item.baseUnit}</SelectItem>
+                                {item.productUnits.map((u: any) => (
+                                  <SelectItem key={u.id} value={u.unit}>{u.unit}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Badge variant="secondary" className="mt-1 text-[9px] w-fit font-black h-4 px-1 leading-none">
+                              {item.unitType}
+                            </Badge>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <NumberInput 
                             value={item.quantity} 

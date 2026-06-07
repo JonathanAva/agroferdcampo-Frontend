@@ -17,6 +17,8 @@ export interface CashShift {
   openingNotes: string | null;
   notes: string | null;
   status: 'ABIERTO' | 'CERRADO';
+  closeRequested?: boolean;
+  closeRequestedAt?: string | null;
   cashRegister?: CashRegister;
 }
 
@@ -60,7 +62,10 @@ export interface OpenShiftPayload {
 }
 
 export interface CloseShiftPayload {
-  breakdown: DenominationBreakdown;
+  breakdown?: DenominationBreakdown;
+  countedCash?: number;
+  countedTarjeta?: number;
+  countedTransferencia?: number;
   notes?: string;
 }
 
@@ -110,5 +115,28 @@ export const cashShiftsService = {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  },
+
+  requestClose: async (payload: CloseShiftPayload): Promise<CashShift> => {
+    return await apiRequest<CashShift>(`${BASE}/close-request`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  closeShiftById: async (id: number, payload: CloseShiftPayload): Promise<{ summary: any }> => {
+    return await apiRequest<{ summary: any }>(`${BASE}/${id}/close`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getExpectedTotalsById: async (id: number): Promise<{ expectedAmount: number; expectedTarjeta: number; expectedTransferencia: number }> => {
+    return await apiRequest<{ expectedAmount: number; expectedTarjeta: number; expectedTransferencia: number }>(`${BASE}/${id}/expected-totals`);
+  },
+
+  getPendingCloseRequests: async (): Promise<CashShift[]> => {
+    const res = await apiRequest<{ data: CashShift[] } | CashShift[]>(`${BASE}/pending-requests`);
+    return Array.isArray(res) ? res : res.data;
   }
 };

@@ -9,6 +9,8 @@ export interface SaleItemDto {
   productId: number;
   quantity: number;
   unitPrice: number;
+  unitType?: string;
+  unitFactor?: number;
 }
 
 export interface SalePaymentDto {

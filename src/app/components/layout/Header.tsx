@@ -5,6 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useBranch } from "../../context/BranchContext";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
+import { NotificationsBell } from "./NotificationsBell";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -114,6 +115,8 @@ export function Header({ onMenuClick }: HeaderProps) {
             )}
           </div>
         </button>
+
+        <NotificationsBell />
 
         {/* User Info & Logout */}
         <div className="flex items-center gap-2 md:gap-3">

@@ -340,7 +340,7 @@ export function Quotes() {
           <h1 className="text-3xl font-bold text-[var(--text-main)]">Cotizaciones</h1>
           <p className="text-[var(--text-sec)]">Gestiona las cotizaciones de clientes y conviértelas en ventas.</p>
         </div>
-        <Button onClick={() => setCreateQuoteModalOpen(true)} className="font-bold whitespace-nowrap bg-[var(--primary)] text-white hover:bg-[var(--primary)]/90">
+        <Button onClick={() => navigate('/quotes/new')} className="font-bold whitespace-nowrap bg-[var(--primary)] text-white hover:bg-[var(--primary)]/90">
           <Plus size={16} className="mr-2" /> Nueva Cotización
         </Button>
       </div>
@@ -571,8 +571,40 @@ export function Quotes() {
                       ))}
                     </TableBody>
                     </Table>
-                  <div className="p-4 border-t border-[var(--border)] bg-[var(--bg)] flex justify-end">
-                    <p className="text-xl font-black">Total: <span className="text-[var(--primary)]">${Number(selectedQuote.totalAmount).toFixed(2)}</span></p>
+                  <div className="p-4 border-t border-[var(--border)] bg-[var(--bg)] flex flex-col md:flex-row justify-between items-end gap-4">
+                    <div className="text-[var(--text-sec)]">
+                      {(() => {
+                        let totalCost = 0;
+                        selectedQuote.items?.forEach(i => {
+                          const cost = Number(i.costPrice) || Number(i.product?.costPrice) || 0;
+                          totalCost += cost * Number(i.quantity);
+                        });
+                        const estimatedGain = Number(selectedQuote.totalAmount) - totalCost;
+                        const gainPercent = totalCost > 0 ? (estimatedGain / totalCost) * 100 : 0;
+                        return (
+                          <div className="flex gap-4 text-xs font-bold bg-[var(--card)] border border-[var(--border)] p-3 rounded-xl shadow-sm">
+                            <div className="flex flex-col">
+                              <span className="uppercase text-[10px] tracking-wider mb-1">Costo Total</span>
+                              <span className="text-[var(--text-main)]">${totalCost.toFixed(2)}</span>
+                            </div>
+                            <div className="w-px bg-[var(--border)]"></div>
+                            <div className="flex flex-col">
+                              <span className="uppercase text-[10px] tracking-wider mb-1 text-emerald-600">Ganancia Estimada</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-emerald-600">${estimatedGain.toFixed(2)}</span>
+                                <span className={cn("text-[10px] font-mono px-1.5 py-0.5 rounded-md border", gainPercent < 5 ? "text-rose-500 border-rose-500/30 bg-rose-500/10" : "text-emerald-600 border-emerald-500/30 bg-emerald-500/10")}>
+                                  {gainPercent.toFixed(1)}%
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold text-[var(--text-sec)] uppercase tracking-wider mb-1">Total Cotización</p>
+                      <p className="text-3xl font-black text-[var(--primary)]">${Number(selectedQuote.totalAmount).toFixed(2)}</p>
+                    </div>
                   </div>
                 </div>
               </div>

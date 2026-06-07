@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 import { apiRequest } from "../config/api";
+import { formatSmartInventory } from "../utils/inventory";
 
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
@@ -69,6 +70,7 @@ interface Product {
   prices?: ProductPrice[];
   category?: { name: string };
   unit: string;
+  units?: { unit: string; factor: number }[];
 }
 
 function getPublicPrice(product: Product): number {
@@ -681,21 +683,26 @@ function InventoryList() {
                               : "var(--primary)",
                         }}
                       >
-                        {Number(item.quantity)}
+                        {Number(item.quantity)} {item.product.unit}
                       </span>
                       <span className="text-[9px] uppercase font-black opacity-30 text-[var(--text-sec)]">
-                        MÍN: {Number(item.minStock)}
+                        MÍN: {Number(item.minStock)} {item.product.unit}
                       </span>
                     </div>
                   </TableCell>
                   <TableCell className="text-center">
                     {getStatusBadge(item)}
                   </TableCell>
-                  <TableCell className="text-right">
-                    <span className="font-black text-[var(--text-main)]">
-                      ${getPublicPrice(item.product).toFixed(2)}
-                    </span>
-                  </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex flex-col items-end">
+                        <span className="font-black text-[var(--text-main)]">
+                          ${getPublicPrice(item.product).toFixed(2)}
+                        </span>
+                        <span className="text-[9px] font-bold opacity-40 text-[var(--text-sec)]">
+                          / {item.product.unit}
+                        </span>
+                      </div>
+                    </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-center gap-1">
                       {canAdjust && (

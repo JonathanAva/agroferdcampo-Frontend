@@ -4,6 +4,8 @@ export interface PurchaseItemDto {
   productId: number;
   quantity: number;
   unitCost: number;
+  unitType?: string;
+  unitFactor?: number;
 }
 
 export interface CreatePurchaseDto {
