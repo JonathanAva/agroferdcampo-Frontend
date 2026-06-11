@@ -439,14 +439,16 @@ export function Finance() {
             <div className="flex-1 bg-[var(--card)] p-4 rounded-xl border border-[var(--border)] shadow-sm">
               <SmartFilter config={financeFilters} />
             </div>
-            <Button 
-              onClick={() => setShowAddGeneralModal(true)} 
-              disabled={checkingShift || !hasActiveShift}
-              title={!hasActiveShift ? "Debes abrir caja para registrar movimientos" : ""}
-              className="font-bold whitespace-nowrap h-fit"
-            >
-              Registrar Movimiento
-            </Button>
+            {user?.roleId !== 4 && (
+              <Button 
+                onClick={() => setShowAddGeneralModal(true)} 
+                disabled={checkingShift || !hasActiveShift}
+                title={!hasActiveShift ? "Debes abrir caja para registrar movimientos" : ""}
+                className="font-bold whitespace-nowrap h-fit"
+              >
+                Registrar Movimiento
+              </Button>
+            )}
           </div>
 
           {/* TABLA GENERAL */}
@@ -669,7 +671,9 @@ export function Finance() {
                               </Button>
                             </div>
                           ) : s.closeRequested ? (
-                            <Button size="sm" className="bg-rose-500 hover:bg-rose-600 text-white" onClick={() => handleOpenAdminCloseShift(s.id)}>Aprobar Cierre</Button>
+                            user?.roleId && user.roleId <= 3 ? (
+                              <Button size="sm" className="bg-rose-500 hover:bg-rose-600 text-white" onClick={() => handleOpenAdminCloseShift(s.id)}>Aprobar Cierre</Button>
+                            ) : <span className="text-xs text-[var(--text-sec)]">Pendiente de aprobación</span>
                           ) : (
                             <span className="text-xs text-[var(--text-sec)]">Pendiente</span>
                           )}

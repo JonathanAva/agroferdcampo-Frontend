@@ -13,6 +13,7 @@ import { apiRequest } from '../../config/api';
 import { toast } from 'sonner';
 import { User, Building2, UserCheck, ShieldCheck } from 'lucide-react';
 import { cn } from '../ui/utils';
+import { useAuth } from '../../context/AuthContext';
 
 interface CustomerDialogProps {
   open: boolean;
@@ -22,6 +23,8 @@ interface CustomerDialogProps {
 }
 
 export function CustomerDialog({ open, onOpenChange, customer, onSuccess }: CustomerDialogProps) {
+  const { user } = useAuth();
+  const isAdmin = user?.roleId === 1 || user?.roleId === 2;
   const [loading, setLoading] = useState(false);
   const isEdit = !!customer;
 
@@ -271,14 +274,16 @@ export function CustomerDialog({ open, onOpenChange, customer, onSuccess }: Cust
                       placeholder="14"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label>Límite Crédito ($)</Label>
-                    <Input 
-                      type="number"
-                      value={formData.creditLimit} 
-                      onChange={(e) => handleChange('creditLimit', e.target.value)}
-                    />
-                  </div>
+                  {isAdmin && (
+                    <div className="space-y-2">
+                      <Label>Límite Crédito ($)</Label>
+                      <Input 
+                        type="number"
+                        value={formData.creditLimit} 
+                        onChange={(e) => handleChange('creditLimit', e.target.value)}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 

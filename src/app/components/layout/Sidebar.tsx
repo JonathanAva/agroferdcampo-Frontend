@@ -25,19 +25,16 @@ import {
 
 const navLinks = [
   { path: "/home", icon: Sprout, label: "Inicio" },
-  { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { path: "/pos", icon: ShoppingCart, label: "Punto de Venta" },
-  { path: "/sales", icon: History, label: "Historial de Ventas" },
-  { path: "/quotes", icon: FileText, label: "Cotizaciones" },
-  { path: "/inventory", icon: Package, label: "Inventario" },
-  { path: "/purchases", icon: ShoppingBag, label: "Compras a Prov." },
-  { path: "/delivery-notes", icon: TruckIcon, label: "Albaranes" },
-  { path: "/customers", icon: Users, label: "Clientes" },
-  { path: "/credit", icon: Landmark, label: "Cuentas por Cobrar" },
-  { path: "/finance", icon: Wallet, label: "Finanzas y Caja" },
+  { path: "/pos", icon: ShoppingCart, label: "Punto de Venta", roles: [1, 2, 3, 4] },
+  { path: "/sales", icon: History, label: "Historial de Ventas", roles: [1, 2, 3, 4] },
+  { path: "/quotes", icon: FileText, label: "Cotizaciones", roles: [1, 2, 3, 4] },
+  { path: "/inventory", icon: Package, label: "Inventario", roles: [1, 2, 3, 5] },
+  { path: "/purchases", icon: ShoppingBag, label: "Compras a Prov.", roles: [1, 2, 5] },
+  { path: "/delivery-notes", icon: TruckIcon, label: "Albaranes", roles: [1, 2, 3, 5] },
+  { path: "/customers", icon: Users, label: "Clientes", roles: [1, 2, 3, 4] },
+  { path: "/credit", icon: Landmark, label: "Cuentas por Cobrar", roles: [1, 2, 3, 4] },
+  { path: "/finance", icon: Wallet, label: "Finanzas y Caja", roles: [1, 2, 3, 4] },
   { path: "/rrhh", icon: Briefcase, label: "Recursos Humanos", roles: [1, 2, 3] },
-  { path: "/reports", icon: FileText, label: "Reportes" },
-  { path: "/settings", icon: Settings, label: "Configuración" },
 ];
 
 interface SidebarProps {
@@ -145,13 +142,26 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         {/* Footer Info */}
         <div
-          className="mt-auto pt-6 border-t text-sm border-[var(--border)]"
+          className="mt-auto pt-6 border-t text-sm border-[var(--border)] flex justify-between items-center"
         >
-          <p className="font-semibold text-[var(--text-main)]">
-            Agroferr D'Campo
-          </p>
-
-          <p className="text-xs mt-1 text-[var(--text-sec)]">Sistema Multi-Sucursal v1.0</p>
+          <div>
+            <p className="font-semibold text-[var(--text-main)]">
+              Agroferr D'Campo
+            </p>
+            <p className="text-xs mt-1 text-[var(--text-sec)]">Sistema Multi-Sucursal v1.0</p>
+          </div>
+          {(!user?.roleId || user.roleId === 1 || user.roleId === 2) && (
+            <Link
+              to="/settings"
+              onClick={() => {
+                if (window.innerWidth < 768) onClose();
+              }}
+              className="p-2 rounded-lg transition-colors hover:bg-[var(--accent)] hover:text-[var(--primary)] text-[var(--text-sec)]"
+              title="Configuración"
+            >
+              <Settings size={20} />
+            </Link>
+          )}
         </div>
       </aside>
     </>

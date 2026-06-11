@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShoppingCart, FileText, TruckIcon, Users, Package, 
   Landmark, Route, Wallet, Briefcase
 } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
+import { Dashboard } from './Dashboard';
 import { Badge } from '../components/ui/badge';
 import { useAuth } from '../context/AuthContext';
 import { useBranch } from '../context/BranchContext';
@@ -12,19 +13,59 @@ export function Home() {
   const { user } = useAuth();
   const { selectedBranch } = useBranch();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "home");
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    setSearchParams({ tab });
+  };
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && (tab === "home" || tab === "dashboard")) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   return (
-    <div className="flex flex-col gap-6 h-full overflow-y-auto pb-8 animate-in fade-in duration-500">
-      <div>
+    <div className="flex flex-col h-full animate-in fade-in duration-500">
+      <div className="shrink-0 mb-4 px-2 pt-2">
         <h1 className="text-3xl font-extrabold text-[var(--text-main)] tracking-tight">
-          Inicio Rapido
+          Inicio
         </h1>
         <p className="text-[var(--text-sec)]">
           Hola, {user?.name}. Sucursal: <span className="font-semibold text-[var(--text-main)]">{selectedBranch?.name || user?.branch || 'Principal'}</span>.
         </p>
       </div>
 
-      <div className="flex flex-col gap-6 my-2">
+      {/* Tabs Selector */}
+      <div className="flex border-b border-[var(--border)] shrink-0 mb-4 px-2">
+        <button
+          onClick={() => handleTabChange("home")}
+          className={`px-6 py-3 font-bold text-sm transition-all border-b-2 -mb-[1px] cursor-pointer ${
+            activeTab === "home"
+              ? "border-[var(--primary)] text-[var(--primary)] font-black"
+              : "border-transparent text-[var(--text-sec)] hover:text-[var(--text-main)]"
+          }`}
+        >
+          Acciones Frecuentes
+        </button>
+        <button
+          onClick={() => handleTabChange("dashboard")}
+          className={`px-6 py-3 font-bold text-sm transition-all border-b-2 -mb-[1px] cursor-pointer ${
+            activeTab === "dashboard"
+              ? "border-[var(--primary)] text-[var(--primary)] font-black"
+              : "border-transparent text-[var(--text-sec)] hover:text-[var(--text-main)]"
+          }`}
+        >
+          Dashboard Estratégico
+        </button>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto px-2">
+        {activeTab === 'home' && (
+          <div className="flex flex-col gap-6 my-2 pb-8">
         {/* Acciones Frecuentes */}
         <div>
           <h2 className="text-[11px] font-black text-[var(--text-sec)] uppercase tracking-widest mb-3">Acciones Frecuentes</h2>
@@ -89,6 +130,12 @@ export function Home() {
             />
           </div>
         </div>
+        </div>
+        )}
+        
+        {activeTab === 'dashboard' && (
+          <Dashboard />
+        )}
       </div>
     </div>
   );

@@ -301,8 +301,10 @@ export function Purchases() {
       case 'BORRADOR': return <Badge variant="secondary">Borrador</Badge>;
       case 'CONFIRMADA': return <Badge variant="warning" className="bg-blue-500/10 text-blue-600">Confirmada</Badge>;
       case 'RECIBIDA': return <Badge variant="success">Recibida</Badge>;
+      case 'RECIBIDA_TOTAL': return <Badge variant="success">Recibida Total</Badge>;
+      case 'RECIBIDA_PARCIAL': return <Badge variant="warning">Recibida Parcial</Badge>;
       case 'CANCELADA': return <Badge variant="destructive">Cancelada</Badge>;
-      default: return <Badge variant="outline">{status}</Badge>;
+      default: return <Badge variant="outline">{status.replace('_', ' ')}</Badge>;
     }
   };
 
@@ -819,7 +821,7 @@ export function Purchases() {
                       {getStatusBadge(purchase.status)}
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant={purchase.isPaid ? 'success' : 'outline'}>
+                      <Badge variant={purchase.isPaid ? 'success' : 'warning'}>
                         {purchase.isPaid ? 'PAGADO' : 'PENDIENTE'}
                       </Badge>
                     </TableCell>

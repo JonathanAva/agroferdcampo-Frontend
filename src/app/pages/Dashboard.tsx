@@ -89,7 +89,7 @@ export function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-6 h-full animate-pulse">
+      <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-10 bg-[var(--border)] rounded w-64" />
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map(i => <div key={i} className="h-32 bg-[var(--card)] rounded-2xl" />)}
@@ -121,7 +121,7 @@ export function Dashboard() {
   ];
 
   return (
-    <div className="flex flex-col gap-6 h-full overflow-y-auto pb-8 scrollbar-thin">
+    <div className="flex flex-col gap-6 pb-8">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

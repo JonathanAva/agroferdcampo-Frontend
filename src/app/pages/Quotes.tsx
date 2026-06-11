@@ -20,6 +20,7 @@ import { Switch } from '../components/ui/switch';
 import { apiRequest } from '../config/api';
 import { TransportSelector, TransportData } from '../components/transport/TransportSelector';
 import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
+import { useAuth } from '../context/AuthContext';
 import { 
   Command, 
   CommandInput, 
@@ -40,6 +41,7 @@ const quotesFilters: FilterConfig[] = [
   { id: 'date', label: 'Fecha Específica', type: 'date_range' }
 ];
 export function Quotes() {
+  const { user } = useAuth();
   const [quotes, setQuotes] = useState<QuoteResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
@@ -429,18 +431,20 @@ export function Quotes() {
                                 Editar Cliente
                               </DropdownMenuItem>
                               
-                              <DropdownMenuItem 
-                                onClick={() => handleOpenConfirmModal(quote)} 
-                                disabled={confirmingId === quote.id}
-                                className="font-bold cursor-pointer text-emerald-600 focus:text-emerald-700"
-                              >
-                                {confirmingId === quote.id ? (
-                                  <RefreshCcw size={14} className="mr-2 animate-spin" />
-                                ) : (
-                                  <CheckCircle2 size={14} className="mr-2" />
-                                )}
-                                Confirmar a Venta
-                              </DropdownMenuItem>
+                              {user?.roleId !== 4 && (
+                                <DropdownMenuItem 
+                                  onClick={() => handleOpenConfirmModal(quote)} 
+                                  disabled={confirmingId === quote.id}
+                                  className="font-bold cursor-pointer text-emerald-600 focus:text-emerald-700"
+                                >
+                                  {confirmingId === quote.id ? (
+                                    <RefreshCcw size={14} className="mr-2 animate-spin" />
+                                  ) : (
+                                    <CheckCircle2 size={14} className="mr-2" />
+                                  )}
+                                  Confirmar a Venta
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem 
                                 onClick={() => handleCancelQuote(quote)} 
                                 disabled={cancelingId === quote.id}
@@ -642,16 +646,18 @@ export function Quotes() {
                   >
                     Cancelar Cotización
                   </Button>
-                  <Button 
-                    onClick={() => {
-                      handleOpenConfirmModal(selectedQuote);
-                      setDetailModalOpen(false);
-                    }}
-                    disabled={confirmingId === selectedQuote.id}
-                    className="font-bold text-white bg-[var(--primary)] hover:bg-[var(--primary)]/90"
-                  >
-                    Confirmar Venta
-                  </Button>
+                  {user?.roleId !== 4 && (
+                    <Button 
+                      onClick={() => {
+                        handleOpenConfirmModal(selectedQuote);
+                        setDetailModalOpen(false);
+                      }}
+                      disabled={confirmingId === selectedQuote.id}
+                      className="font-bold text-white bg-[var(--primary)] hover:bg-[var(--primary)]/90"
+                    >
+                      Confirmar Venta
+                    </Button>
+                  )}
                 </div>
               )}
             </>

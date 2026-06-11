@@ -1422,7 +1422,13 @@ export function POS() {
                 </SelectTrigger>
                 <SelectContent>
                   {availableRegisters.map(reg => (
-                    <SelectItem key={reg.id} value={reg.id.toString()}>{reg.name}</SelectItem>
+                    <SelectItem 
+                      key={reg.id} 
+                      value={reg.id.toString()}
+                      disabled={reg.isOpen}
+                    >
+                      {reg.name} {reg.isOpen && <span className="text-[var(--text-sec)] text-xs ml-2">(Abierta por {reg.openedBy || 'otro usuario'})</span>}
+                    </SelectItem>
                   ))}
                   {availableRegisters.length === 0 && (
                     <div className="p-2 text-sm text-[var(--text-sec)]">No hay cajas disponibles</div>

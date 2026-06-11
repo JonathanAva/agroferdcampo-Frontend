@@ -1,5 +1,6 @@
 import { Bell } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import notificationSoundUrl from "../../../assets/notification.mp3";
 import { cashShiftsService } from "../../services/cash-shifts.service";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Button } from "../ui/button";
@@ -16,10 +17,24 @@ export function NotificationsBell() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  const prevReqsRef = useRef<number[]>([]);
+
   const fetchRequests = async () => {
     try {
       const data = await cashShiftsService.getPendingCloseRequests();
       setPendingRequests(data);
+
+      const newIds = data.map((d: any) => d.id);
+      const oldIds = prevReqsRef.current;
+      
+      const hasNew = newIds.some((id: number) => !oldIds.includes(id));
+      // Solo reproducimos sonido si ya habiamos cargado antes (oldIds.length > 0 o si es la primera carga y hay nuevos, depende de si queremos que suene al iniciar)
+      // Lo mejor es no sonar al primer render para no asustar al usuario cada que entra a la app, asi que oldIds.length > 0
+      if (oldIds.length > 0 && hasNew) {
+        const audio = new Audio(notificationSoundUrl);
+        audio.play().catch(e => console.log("Audio no pudo reproducirse por políticas del navegador:", e));
+      }
+      prevReqsRef.current = newIds;
     } catch (error) {
       console.error("Failed to fetch pending requests", error);
     }
@@ -48,8 +63,8 @@ export function NotificationsBell() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative text-[var(--text-sec)] hover:text-[var(--text-main)] transition-colors">
-          <Bell size={20} />
+        <Button variant="outline" size="icon" className="relative text-[var(--text-main)] bg-[var(--bg)] border border-[var(--border)] hover:bg-[var(--accent)] hover:text-[var(--primary)] transition-all shadow-sm">
+          <Bell size={20} className={visibleRequests.length > 0 ? "text-rose-500" : ""} />
           {visibleRequests.length > 0 && (
             <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-[var(--bg)]"></span>
           )}

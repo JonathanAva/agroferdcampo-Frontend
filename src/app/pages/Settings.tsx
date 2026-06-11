@@ -1,4 +1,4 @@
-import { Settings as SettingsIcon, Building2, Users, Receipt, Bell, Palette, Monitor } from 'lucide-react';
+import { Settings as SettingsIcon, Building2, Users, Palette, Monitor, FileText } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigate } from 'react-router';
@@ -38,18 +38,12 @@ const SETTINGS_SECTIONS = [
     path: '/users',
   },
   {
-    id: '3',
-    title: 'Facturación Electrónica',
-    description: 'Configurar integración DTE y certificados',
-    icon: Receipt,
+    id: 'reports',
+    title: 'Reportes',
+    description: 'Consultar estadísticas, ventas y métricas del sistema',
+    icon: FileText,
     adminOnly: false,
-  },
-  {
-    id: '4',
-    title: 'Notificaciones',
-    description: 'Configurar alertas de stock, pagos y sistema',
-    icon: Bell,
-    adminOnly: false,
+    path: '/reports',
   },
 ];
 
