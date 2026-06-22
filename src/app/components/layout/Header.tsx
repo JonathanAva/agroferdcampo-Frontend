@@ -5,6 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useBranch } from "../../context/BranchContext";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
+import { NotificationsBell } from "./NotificationsBell";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -63,6 +64,8 @@ export function Header({ onMenuClick }: HeaderProps) {
 
       {/* Right Section */}
       <div className="flex items-center gap-2 md:gap-4">
+        <NotificationsBell />
+
         {/* Branch Display (Non-clickable) */}
         {(selectedBranch || user?.branch) && (
           <div

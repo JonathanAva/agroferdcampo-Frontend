@@ -1,4 +1,4 @@
-import { Settings as SettingsIcon, Building2, Users, Receipt, Bell, Palette } from 'lucide-react';
+import { Settings as SettingsIcon, Building2, Users, Palette, Monitor, FileText } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigate } from 'react-router';
@@ -22,6 +22,14 @@ const SETTINGS_SECTIONS = [
     path: '/settings/branches',
   },
   {
+    id: 'cash-registers',
+    title: 'Cajas Físicas',
+    description: 'Gestionar terminales de punto de venta',
+    icon: Monitor,
+    adminOnly: true,
+    path: '/settings/cash-registers',
+  },
+  {
     id: '2',
     title: 'Gestión de Usuarios',
     description: 'Administrar usuarios, roles y permisos',
@@ -30,18 +38,12 @@ const SETTINGS_SECTIONS = [
     path: '/users',
   },
   {
-    id: '3',
-    title: 'Facturación Electrónica',
-    description: 'Configurar integración DTE y certificados',
-    icon: Receipt,
+    id: 'reports',
+    title: 'Reportes',
+    description: 'Consultar estadísticas, ventas y métricas del sistema',
+    icon: FileText,
     adminOnly: false,
-  },
-  {
-    id: '4',
-    title: 'Notificaciones',
-    description: 'Configurar alertas de stock, pagos y sistema',
-    icon: Bell,
-    adminOnly: false,
+    path: '/reports',
   },
 ];
 

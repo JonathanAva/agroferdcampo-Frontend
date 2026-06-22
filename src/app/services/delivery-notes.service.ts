@@ -38,6 +38,7 @@ export interface DeliverDeliveryNoteDto {
   clientSignedBy?: string;
   clientSignature?: string;
   proofPhoto?: string;
+  proofPhotos?: string[];
 }
 
 export interface DeliveryNoteResponse {
@@ -67,6 +68,7 @@ export interface DeliveryNoteResponse {
   vehicle?: any;
   driver?: any;
   route?: any;
+  sale?: any;
   items: Array<{
     id: number;
     productId: number;

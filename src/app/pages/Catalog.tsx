@@ -70,6 +70,14 @@ interface CatalogProduct {
   isActive: boolean;
   category?: { id: number; name: string };
   prices: ProductPrice[];
+  units?: {
+    id: number;
+    unit: string;
+    factor: number | string;
+    priceDetalle?: number | string;
+    priceMayorista?: number | string;
+    barcode?: string;
+  }[];
   inventory?: { branchId: number; quantity: string; minStock: string }[];
 }
 
@@ -95,7 +103,12 @@ interface PriceRow {
   price: string;
 }
 
-const UNITS = ["UNIDAD", "KG", "LB", "QUINTAL", "CAJA", "LITRO"];
+const UNITS = [
+  "UNIDAD", "KG", "LB", "QUINTAL", "CAJA", "LITRO",
+  "ARROBA", "KINTALE", "METRO", "YARDA", "PIE", "GALON",
+  "CUBETA", "CUARTO_GALON", "GRAMO", "CENTIMETRO",
+  "PULGADA", "ONZA", "SACO", "BULTO", "PAQUETE", "TONELADA"
+];
 const PRICE_TYPES = ["PUBLICO", "MAYOREO", "ESPECIAL"];
 
 // --- Validation Schema ---
@@ -118,6 +131,16 @@ const productSchema = z.object({
       }),
     )
     .min(1, "Al menos un precio es requerido"),
+  units: z.array(
+    z.object({
+      id: z.number().optional(),
+      unit: z.string().min(1, "Unidad requerida"),
+      factor: z.string().min(1, "Factor requerido"),
+      priceDetalle: z.string().optional(),
+      priceMayorista: z.string().optional(),
+      barcode: z.string().optional(),
+    })
+  ).optional(),
   stockRows: z.array(
     z.object({
       branchId: z.string(),
@@ -197,6 +220,15 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   });
 
   const {
+    fields: unitFields,
+    append: appendUnit,
+    remove: removeUnit,
+  } = useFieldArray({
+    control,
+    name: "units",
+  });
+
+  const {
     fields: stockFields,
     append: appendStock,
     remove: removeStock,
@@ -266,6 +298,14 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
           branchId: p.branchId === null ? "global" : String(p.branchId),
           price: String(p.price),
         })),
+        units: product.units ? product.units.map((u) => ({
+          id: u.id,
+          unit: u.unit,
+          factor: String(u.factor),
+          priceDetalle: u.priceDetalle ? String(u.priceDetalle) : "",
+          priceMayorista: u.priceMayorista ? String(u.priceMayorista) : "",
+          barcode: u.barcode || "",
+        })) : [],
         stockRows: [],
       });
     } else {
@@ -280,6 +320,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         costPrice: "",
         trackStock: true,
         prices: [{ priceType: "PUBLICO", branchId: "global", price: "" }],
+        units: [],
         stockRows: [],
       });
     }
@@ -320,6 +361,14 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       internalCode: data.internalCode?.trim() || undefined,
       barcode: data.barcode?.trim() || undefined,
       description: data.description?.trim() || undefined,
+      units: data.units?.map((u) => ({
+        id: u.id,
+        unit: u.unit,
+        factor: Number(u.factor),
+        priceDetalle: u.priceDetalle ? Number(u.priceDetalle) : null,
+        priceMayorista: u.priceMayorista ? Number(u.priceMayorista) : null,
+        barcode: u.barcode?.trim() || undefined,
+      })) || [],
     };
 
     if (!editingProduct) {
@@ -543,9 +592,14 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                   </span>
                 </TableCell>
                 <TableCell className="text-right">
-                  <span className="font-black text-[var(--primary)] text-base">
-                    ${getPublicPrice(product.prices)}
-                  </span>
+                  <div className="flex flex-col items-end">
+                    <span className="font-black text-[var(--primary)] text-base">
+                      ${getPublicPrice(product.prices)}
+                    </span>
+                    <span className="text-[9px] font-bold opacity-40 text-[var(--text-sec)]">
+                      / {product.unit}
+                    </span>
+                  </div>
                 </TableCell>
                 <TableCell>
                   <div className="flex justify-center">
@@ -776,10 +830,10 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                     {priceFields.map((field, i) => (
                       <div
                         key={field.id}
-                        className="p-4 rounded-xl border bg-[var(--card)] border-[var(--border)] space-y-3 relative group"
+                        className="p-3 rounded-xl border bg-[var(--card)] border-[var(--border)] relative group"
                       >
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1">
+                        <div className="grid grid-cols-12 gap-2 sm:gap-3 items-end">
+                          <div className="col-span-5 sm:col-span-4 space-y-1">
                             <Label className="text-[10px] font-bold uppercase opacity-50">
                               Tipo
                             </Label>
@@ -801,7 +855,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                               </SelectContent>
                             </Select>
                           </div>
-                          <div className="space-y-1">
+                          <div className="col-span-4 sm:col-span-4 space-y-1">
                             <Label className="text-[10px] font-bold uppercase opacity-50">
                               Sucursal
                             </Label>
@@ -824,22 +878,22 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                               </SelectContent>
                             </Select>
                           </div>
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-[10px] font-bold uppercase opacity-50">
-                            Precio
-                          </Label>
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">
-                              $
-                            </span>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              {...register(`prices.${i}.price`)}
-                              className="h-9 pl-6 rounded-lg"
-                              placeholder="0.00"
-                            />
+                          <div className="col-span-3 sm:col-span-4 space-y-1">
+                            <Label className="text-[10px] font-bold uppercase opacity-50">
+                              Precio
+                            </Label>
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-bold">
+                                $
+                              </span>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                {...register(`prices.${i}.price`)}
+                                className="h-9 pl-6 rounded-lg font-bold"
+                                placeholder="0.00"
+                              />
+                            </div>
                           </div>
                         </div>
                         {priceFields.length > 1 && (
@@ -864,6 +918,139 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                             <Trash2 size={14} />
                           </button>
                         )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sección Unidades Secundarias */}
+                <div className="p-6 rounded-xl border border-[var(--border)] space-y-6 bg-[var(--surface)]">
+                  <div className="flex items-start justify-between flex-col sm:flex-row sm:items-center gap-4">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-widest opacity-60 text-[var(--text-sec)]">
+                        Unidades de Venta Adicionales
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">Si vendes este producto en otras presentaciones (Ej. por Caja, Docena, etc.), agrégalas aquí.</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        appendUnit({
+                          unit: "",
+                          factor: "",
+                          priceDetalle: "",
+                          priceMayorista: "",
+                          barcode: "",
+                        })
+                      }
+                      className="rounded-full gap-2 border-[var(--border)] bg-transparent hover:bg-[var(--border)]"
+                    >
+                      <Plus size={16} />
+                      Agregar Presentación
+                    </Button>
+                  </div>
+                  <div className="space-y-4">
+                    {unitFields.map((field, i) => (
+                      <div
+                        key={field.id}
+                        className="p-4 rounded-xl border bg-[var(--card)] border-[var(--border)] space-y-4 relative group"
+                      >
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label className="text-[10px] font-bold uppercase opacity-50 block">Selecciona la Unidad Alternativa</Label>
+                            <Select
+                              value={watch(`units.${i}.unit`)}
+                              onValueChange={(v) => setValue(`units.${i}.unit`, v)}
+                            >
+                              <SelectTrigger className="h-9 rounded-lg font-bold">
+                                <SelectValue placeholder="Ej. CAJA, DOCENA..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {UNITS.map((t) => (
+                                  <SelectItem key={t} value={t}>
+                                    {t}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="flex flex-col gap-2 p-2 bg-[var(--surface)] rounded-xl border border-[var(--border)] border-dashed relative">
+                            <Label className="text-[9px] font-bold uppercase opacity-60 absolute -top-2 left-3 bg-[var(--card)] px-1.5">¿Equivalencia?</Label>
+                            <div className="flex items-center justify-center gap-2 w-full mt-1.5">
+                              <span className="text-xs font-bold opacity-80 whitespace-nowrap">
+                                1 {watch(`units.${i}.unit`) || 'Nueva'}
+                              </span>
+                              <span className="text-xs opacity-40 font-bold">=</span>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                {...register(`units.${i}.factor`)}
+                                className="h-8 w-20 text-center font-black text-sm bg-[var(--card)] border-[var(--border)] focus-visible:ring-[var(--primary)]"
+                                placeholder="Ej. 12"
+                              />
+                              <span className="text-xs font-black text-[var(--primary)] whitespace-nowrap">
+                                {watch("unit") || 'Base'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="space-y-1">
+                            <Label className="text-[10px] font-bold uppercase opacity-50 block">Precio (Detalle)</Label>
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-xs">$</span>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                {...register(`units.${i}.priceDetalle`)}
+                                className="h-9 pl-6 rounded-lg font-bold"
+                                placeholder="0.00"
+                              />
+                            </div>
+                            <p className="text-[9px] font-bold text-[var(--primary)] opacity-70 leading-none pt-0.5">Dejar vacío para auto-calcular</p>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[10px] font-bold uppercase opacity-50 block">Precio (Mayorista)</Label>
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-xs">$</span>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                {...register(`units.${i}.priceMayorista`)}
+                                className="h-9 pl-6 rounded-lg font-bold"
+                                placeholder="0.00"
+                              />
+                            </div>
+                            <p className="text-[9px] font-bold text-[var(--primary)] opacity-70 leading-none pt-0.5">Dejar vacío para auto-calcular</p>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[10px] font-bold uppercase opacity-50 block">Cód. Barras</Label>
+                            <Input
+                              type="text"
+                              {...register(`units.${i}.barcode`)}
+                              className="h-9 rounded-lg"
+                              placeholder="Opcional..."
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const unitId = watch(`units.${i}.id`);
+                            if (unitId && editingProduct) {
+                              if (!confirm("¿Eliminar esta presentación? Se aplicará inmediatamente.")) return;
+                            }
+                            removeUnit(i);
+                          }}
+                          className="absolute -top-3 -right-3 bg-red-500 text-white rounded-full p-2 shadow-md z-10 hover:scale-110 hover:bg-red-600 transition-all"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     ))}
                   </div>

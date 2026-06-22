@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from "react-router";
 import { Layout } from "./components/layout/Layout";
+import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { Login } from "./pages/Login";
 import { ForgotPassword } from "./pages/ForgotPassword";
 import { ResetPassword } from "./pages/ResetPassword";
@@ -15,12 +16,14 @@ import { Reports } from "./pages/Reports";
 import { Settings } from "./pages/Settings";
 import { ThemeCustomizer } from "./pages/ThemeCustomizer";
 import { Branches as BranchesPage } from "./pages/Branches";
+import { CashRegisters } from "./pages/CashRegisters";
 import { HumanResources } from "./pages/HumanResources";
 import { Catalog } from "./pages/Catalog";
 import { UIComponentsShowcase } from "./pages/UIComponentsShowcase";
 import { SalesHistory } from "./pages/SalesHistory";
 import { SystemConfig } from "./pages/SystemConfig";
 import { Quotes } from "./pages/Quotes";
+import { NewQuote } from "./pages/NewQuote";
 import { Purchases } from "./pages/Purchases";
 import { DeliveryNotes } from "./pages/DeliveryNotes";
 import { Credit } from "./pages/Credit";
@@ -57,88 +60,61 @@ export const router = createBrowserRouter([
         element: <Dashboard />,
       },
       {
-        path: "pos",
-        element: <POS />,
-      },
-      {
-        path: "sales",
-        element: <SalesHistory />,
-      },
-      {
-        path: "quotes",
-        element: <Quotes />,
-      },
-      {
-        path: "catalog",
-        element: <Catalog />,
-      },
-      {
-        path: "inventory",
-        element: <Inventory />,
-      },
-      {
-        path: "customers",
-        element: <Customers />,
-      },
-      {
-        path: "users",
-        element: <UsersPage />,
-      },
-      {
-        path: "purchases",
-        element: <Purchases />,
-      },
-      {
-        path: "delivery-notes",
-        element: <DeliveryNotes />,
-      },
-      {
-        path: "vehicles",
-        element: <Vehicles />,
-      },
-      {
-        path: "delivery-routes",
-        element: <DeliveryRoutes />,
-      },
-      {
-        path: "finance",
-        element: <Finance />,
-      },
-      {
-        path: "credit",
-        element: <Credit />,
-      },
-      {
-        path: "reports",
-        element: <Reports />,
-      },
-      {
-        path: "audit",
-        element: <Audit />,
-      },
-      {
-        path: "settings",
-        element: <Settings />,
-      },
-      {
-        path: "settings/theme",
-        element: <ThemeCustomizer />,
-      },
-      {
-        path: "settings/branches",
-        element: <BranchesPage />,
-      },
-      {
-        path: "settings/global",
-        element: <SystemConfig />,
-      },
-      {
-        path: "rrhh",
-        element: <HumanResources />,
-      },
-      {
+
         path: "ui-showcase",
         element: <UIComponentsShowcase />,
+      },
+      // Roles 1, 2, 3, 4 (Cajero y Supervisor)
+      {
+        element: <ProtectedRoute allowedRoles={[1, 2, 3, 4]} />,
+        children: [
+          { path: "pos", element: <POS /> },
+          { path: "sales", element: <SalesHistory /> },
+          { path: "quotes", element: <Quotes /> },
+          { path: "quotes/new", element: <NewQuote /> },
+          { path: "customers", element: <Customers /> },
+          { path: "credit", element: <Credit /> },
+          { path: "finance", element: <Finance /> },
+        ]
+      },
+      // Roles 1, 2, 3, 5 (Bodeguero)
+      {
+        element: <ProtectedRoute allowedRoles={[1, 2, 3, 5]} />,
+        children: [
+          { path: "inventory", element: <Inventory /> },
+          { path: "delivery-notes", element: <DeliveryNotes /> },
+        ]
+      },
+      // Roles 1, 2, 5 (Compras)
+      {
+        element: <ProtectedRoute allowedRoles={[1, 2, 5]} />,
+        children: [
+          { path: "purchases", element: <Purchases /> },
+        ]
+      },
+      // Roles 1, 2, 3 (Supervisor)
+      {
+        element: <ProtectedRoute allowedRoles={[1, 2, 3]} />,
+        children: [
+          { path: "rrhh", element: <HumanResources /> },
+        ]
+      },
+      // Roles 1, 2 (Propietario y Admin)
+      {
+        element: <ProtectedRoute allowedRoles={[1, 2]} />,
+        children: [
+          { path: "catalog", element: <Catalog /> },
+          { path: "users", element: <UsersPage /> },
+          { path: "vehicles", element: <Vehicles /> },
+          { path: "delivery-routes", element: <DeliveryRoutes /> },
+          { path: "reports", element: <Reports /> },
+          { path: "audit", element: <Audit /> },
+          { path: "settings", element: <Settings /> },
+          { path: "settings/theme", element: <ThemeCustomizer /> },
+          { path: "settings/branches", element: <BranchesPage /> },
+          { path: "settings/cash-registers", element: <CashRegisters /> },
+          { path: "settings/global", element: <SystemConfig /> },
+        ]
       },
     ],
   },

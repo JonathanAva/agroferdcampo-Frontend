@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search, FileText, Filter, CheckCircle2,
-  CreditCard, DollarSign, AlertCircle, Plus, Eye, History, Users as UsersIcon, RefreshCcw, Trash2
+  CreditCard, DollarSign, AlertCircle, Plus, Eye, History, Users as UsersIcon, RefreshCcw, Trash2, Printer,
+  Hash, User, Package, Building2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSearchParams } from 'react-router';
 
 import { creditService, CreditSale, CreditSummary, CreditPayment, RegisterPaymentDto, GroupedCreditCustomer } from '../services/credit.service';
+import { getSaleDetail } from '../services/sales.service';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
@@ -18,6 +20,7 @@ import { Label } from '../components/ui/label';
 import { NumberInput } from '../components/ui/number-input';
 import { SemaphoreBanner } from '../components/ui/semaphore-banner';
 import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
+import { cn } from '../components/ui/utils';
 
 const creditFilters: FilterConfig[] = [
   { id: 'search', label: 'Buscar cliente...', type: 'text', placeholder: 'Nombre del cliente...' },
@@ -51,7 +54,7 @@ export function Credit() {
   const [selectedSpecificCredit, setSelectedSpecificCredit] = useState<CreditSale | null>(null);
   const [specificPayments, setSpecificPayments] = useState<CreditPayment[]>([]);
   const [specificPaymentsPage, setSpecificPaymentsPage] = useState(1);
-  const [specificDetailTab, setSpecificDetailTab] = useState<'abonos'>('abonos');
+  const [specificDetailTab, setSpecificDetailTab] = useState<'abonos' | 'factura'>('abonos');
 
   // Inner Modal Filters
   const [innerStatusFilter, setInnerStatusFilter] = useState('all');
@@ -130,13 +133,19 @@ export function Credit() {
     setDetailModalOpen(true);
   };
 
+  const [specificSaleDetail, setSpecificSaleDetail] = useState<any>(null);
+
   const handleOpenSpecificDetail = async (sale: CreditSale) => {
     try {
-      const creditPayments = await creditService.getPayments(sale.id);
+      const [creditPayments, saleDetail] = await Promise.all([
+        creditService.getPayments(sale.id),
+        getSaleDetail(sale.saleId)
+      ]);
       setSelectedSpecificCredit(sale);
       setSpecificPayments(Array.isArray(creditPayments) ? creditPayments : []);
+      setSpecificSaleDetail(saleDetail);
       setSpecificPaymentsPage(1);
-      setSpecificPaymentsPage(1);
+      setSpecificDetailTab('abonos');
       setSpecificDetailModalOpen(true);
     } catch (e) {
       toast.error('Error al cargar detalle del crédito');
@@ -231,6 +240,101 @@ export function Credit() {
       isSubmittingRef.current = false;
       setSavingPayment(false);
     }
+  };
+
+  const printPaymentReceipt = (payment: CreditPayment) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('El navegador bloqueó la ventana emergente de impresión.');
+      return;
+    }
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Recibo de Abono #${payment.id}</title>
+        <style>
+          @page { margin: 0; }
+          body { 
+            font-family: 'Courier New', Courier, monospace; 
+            margin: 0; 
+            padding: 10px; 
+            width: 80mm; 
+            color: #000;
+            font-size: 12px;
+          }
+          .center { text-align: center; }
+          .bold { font-weight: bold; }
+          .divider { border-bottom: 1px dashed #000; margin: 10px 0; }
+          .row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+          h2 { margin: 0 0 5px 0; font-size: 16px; }
+          p { margin: 0 0 5px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="center">
+          <h2>AGROFERR D'CAMPO</h2>
+          <p>San Lorenzo, Ahuachapán,<br>El Salvador, 01009</p>
+          <p>Tel: 7216 6748</p>
+          <p>agroferreteriadcampo@gmail.com</p>
+          <div class="divider"></div>
+          <p class="bold" style="font-size: 14px;">COMPROBANTE DE ABONO</p>
+        </div>
+        <div class="divider"></div>
+        
+        <div class="row">
+          <span>N° Recibo:</span>
+          <span>${payment.id.toString().padStart(6, '0')}</span>
+        </div>
+        <div class="row">
+          <span>Fecha:</span>
+          <span>${new Date(payment.createdAt).toLocaleString('es-ES')}</span>
+        </div>
+        <div class="row">
+          <span>Cajero:</span>
+          <span>${payment.user?.fullName || 'Sistema'}</span>
+        </div>
+        
+        <div class="divider"></div>
+        
+        <div class="row bold">
+          <span>MÉTODO DE PAGO</span>
+        </div>
+        <div class="row">
+          <span>${payment.paymentMethod}</span>
+          <span>$${Number(payment.amount).toFixed(2)}</span>
+        </div>
+        ${payment.reference ? `<div class="row"><span>Referencia:</span><span>${payment.reference}</span></div>` : ''}
+        
+        <div class="divider"></div>
+        
+        <div class="row bold" style="font-size: 14px; margin-top: 10px;">
+          <span>TOTAL ABONADO:</span>
+          <span>$${Number(payment.amount).toFixed(2)}</span>
+        </div>
+        
+        <div class="divider"></div>
+        <div class="center" style="margin-top: 20px;">
+          <p style="font-size: 11px; margin-bottom: 8px;">
+            * Este documento NO es una factura válida. 
+            Es únicamente un comprobante de abono a cuenta. *
+          </p>
+          <p class="bold">¡Gracias por su pago!</p>
+          <p>*** COPIA CLIENTE ***</p>
+        </div>
+        <script>
+          window.onload = () => {
+            window.print();
+            setTimeout(() => window.close(), 500);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+    
+    printWindow.document.write(html);
+    printWindow.document.close();
   };
 
   const getStatusBadge = (status: string) => {
@@ -629,10 +733,21 @@ export function Credit() {
                   <History size={16} />
                   Historial de Abonos
                 </button>
-
+                <button
+                  className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors flex items-center justify-center gap-2 ${
+                    specificDetailTab === 'factura'
+                      ? 'border-[var(--primary)] text-[var(--primary)]'
+                      : 'border-transparent text-[var(--text-sec)] hover:text-[var(--text-main)]'
+                  }`}
+                  onClick={() => setSpecificDetailTab('factura')}
+                >
+                  <FileText size={16} />
+                  Detalle de Factura
+                </button>
               </div>
 
               <div className="p-6 overflow-y-auto flex-1 custom-scrollbar min-h-0">
+                {specificDetailTab === 'abonos' ? (
                   <div className="border rounded-xl overflow-hidden shadow-sm bg-[var(--card)]">
                     <Table>
                       <TableHeader>
@@ -696,6 +811,144 @@ export function Credit() {
                       </div>
                     )}
                   </div>
+                ) : (
+                  <div className="space-y-8">
+                  {/* ESTADO BANNER */}
+                  <div className="flex flex-col sm:flex-row items-center justify-between p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5">
+                    <div className="flex items-center gap-3">
+                      <CheckCircle2 className={specificSaleDetail?.dteResponse?.estado === 'PROCESADO' ? "text-emerald-500" : "text-[var(--text-sec)]"} size={24} />
+                      <div>
+                        <p className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">Estado en Hacienda</p>
+                        <p className={cn("text-sm font-black uppercase", specificSaleDetail?.dteResponse?.estado === 'PROCESADO' ? "text-emerald-600" : "text-[var(--text-main)]")}>
+                          {specificSaleDetail?.dteResponse?.estado || 'NO ENVIADO'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right mt-4 sm:mt-0">
+                      <p className="text-sm font-bold text-[var(--text-main)]">
+                        {specificSaleDetail?.createdAt ? new Date(specificSaleDetail.createdAt).toLocaleString('es-ES') : ''}
+                      </p>
+                      <p className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">Fecha Procesamiento</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* IDENTIFICACION */}
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 border-b border-[var(--border)] pb-2">
+                        <Hash size={16} className="text-[var(--text-sec)]" />
+                        <h3 className="text-xs font-black text-[var(--text-sec)] uppercase tracking-widest">Identificación</h3>
+                      </div>
+                      
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-[10px] font-bold text-[var(--text-sec)] uppercase tracking-wider mb-1">Número de Control</p>
+                          <div className="bg-[var(--bg)] px-3 py-2 rounded-md border border-[var(--border)] font-mono text-sm text-[var(--text-main)]">
+                            {specificSaleDetail?.dteResponse?.numeroControl || 'N/A'}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-[var(--text-sec)] uppercase tracking-wider mb-1">Código de Generación</p>
+                          <div className="bg-[var(--bg)] px-3 py-2 rounded-md border border-[var(--border)] font-mono text-sm text-amber-600 font-bold break-all">
+                            {specificSaleDetail?.dteResponse?.codigoGeneracion || 'N/A'}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-[10px] font-bold text-[var(--text-sec)] uppercase tracking-wider mb-1">Serie / POS</p>
+                            <p className="font-bold text-[var(--text-main)] uppercase">{specificSaleDetail?.dteResponse?.serie || 'P001'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-[var(--text-sec)] uppercase tracking-wider mb-1">Ambiente</p>
+                            <p className="font-bold text-[var(--text-main)] uppercase">{specificSaleDetail?.dteResponse?.ambiente || 'N/A'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* RECEPTOR */}
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 border-b border-[var(--border)] pb-2">
+                        <User size={16} className="text-[var(--text-sec)]" />
+                        <h3 className="text-xs font-black text-[var(--text-sec)] uppercase tracking-widest">Receptor / Cliente</h3>
+                      </div>
+                      
+                      <div className="bg-[var(--bg)] rounded-xl border border-[var(--border)] p-4 space-y-4">
+                        <div>
+                          <p className="font-bold text-[var(--text-main)] text-base">{specificSaleDetail?.customer?.name || 'Consumidor Final'}</p>
+                          <p className="text-sm text-[var(--text-sec)]">{specificSaleDetail?.customer?.email || 'Sin correo'}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 border-t border-[var(--border)] pt-4">
+                          <div>
+                            <p className="text-[10px] font-bold text-[var(--text-sec)] uppercase tracking-wider mb-1">Documento</p>
+                            <p className="font-medium text-[var(--text-main)] text-sm">{specificSaleDetail?.customer?.nit || specificSaleDetail?.customer?.documentNumber || 'S/N'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-[var(--text-sec)] uppercase tracking-wider mb-1">NRC</p>
+                            <p className="font-medium text-[var(--text-main)] text-sm">{specificSaleDetail?.customer?.customerType === 'CONTRIBUYENTE' ? 'S/N' : 'S/N'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* PRODUCTOS */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 border-b border-[var(--border)] pb-2">
+                      <Package size={16} className="text-[var(--text-sec)]" />
+                      <h3 className="text-xs font-black text-[var(--text-sec)] uppercase tracking-widest">Detalle de Productos / Servicios</h3>
+                    </div>
+                    
+                    <div className="rounded-xl border border-[var(--border)] overflow-hidden bg-[var(--bg)]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="border-b border-[var(--border)] hover:bg-transparent">
+                            <TableHead className="text-[10px] font-black tracking-widest uppercase text-[var(--text-sec)]">Cant</TableHead>
+                            <TableHead className="text-[10px] font-black tracking-widest uppercase text-[var(--text-sec)]">Descripción</TableHead>
+                            <TableHead className="text-[10px] font-black tracking-widest uppercase text-[var(--text-sec)] text-right">P. Unit</TableHead>
+                            <TableHead className="text-[10px] font-black tracking-widest uppercase text-[var(--text-sec)] text-right">Total</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {specificSaleDetail?.items?.map((item: any) => (
+                            <TableRow key={item.id} className="border-b border-[var(--border)]/50 hover:bg-transparent">
+                              <TableCell className="font-bold text-[var(--text-main)]">{item.quantity}</TableCell>
+                              <TableCell>
+                                <p className="font-bold text-[var(--text-main)] uppercase">{item.product?.name}</p>
+                                <p className="text-[10px] text-[var(--text-sec)] uppercase">Cód: {item.product?.id}</p>
+                              </TableCell>
+                              <TableCell className="text-right text-[var(--text-sec)] font-medium">${Number(item.unitPrice).toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-black text-amber-500">${Number(item.totalPrice).toFixed(2)}</TableCell>
+                            </TableRow>
+                          ))}
+                          {!specificSaleDetail?.items?.length && (
+                            <TableRow>
+                              <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">
+                                No hay productos en esta factura.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                      <div className="p-4 border-t border-[var(--border)] flex justify-end bg-[var(--bg)]/50">
+                        <div className="flex items-center gap-8">
+                          <p className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-widest">Total a Pagar</p>
+                          <p className="text-xl font-black text-amber-500">${Number(specificSaleDetail?.totalAmount || 0).toFixed(2)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* FOOTER */}
+                  <div className="flex items-center justify-between pt-4 pb-4">
+                    <div className="flex items-center gap-2 text-[var(--text-sec)]">
+                      <Building2 size={14} />
+                      <span className="text-[10px] font-black uppercase tracking-widest">Emisor: Agroferr D'Campo</span>
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-sec)]">MH-API-V2 / DTE-01</span>
+                  </div>
+                </div>
+                )}
               </div>
             </>
           )}
@@ -784,7 +1037,14 @@ export function Credit() {
                 </div>
               </div>
               
-              <div className="p-4 border-t border-[var(--border)] bg-[var(--bg)]/50 flex justify-end">
+              <div className="p-4 border-t border-[var(--border)] bg-[var(--bg)]/50 flex justify-between items-center gap-4">
+                <Button 
+                  onClick={() => printPaymentReceipt(selectedPaymentDetail)} 
+                  variant="outline" 
+                  className="font-bold border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300"
+                >
+                  <Printer size={16} className="mr-2" /> IMPRIMIR RECIBO
+                </Button>
                 <Button onClick={() => setPaymentDetailModalOpen(false)} variant="outline" className="font-bold px-8">
                   CERRAR DETALLE
                 </Button>

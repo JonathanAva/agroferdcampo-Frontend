@@ -167,8 +167,10 @@ export function Customers() {
             metrics={[
               { label: 'Total Clientes', value: totalCustomers, icon: Users, color: 'var(--primary)' },
               { label: 'Activos', value: totalCustomers, icon: Users, color: '#10b981' },
-              { label: 'Crédito Total', value: `$${totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, icon: CreditCard, color: '#f59e0b' },
-              { label: 'Con Deuda', value: customers.filter(c => Number(c.creditBalance) > 0).length, icon: AlertCircle, color: '#ef4444' },
+              ...(isAdmin ? [
+                { label: 'Crédito Total', value: `$${totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, icon: CreditCard, color: '#f59e0b' },
+                { label: 'Con Deuda', value: customers.filter(c => Number(c.creditBalance) > 0).length, icon: AlertCircle, color: '#ef4444' },
+              ] : []),
             ]}
           />
         </div>
@@ -195,7 +197,7 @@ export function Customers() {
               <TableRow className="bg-[var(--bg)]/50 border-b border-[var(--border)]">
                 <TableHead className="font-bold text-[var(--text-main)]">Cliente</TableHead>
                 <TableHead className="font-bold text-[var(--text-main)]">Contacto</TableHead>
-                <TableHead className="text-right font-bold text-[var(--text-main)]">Límite</TableHead>
+                {isAdmin && <TableHead className="text-right font-bold text-[var(--text-main)]">Límite</TableHead>}
                 <TableHead className="text-right font-bold text-[var(--text-main)]">Deuda</TableHead>
                 <TableHead className="text-center font-bold text-[var(--text-main)]">Estado</TableHead>
                 <TableHead className="text-center font-bold text-[var(--text-main)]">Acciones</TableHead>
@@ -245,11 +247,13 @@ export function Customers() {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-right">
-                      <span className="font-black text-[var(--text-main)]">
-                        ${Number(customer.creditLimit).toFixed(2)}
-                      </span>
-                    </TableCell>
+                    {isAdmin && (
+                      <TableCell className="text-right">
+                        <span className="font-black text-[var(--text-main)]">
+                          ${Number(customer.creditLimit).toFixed(2)}
+                        </span>
+                      </TableCell>
+                    )}
                     <TableCell className="text-right">
                       <span 
                         className={cn(
@@ -282,9 +286,11 @@ export function Customers() {
                             <DropdownMenuItem onClick={() => { setSelectedCustomer(customer); setIsDialogOpen(true); }} className="gap-2 font-bold focus:bg-[var(--primary)]/10 cursor-pointer">
                               <Edit2 size={14} className="text-[var(--primary)]" /> Editar
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => { setSelectedCustomer(customer); setIsCreditDialogOpen(true); }} className="gap-2 font-bold focus:bg-amber-500/10 cursor-pointer text-amber-500">
-                              <CreditCard size={14} className="text-amber-500" /> Asignar Crédito
-                            </DropdownMenuItem>
+                            {isAdmin && (
+                              <DropdownMenuItem onClick={() => { setSelectedCustomer(customer); setIsCreditDialogOpen(true); }} className="gap-2 font-bold focus:bg-amber-500/10 cursor-pointer text-amber-500">
+                                <CreditCard size={14} className="text-amber-500" /> Asignar Crédito
+                              </DropdownMenuItem>
+                            )}
                             {isAdmin && (
                               <DropdownMenuItem onClick={() => handleDelete(customer.id)} className="gap-2 font-bold text-destructive focus:bg-destructive/10 cursor-pointer">
                                 <Trash2 size={14} /> Desactivar

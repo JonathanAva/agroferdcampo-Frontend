@@ -25,6 +25,7 @@ import {
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Calendar } from "../components/ui/calendar";
 import { apiRequest } from "../config/api";
 import { createSale, sendFacturaConsumidor, sendCreditoFiscal } from "../services/sales.service";
@@ -53,12 +54,26 @@ interface Product {
   stock: number;
   category: { name: string };
   unit: string;
+  units?: {
+    id: number;
+    unit: string;
+    factor: number;
+    priceDetalle?: number;
+    priceMayorista?: number;
+  }[];
+}
+
+interface CartUnitSelection {
+  id: string;
+  unitType: string;
+  unitFactor: number;
+  quantity: number;
+  price: number;
+  originalPrice: number;
 }
 
 interface CartItem extends Product {
-  quantity: number;
-  subtotal: number;
-  originalPrice: number;
+  selections: CartUnitSelection[];
 }
 
 interface Customer {
@@ -186,10 +201,14 @@ export function POS() {
 
   // New Checkout States
   const [processingOverlay, setProcessingOverlay] = useState(false);
+  const [showMixedPaymentModal, setShowMixedPaymentModal] = useState(false);
+  const [payments, setPayments] = useState<{ paymentMethod: 'EFECTIVO' | 'TARJETA' | 'TRANSFERENCIA' | 'CREDITO'; amount: number; reference?: string }[]>([]);
 
   // Cash Shift States
   const [activeShift, setActiveShift] = useState<CashShift | null>(null);
   const [loadingShift, setLoadingShift] = useState(true);
+  const [availableRegisters, setAvailableRegisters] = useState<any[]>([]);
+  const [selectedRegisterId, setSelectedRegisterId] = useState<string>("");
   const [showOpenShiftModal, setShowOpenShiftModal] = useState(false);
   const [openBills, setOpenBills] = useState<BillsBreakdown>({ d100:0, d50:0, d20:0, d10:0, d5:0, d1:0 });
   const [openCoins, setOpenCoins] = useState<CoinsBreakdown>({ c25:0, c10:0, c5:0, c1:0 });
@@ -200,6 +219,12 @@ export function POS() {
   const [closeNotes, setCloseNotes] = useState("");
   const [closeSummary, setCloseSummary] = useState<{ expectedAmount: number; countedCash: number; difference: number } | null>(null);
   const [closeExpectedTotals, setCloseExpectedTotals] = useState<{ expectedAmount: number; expectedTarjeta: number; expectedTransferencia: number } | null>(null);
+
+  const [showTransferSafeModal, setShowTransferSafeModal] = useState(false);
+  const [transferBills, setTransferBills] = useState<BillsBreakdown>({ d100:0, d50:0, d20:0, d10:0, d5:0, d1:0 });
+  const [transferCoins, setTransferCoins] = useState<CoinsBreakdown>({ c25:0, c10:0, c5:0, c1:0 });
+
+  const canCloseDirectly = ["ADMINISTRADOR", "PROPIETARIO", "SUPERVISOR"].includes(user?.role || "");
 
   // Quote States
   const [showQuoteModal, setShowQuoteModal] = useState(false);
@@ -268,6 +293,12 @@ export function POS() {
         setShowOpenShiftModal(false);
       } else {
         setActiveShift(null);
+        try {
+          const registers = await cashShiftsService.getAvailableRegisters();
+          setAvailableRegisters(registers);
+        } catch (err) {
+          console.error("Error fetching registers:", err);
+        }
         setShowOpenShiftModal(true);
       }
     } catch (error) {
@@ -278,6 +309,10 @@ export function POS() {
   };
 
   const handleOpenShift = async () => {
+    if (!selectedRegisterId) {
+      toast.error("Debe seleccionar una caja para iniciar turno");
+      return;
+    }
     const total = calcBreakdownTotal(openBills, openCoins);
     if (total <= 0) {
       toast.error("El desglose debe sumar al menos $0.01");
@@ -287,6 +322,7 @@ export function POS() {
     try {
       setLoadingShift(true);
       const shift = await cashShiftsService.openShift({ 
+        cashRegisterId: Number(selectedRegisterId),
         breakdown: { bills: openBills, coins: openCoins },
         notes: openNotes || undefined
       });
@@ -296,6 +332,7 @@ export function POS() {
       setOpenBills({ d100:0, d50:0, d20:0, d10:0, d5:0, d1:0 });
       setOpenCoins({ c25:0, c10:0, c5:0, c1:0 });
       setOpenNotes("");
+      setSelectedRegisterId("");
       toast.success("Caja abierta exitosamente");
     } catch (error: any) {
       toast.error(error.message || "Error al abrir caja");
@@ -339,6 +376,97 @@ export function POS() {
     }
   };
 
+  const handleRequestClose = async () => {
+    if (activeShift?.closeRequested) return;
+    const total = calcBreakdownTotal(closeBills, closeCoins);
+    if (total <= 0) {
+      toast.error("El desglose debe sumar al menos $0.01");
+      return;
+    }
+    try {
+      setLoadingShift(true);
+      const updatedShift = await cashShiftsService.requestClose({
+        breakdown: { bills: closeBills, coins: closeCoins },
+        notes: closeNotes || undefined,
+      });
+      setActiveShift(updatedShift);
+      toast.success("Solicitud de cierre enviada con el desglose de caja");
+      setShowCloseShiftModal(false);
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoadingShift(false);
+    }
+  };
+
+  const printSafeTransferTicket = () => {
+    const total = calcBreakdownTotal(transferBills, transferCoins);
+    const date = new Date().toLocaleString();
+    const branchName = user?.branch || 'Sucursal';
+    const cashierName = user?.name || 'Cajero';
+
+    const html = `
+      <html>
+        <head>
+          <title>Ticket Caja Fuerte</title>
+          <style>
+            body { font-family: monospace; padding: 20px; max-width: 300px; margin: 0 auto; }
+            h2 { text-align: center; margin-bottom: 5px; }
+            p { margin: 2px 0; font-size: 14px; }
+            .divider { border-top: 1px dashed #000; margin: 10px 0; }
+            .table { width: 100%; border-collapse: collapse; }
+            .table th, .table td { text-align: left; padding: 2px 0; font-size: 14px; }
+            .table th:last-child, .table td:last-child { text-align: right; }
+            .total { font-weight: bold; font-size: 18px; text-align: right; margin-top: 10px; }
+            .center { text-align: center; }
+          </style>
+        </head>
+        <body>
+          <h2>TRANSFERENCIA A CAJA FUERTE</h2>
+          <p class="center">${branchName}</p>
+          <p class="center">${date}</p>
+          <div class="divider"></div>
+          <p><strong>Cajero:</strong> ${cashierName}</p>
+          <p><strong>Caja:</strong> ${activeShift?.cashRegister?.name || 'Caja'}</p>
+          <div class="divider"></div>
+          <p><strong>DESGLOSE DE BILLETES</strong></p>
+          <table class="table">
+            ${transferBills.d100 > 0 ? `<tr><td>Billetes $100:</td><td>${transferBills.d100}</td><td>$${(transferBills.d100 * 100).toFixed(2)}</td></tr>` : ''}
+            ${transferBills.d50 > 0 ? `<tr><td>Billetes $50:</td><td>${transferBills.d50}</td><td>$${(transferBills.d50 * 50).toFixed(2)}</td></tr>` : ''}
+            ${transferBills.d20 > 0 ? `<tr><td>Billetes $20:</td><td>${transferBills.d20}</td><td>$${(transferBills.d20 * 20).toFixed(2)}</td></tr>` : ''}
+            ${transferBills.d10 > 0 ? `<tr><td>Billetes $10:</td><td>${transferBills.d10}</td><td>$${(transferBills.d10 * 10).toFixed(2)}</td></tr>` : ''}
+            ${transferBills.d5 > 0 ? `<tr><td>Billetes $5:</td><td>${transferBills.d5}</td><td>$${(transferBills.d5 * 5).toFixed(2)}</td></tr>` : ''}
+            ${transferBills.d1 > 0 ? `<tr><td>Billetes $1:</td><td>${transferBills.d1}</td><td>$${(transferBills.d1 * 1).toFixed(2)}</td></tr>` : ''}
+          </table>
+          <div class="divider"></div>
+          <p><strong>DESGLOSE DE MONEDAS</strong></p>
+          <table class="table">
+            ${transferCoins.c25 > 0 ? `<tr><td>Monedas $0.25:</td><td>${transferCoins.c25}</td><td>$${(transferCoins.c25 * 0.25).toFixed(2)}</td></tr>` : ''}
+            ${transferCoins.c10 > 0 ? `<tr><td>Monedas $0.10:</td><td>${transferCoins.c10}</td><td>$${(transferCoins.c10 * 0.10).toFixed(2)}</td></tr>` : ''}
+            ${transferCoins.c5 > 0 ? `<tr><td>Monedas $0.05:</td><td>${transferCoins.c5}</td><td>$${(transferCoins.c5 * 0.05).toFixed(2)}</td></tr>` : ''}
+            ${transferCoins.c1 > 0 ? `<tr><td>Monedas $0.01:</td><td>${transferCoins.c1}</td><td>$${(transferCoins.c1 * 0.01).toFixed(2)}</td></tr>` : ''}
+          </table>
+          <div class="divider"></div>
+          <div class="total">TOTAL: $${total.toFixed(2)}</div>
+          <br><br><br>
+          <div class="divider"></div>
+          <p class="center">Firma Responsable</p>
+          <script>
+            window.onload = () => { window.print(); }
+          </script>
+        </body>
+      </html>
+    `;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+    }
+    setShowTransferSafeModal(false);
+    setTransferBills({ d100:0, d50:0, d20:0, d10:0, d5:0, d1:0 });
+    setTransferCoins({ c25:0, c10:0, c5:0, c1:0 });
+  };
+
   const handleSaveQuote = async () => {
     if (cart.length === 0) return;
     if (isQuoteSubmittingGlobal) return;
@@ -352,8 +480,6 @@ export function POS() {
     isSubmittingRef.current = true;
     if (quoteBtnRef.current) {
       quoteBtnRef.current.disabled = true;
-      quoteBtnRef.current.style.pointerEvents = 'none';
-      quoteBtnRef.current.style.opacity = '0.6';
     }
     setProcessingOverlay(true);
     setLoading(true);
@@ -362,11 +488,13 @@ export function POS() {
       await quotesService.createQuote({
         customerId: selectedCustomer?.id,
         validDays: Number(quoteValidDays),
-        items: cart.map((i) => ({
-          productId: i.id,
-          quantity: i.quantity,
-          unitPrice: i.price,
-        })),
+        items: cart.flatMap((i) =>
+          i.selections.map((s) => ({
+            productId: i.id,
+            quantity: Number(s.quantity),
+            unitPrice: Number(s.price),
+          }))
+        ),
         ...(transportData && transportData.requiresTransport ? {
           requiresTransport: true,
           vehicleId: transportData.vehicleId,
@@ -388,8 +516,6 @@ export function POS() {
       // Si falla, rehabilitar el botón para que el cajero corrija y reintente
       if (quoteBtnRef.current) {
         quoteBtnRef.current.disabled = false;
-        quoteBtnRef.current.style.pointerEvents = '';
-        quoteBtnRef.current.style.opacity = '';
       }
     } finally {
       // Siempre liberar el lock al terminar
@@ -469,6 +595,7 @@ export function POS() {
           stock: Number(stockValue),
           category: p.category || { name: "General" },
           unit: p.unit,
+          units: p.units || [],
         };
       });
       setProducts(mapped);
@@ -495,89 +622,252 @@ export function POS() {
     }
   };
 
-  const addToCart = (product: Product) => {
+  const addToCart = (product: Product, unitType?: string, unitFactor?: number, unitPrice?: number) => {
     if (product.stock <= 0) {
       toast.error("Producto sin stock disponible");
       return;
     }
-    const existingItem = cart.find((item) => item.id === product.id);
-    if (existingItem) {
-      if (existingItem.quantity >= product.stock) {
-        toast.error("No hay más stock disponible");
-        return;
+    const resolvedUnit = unitType || product.unit;
+    const resolvedFactor = unitFactor || 1;
+    const resolvedPrice = unitPrice || product.price;
+
+    const existingCartItem = cart.find((i) => i.id === product.id);
+    const currentlyUsedStock = existingCartItem
+      ? existingCartItem.selections.reduce((sum, s) => sum + s.quantity * s.unitFactor, 0)
+      : 0;
+
+    if (currentlyUsedStock + resolvedFactor > product.stock) {
+      toast.error("No hay más stock disponible");
+      return;
+    }
+
+    if (existingCartItem) {
+      const existingSel = existingCartItem.selections.find((s) => s.unitType === resolvedUnit);
+      if (existingSel) {
+        setCart(cart.map((item) => {
+          if (item.id === product.id) {
+            return {
+              ...item,
+              selections: item.selections.map((s) =>
+                s.unitType === resolvedUnit
+                  ? { ...s, quantity: s.quantity + 1 }
+                  : s
+              )
+            };
+          }
+          return item;
+        }));
+      } else {
+        setCart(cart.map((item) => {
+          if (item.id === product.id) {
+            return {
+              ...item,
+              selections: [
+                ...item.selections,
+                {
+                  id: Math.random().toString(36).substring(2, 9),
+                  unitType: resolvedUnit,
+                  unitFactor: resolvedFactor,
+                  quantity: 1,
+                  price: resolvedPrice,
+                  originalPrice: resolvedPrice,
+                }
+              ]
+            };
+          }
+          return item;
+        }));
       }
-      setCart(
-        cart.map((item) =>
-          item.id === product.id
-            ? {
-                ...item,
-                quantity: item.quantity + 1,
-                subtotal: (item.quantity + 1) * item.price,
-              }
-            : item,
-        ),
-      );
     } else {
-      setCart([
-        ...cart,
-        {
-          ...product,
-          quantity: 1,
-          subtotal: product.price,
-          originalPrice: product.price,
-        },
-      ]);
+      setCart([...cart, {
+        ...product,
+        selections: [
+          {
+            id: Math.random().toString(36).substring(2, 9),
+            unitType: resolvedUnit,
+            unitFactor: resolvedFactor,
+            quantity: 1,
+            price: resolvedPrice,
+            originalPrice: resolvedPrice,
+          }
+        ]
+      }]);
     }
   };
 
-  const updateQuantity = (id: number, newQuantity: number) => {
-    const item = cart.find((i) => i.id === id);
+  const updateQuantity = (productId: number, selectionId: string, newQty: number) => {
+    const item = cart.find((i) => i.id === productId);
     if (!item) return;
-    if (newQuantity <= 0) {
-      removeFromCart(id);
+    if (newQty <= 0) {
+      removeSelection(productId, selectionId);
       return;
     }
-    if (newQuantity > item.stock) {
+
+    const targetSel = item.selections.find((s) => s.id === selectionId);
+    if (!targetSel) return;
+
+    const otherUsedStock = item.selections
+      .filter((s) => s.id !== selectionId)
+      .reduce((sum, s) => sum + s.quantity * s.unitFactor, 0);
+
+    if (otherUsedStock + newQty * targetSel.unitFactor > item.stock) {
       toast.error("Excede el stock disponible");
       return;
     }
-    setCart(
-      cart.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              quantity: newQuantity,
-              subtotal: newQuantity * item.price,
-            }
-          : item,
-      ),
-    );
+
+    setCart(cart.map((i) => {
+      if (i.id === productId) {
+        return {
+          ...i,
+          selections: i.selections.map((s) =>
+            s.id === selectionId ? { ...s, quantity: newQty } : s
+          )
+        };
+      }
+      return i;
+    }));
   };
 
-  const updatePrice = (id: number, newPrice: number | undefined) => {
-    setCart(
-      cart.map((item) => {
-        if (item.id === id) {
-          // We allow 0 or undefined to let the user clear and type
-          const val = newPrice === undefined || isNaN(newPrice) ? 0 : newPrice;
-          // But for the subtotal calculation, we use originalPrice if current value is invalid/zero
-          const calcPrice = val <= 0 ? item.originalPrice : val;
+  const updatePrice = (productId: number, selectionId: string, newPrice: number | undefined) => {
+    setCart(cart.map((item) => {
+      if (item.id === productId) {
+        return {
+          ...item,
+          selections: item.selections.map((s) => {
+            if (s.id === selectionId) {
+              const val = newPrice === undefined || isNaN(newPrice) ? 0 : newPrice;
+              const calcPrice = val <= 0 ? s.originalPrice : val;
+              return { ...s, price: val };
+            }
+            return s;
+          })
+        };
+      }
+      return item;
+    }));
+  };
+
+  const removeSelection = (productId: number, selectionId: string) => {
+    setCart(cart.map((item) => {
+      if (item.id === productId) {
+        return {
+          ...item,
+          selections: item.selections.filter((s) => s.id !== selectionId)
+        };
+      }
+      return item;
+    }).filter((item) => item.selections.length > 0));
+  };
+
+  const updateSelectionUnit = (productId: number, selectionId: string, newUnitType: string) => {
+    const item = cart.find((i) => i.id === productId);
+    if (!item) return;
+
+    let newFactor = 1;
+    let newPrice = item.price; // product base price
+
+    if (newUnitType !== item.unit) {
+      const u = item.units?.find((x) => x.unit === newUnitType);
+      if (!u) return;
+      newFactor = u.factor;
+      newPrice = u.priceDetalle || (item.price * u.factor);
+    }
+
+    const existingSel = item.selections.find((s) => s.unitType === newUnitType && s.id !== selectionId);
+    const targetSel = item.selections.find((s) => s.id === selectionId);
+    if (!targetSel) return;
+
+    const otherUsedStock = item.selections
+      .filter((s) => s.id !== selectionId && s.id !== existingSel?.id)
+      .reduce((sum, s) => sum + s.quantity * s.unitFactor, 0);
+
+    const combinedQty = existingSel ? existingSel.quantity + targetSel.quantity : targetSel.quantity;
+
+    if (otherUsedStock + combinedQty * newFactor > item.stock) {
+      toast.error("No hay suficiente stock para cambiar a esta unidad");
+      return;
+    }
+
+    if (existingSel) {
+      setCart(cart.map((i) => {
+        if (i.id === productId) {
           return {
-            ...item,
-            price: val,
-            subtotal: item.quantity * calcPrice,
+            ...i,
+            selections: i.selections
+              .map((s) => {
+                if (s.id === existingSel.id) {
+                  return {
+                    ...s,
+                    quantity: combinedQty,
+                    price: newPrice,
+                    originalPrice: newPrice
+                  };
+                }
+                return s;
+              })
+              .filter((s) => s.id !== selectionId)
           };
         }
-        return item;
-      }),
-    );
+        return i;
+      }).filter((i) => i.selections.length > 0));
+    } else {
+      setCart(cart.map((i) => {
+        if (i.id === productId) {
+          return {
+            ...i,
+            selections: i.selections.map((s) =>
+              s.id === selectionId
+                ? {
+                    ...s,
+                    unitType: newUnitType,
+                    unitFactor: newFactor,
+                    price: newPrice,
+                    originalPrice: newPrice,
+                  }
+                : s
+            )
+          };
+        }
+        return i;
+      }));
+    }
   };
 
-  const removeFromCart = (id: number) => {
-    setCart(cart.filter((item) => item.id !== id));
+  const addSelectionRow = (productId: number) => {
+    const item = cart.find((i) => i.id === productId);
+    if (!item) return;
+
+    const usedStock = item.selections.reduce((sum, s) => sum + s.quantity * s.unitFactor, 0);
+    if (usedStock + 1 > item.stock) {
+      toast.error("No hay más stock disponible");
+      return;
+    }
+
+    setCart(cart.map((i) => {
+      if (i.id === productId) {
+        return {
+          ...i,
+          selections: [
+            ...i.selections,
+            {
+              id: Math.random().toString(36).substring(2, 9),
+              unitType: i.unit,
+              unitFactor: 1,
+              quantity: 1,
+              price: i.price,
+              originalPrice: i.price,
+            }
+          ]
+        };
+      }
+      return i;
+    }));
   };
 
-  const total = cart.reduce((sum, item) => sum + item.subtotal, 0);
+  const total = cart.reduce(
+    (sum, item) => sum + item.selections.reduce((sub, s) => sub + s.quantity * s.price, 0),
+    0
+  );
   const vatRate = parseFloat(String(sysConfig?.vatRate ?? 0.13));
   const isVatIncluded = sysConfig?.vatIncluded !== false; // Default to true if not set
   
@@ -592,9 +882,8 @@ export function POS() {
     iva = subtotal * vatRate;
   }
 
-  const handleCheckout = async () => {
+  const handleCheckoutClick = () => {
     if (cart.length === 0) return;
-    if (isCheckoutSubmittingGlobal) return;
 
     if (selectedPayment === "CREDITO") {
       if (!selectedCustomer) {
@@ -615,13 +904,24 @@ export function POS() {
       }
     }
 
+    setPayments([{ paymentMethod: selectedPayment, amount: total }]);
+    setShowMixedPaymentModal(true);
+  };
+
+  const processSale = async () => {
+    if (cart.length === 0) return;
+    // Validación extra: suma de pagos debe cuadrar con el total
+    const sumPayments = payments.reduce((sum, p) => sum + p.amount, 0);
+    if (Math.abs(sumPayments - total) > 0.01) {
+      toast.error(`La suma de los pagos ($${sumPayments.toFixed(2)}) no coincide con el total ($${total.toFixed(2)})`);
+      return;
+    }
+
     // Bloquear el botón a nivel DOM ANTES de cualquier código asíncrono
     isCheckoutSubmittingGlobal = true;
     isSubmittingRef.current = true;
     if (checkoutBtnRef.current) {
       checkoutBtnRef.current.disabled = true;
-      checkoutBtnRef.current.style.pointerEvents = 'none';
-      checkoutBtnRef.current.style.opacity = '0.6';
     }
     setProcessingOverlay(true);
     setLoading(true);
@@ -629,15 +929,20 @@ export function POS() {
     try {
       await createSale({
         customerId: selectedCustomer?.id,
-        paymentMethod: selectedPayment,
+        paymentMethod: payments[0]?.paymentMethod || 'EFECTIVO',
+        payments: payments,
         totalAmount: total,
         taxAmount: iva,
-        dueDate: selectedPayment === "CREDITO" && checkoutDueDate ? checkoutDueDate : undefined,
-        items: cart.map((i) => ({
-          productId: i.id,
-          quantity: i.quantity,
-          unitPrice: i.price,
-        })),
+        dueDate: payments.some(p => p.paymentMethod === "CREDITO") && checkoutDueDate ? checkoutDueDate : undefined,
+        items: cart.flatMap((i) =>
+          i.selections.map((s) => ({
+            productId: i.id,
+            quantity: Number(s.quantity),
+            unitPrice: Number(s.price),
+            unitType: s.unitType,
+            unitFactor: Number(s.unitFactor),
+          }))
+        ),
         ...(transportData && transportData.requiresTransport ? {
           requiresTransport: true,
           vehicleId: transportData.vehicleId,
@@ -658,10 +963,11 @@ export function POS() {
       }
       setCart([]);
       setSearchTerm("");
-      setProducts([]);
+      searchProducts("");
       setSelectedCustomer(null);
       setCheckoutDueDate("");
       setTransportData(null);
+      setShowMixedPaymentModal(false);
 
     } catch (error: any) {
       const msg = error.message || "Error al procesar la venta. Verifique el stock.";
@@ -676,8 +982,6 @@ export function POS() {
       // Si falla, rehabilitar el botón para que el cajero corrija y reintente
       if (checkoutBtnRef.current) {
         checkoutBtnRef.current.disabled = false;
-        checkoutBtnRef.current.style.pointerEvents = '';
-        checkoutBtnRef.current.style.opacity = '';
       }
     } finally {
       // Siempre liberar el lock al terminar
@@ -698,15 +1002,34 @@ export function POS() {
             <Package size={14} className="mr-1" /> {user?.branch || "Sucursal"}
           </Badge>
         </div>
-        {activeShift && (
-          <Button
-            variant="outline" size="sm"
-            className="border-red-200 text-red-500 hover:bg-red-50 font-bold"
-            onClick={handleOpenCloseShiftModal}
-          >
-            <Lock size={14} className="mr-2" /> Cerrar Caja
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {activeShift && (
+            <Button
+              variant="outline" size="sm"
+              className="border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 font-bold hover:border-emerald-300"
+              onClick={() => setShowTransferSafeModal(true)}
+            >
+              <DollarSign size={14} className="mr-2 hidden sm:inline" /> Transferir a Caja Fuerte
+            </Button>
+          )}
+          {activeShift && (
+            <Button
+              disabled={activeShift.closeRequested}
+              variant="outline"
+              className={cn(
+                "font-bold",
+                activeShift.closeRequested 
+                  ? "border-amber-200 text-amber-600 bg-amber-50" 
+                  : "border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 hover:border-red-300"
+              )}
+              onClick={handleOpenCloseShiftModal}
+            >
+              <Lock size={14} className="mr-2" /> 
+              {activeShift.closeRequested ? "Cierre Solicitado" : (canCloseDirectly ? "Cerrar Caja" : "Solicitar Cierre")} 
+              <span className="hidden sm:inline ml-1">({activeShift.cashRegister?.name || 'Caja Activa'})</span>
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0">
@@ -759,7 +1082,7 @@ export function POS() {
                   
                   <div className="mt-auto flex items-center justify-between pt-2 border-t border-[var(--border)]">
                     <span className="text-base font-black text-[var(--primary)]">
-                      ${product.price.toFixed(2)}
+                      ${product.price.toFixed(2)} <span className="text-[10px] font-normal text-[var(--text-sec)]">/ {product.unit}</span>
                     </span>
                     <div className="size-6 rounded bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center">
                       <Plus size={14} />
@@ -781,7 +1104,7 @@ export function POS() {
                 <ShoppingCart size={16} className="text-[var(--primary)]" /> Venta Actual
               </h2>
               <Badge className="bg-[var(--primary)] text-white text-[10px] px-2 rounded-md">
-                {cart.length} items
+                {cart.reduce((sum, item) => sum + item.selections.length, 0)} items
               </Badge>
             </div>
 
@@ -851,40 +1174,100 @@ export function POS() {
             ) : (
               <div className="space-y-2">
                 {cart.map((item) => (
-                  <div key={item.id} className="relative p-2.5 rounded-lg bg-[var(--card)] border border-[var(--border)]">
-                    <div className="flex justify-between items-start mb-2 pr-6">
-                      <p className="font-bold text-xs leading-tight text-[var(--text-main)]">{item.name}</p>
-                      <Button variant="ghost" size="icon" className="absolute right-1 top-1 size-6 text-red-400 hover:bg-red-50 hover:text-red-500" onClick={() => removeFromCart(item.id)}>
+                  <div key={item.id} className="relative p-3 rounded-lg bg-[var(--card)] border border-[var(--border)] space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-bold text-xs leading-tight text-[var(--text-main)]">{item.name}</p>
+                        <p className="text-[9px] font-bold text-[var(--text-sec)]">Stock: {item.stock} {item.unit}</p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 text-red-400 hover:bg-red-50 hover:text-red-500"
+                        onClick={() => setCart(cart.filter((c) => c.id !== item.id))}
+                      >
                         <Trash2 size={12} />
                       </Button>
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center bg-[var(--bg)] rounded border border-[var(--border)]">
-                        <Button variant="ghost" size="icon" className="size-6" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
-                          <Minus size={12} />
-                        </Button>
-                        <span className="text-xs font-bold w-6 text-center">{item.quantity}</span>
-                        <Button variant="ghost" size="icon" className="size-6 text-[var(--primary)]" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
-                          <Plus size={12} />
-                        </Button>
-                      </div>
+                    <div className="space-y-2.5">
+                      {item.selections.map((sel) => (
+                        <div key={sel.id} className="flex items-center justify-between gap-2 border-t border-[var(--border)]/50 pt-2 first:border-t-0 first:pt-0">
+                          <div className="flex-1 max-w-[100px]">
+                            {item.units && item.units.length > 0 ? (
+                              <select
+                                value={sel.unitType}
+                                onChange={(e) => updateSelectionUnit(item.id, sel.id, e.target.value)}
+                                className="text-[10px] font-black h-7 px-1.5 w-full bg-[var(--bg)] border border-[var(--border)] rounded text-[var(--text-main)] focus:outline-none focus:border-[var(--primary)] cursor-pointer"
+                              >
+                                <option value={item.unit}>{item.unit}</option>
+                                {item.units.map((u: any) => (
+                                  <option key={u.unit} value={u.unit}>
+                                    {u.unit}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className="text-[10px] font-bold text-[var(--text-sec)] px-1">{sel.unitType}</span>
+                            )}
+                          </div>
 
-                      <div className="flex flex-col items-end gap-1">
-                        <div className="relative flex items-center justify-end w-20">
-                          <span className="absolute left-2 text-xs font-black text-[var(--primary)] pointer-events-none">$</span>
-                          <NumberInput
-                            value={item.price === 0 ? "" : item.price}
-                            onValueChange={(val) => updatePrice(item.id, val)}
-                            onBlur={() => { if (!item.price || item.price <= 0) updatePrice(item.id, item.originalPrice); }}
-                            step={0.01}
-                            hideControls={true}
-                            className="w-full h-7 bg-[var(--bg)] border border-[var(--border)] focus:border-[var(--primary)] rounded text-right pr-2 pl-4 font-black text-[var(--primary)] text-sm shadow-[inset_0_1px_2px_rgba(0,0,0,0.1)] transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none focus-visible:ring-0"
-                          />
+                          <div className="flex items-center bg-[var(--bg)] rounded border border-[var(--border)] overflow-hidden h-7">
+                            <Button variant="ghost" size="icon" className="size-7 rounded-none shrink-0" onClick={() => updateQuantity(item.id, sel.id, sel.quantity - 1)}>
+                              <Minus size={12} />
+                            </Button>
+                            <NumberInput
+                              value={sel.quantity}
+                              onValueChange={(val) => val !== undefined && updateQuantity(item.id, sel.id, val)}
+                              min={1}
+                              max={Math.floor(item.stock / sel.unitFactor)}
+                              step={1}
+                              className="w-10 h-7 text-xs font-bold text-center border-none p-0 rounded-none bg-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none focus-visible:ring-0"
+                              hideControls={true}
+                            />
+                            <Button variant="ghost" size="icon" className="size-7 rounded-none shrink-0 text-[var(--primary)]" onClick={() => updateQuantity(item.id, sel.id, sel.quantity + 1)}>
+                              <Plus size={12} />
+                            </Button>
+                          </div>
+
+                          <div className="flex flex-col items-end gap-1">
+                            <div className="relative flex items-center justify-end w-20">
+                              <span className="absolute left-2 text-xs font-black text-[var(--primary)] pointer-events-none">$</span>
+                              <NumberInput
+                                value={sel.price === 0 ? "" : sel.price}
+                                onValueChange={(val) => updatePrice(item.id, sel.id, val)}
+                                onBlur={() => { if (!sel.price || sel.price <= 0) updatePrice(item.id, sel.id, sel.originalPrice); }}
+                                step={0.01}
+                                hideControls={true}
+                                className="w-full h-7 bg-[var(--bg)] border border-[var(--border)] focus:border-[var(--primary)] rounded text-right pr-2 pl-4 font-black text-[var(--primary)] text-sm shadow-[inset_0_1px_2px_rgba(0,0,0,0.1)] transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none focus-visible:ring-0"
+                              />
+                            </div>
+                            <span className="text-[9px] font-bold text-[var(--text-sec)]">Sub: ${(sel.quantity * sel.price).toFixed(2)}</span>
+                          </div>
+                          
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-6 text-red-400 hover:bg-red-50 hover:text-red-500 shrink-0"
+                            onClick={() => removeSelection(item.id, sel.id)}
+                            disabled={item.selections.length === 1}
+                          >
+                            <Trash2 size={10} />
+                          </Button>
                         </div>
-                        <span className="text-[9px] font-bold text-[var(--text-sec)]">Sub: ${item.subtotal.toFixed(2)}</span>
-                      </div>
+                      ))}
                     </div>
+
+                    {item.units && item.units.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full h-6 text-[9px] font-bold border-dashed border-[var(--primary)]/30 text-[var(--primary)] bg-[var(--primary)]/5 hover:bg-[var(--primary)] hover:text-white"
+                        onClick={() => addSelectionRow(item.id)}
+                      >
+                        <Plus size={10} className="mr-1" /> AGREGAR UNIDAD
+                      </Button>
+                    )}
                   </div>
                 ))}
 
@@ -914,10 +1297,11 @@ export function POS() {
               </div>
             </div>
 
-            <div className="grid grid-cols-4 gap-1.5">
-              {["EFECTIVO", "TARJETA", "TRANSFERENCIA", "CREDITO"]
+            <div className="grid grid-cols-5 gap-1.5">
+              {["EFECTIVO", "TARJETA", "TRANSFERENCIA", "CREDITO", "MIXTO"]
                 .filter((method) => {
                   if (method === "CREDITO" && sysConfig?.allowCreditSales === false) return false;
+                  if (method === "MIXTO") return true;
                   if (!branchPaymentConfig) return true;
                   if (method === "EFECTIVO" && !branchPaymentConfig.acceptsCash) return false;
                   if (method === "TARJETA" && !branchPaymentConfig.acceptsCard) return false;
@@ -928,12 +1312,24 @@ export function POS() {
                 .map((method) => (
                   <Button
                     key={method}
-                    variant={selectedPayment === method ? "default" : "outline"}
+                    variant={(selectedPayment as string) === method && method !== "MIXTO" ? "default" : "outline"}
                     className={cn(
                       "h-8 text-[9px] font-black tracking-tight px-0",
-                      selectedPayment === method ? "bg-[var(--primary)] text-white shadow-sm" : "bg-[var(--bg)] text-[var(--text-sec)]"
+                      (selectedPayment as string) === method && method !== "MIXTO" ? "bg-[var(--primary)] text-white shadow-sm" : 
+                      method === "MIXTO" ? "border-[var(--primary)] text-[var(--primary)] hover:bg-[var(--primary)] hover:text-white" :
+                      "bg-[var(--bg)] text-[var(--text-sec)]"
                     )}
-                    onClick={() => setSelectedPayment(method as any)}
+                    onClick={() => {
+                      if (method === "MIXTO") {
+                        if (cart.length === 0) {
+                          toast.error("Agregue productos al carrito para usar pago mixto");
+                          return;
+                        }
+                        if (!isCheckoutSubmittingGlobal) handleCheckoutClick();
+                      } else {
+                        setSelectedPayment(method as any);
+                      }
+                    }}
                   >
                     {method}
                   </Button>
@@ -964,7 +1360,7 @@ export function POS() {
               </Button>
               <Button
                 ref={checkoutBtnRef}
-                onPointerDown={() => { if (!isCheckoutSubmittingGlobal) handleCheckout(); }}
+                onClick={() => { if (!isCheckoutSubmittingGlobal) handleCheckoutClick(); }}
                 disabled={loading || cart.length === 0}
                 className="h-12 rounded-xl font-black text-sm bg-[var(--primary)] text-white hover:bg-[var(--primary)]/90"
               >
@@ -1012,12 +1408,35 @@ export function POS() {
                 Apertura de Caja
               </DialogTitle>
               <DialogDescription className="text-sm sm:text-base font-medium opacity-80 mt-1">
-                Ingresa el efectivo inicial contando los billetes y monedas disponibles.
+                Selecciona la caja física e ingresa el efectivo inicial contando los billetes y monedas disponibles.
               </DialogDescription>
             </DialogHeader>
           </div>
 
           <div className="p-4 sm:p-6 pt-4 space-y-4 sm:space-y-6 overflow-y-auto flex-1">
+            <div className="bg-[var(--card)] p-5 rounded-2xl border border-[var(--border)] shadow-sm flex flex-col space-y-2">
+              <label className="text-sm font-bold text-[var(--text-main)]">Caja a utilizar</label>
+              <Select value={selectedRegisterId} onValueChange={setSelectedRegisterId}>
+                <SelectTrigger className="w-full h-12 bg-[var(--bg)] border-[var(--border)] rounded-xl font-bold">
+                  <SelectValue placeholder="Seleccione una caja..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableRegisters.map(reg => (
+                    <SelectItem 
+                      key={reg.id} 
+                      value={reg.id.toString()}
+                      disabled={reg.isOpen}
+                    >
+                      {reg.name} {reg.isOpen && <span className="text-[var(--text-sec)] text-xs ml-2">(Abierta por {reg.openedBy || 'otro usuario'})</span>}
+                    </SelectItem>
+                  ))}
+                  {availableRegisters.length === 0 && (
+                    <div className="p-2 text-sm text-[var(--text-sec)]">No hay cajas disponibles</div>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
               {/* BILLETES */}
               <div className="bg-[var(--card)] p-5 rounded-2xl border border-[var(--border)] shadow-sm hover:shadow-md transition-shadow">
@@ -1155,19 +1574,27 @@ export function POS() {
             <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
               <div className="p-4 sm:p-6 rounded-2xl border border-[var(--border)] bg-[var(--card)]/50 space-y-4">
                 <div className="flex justify-between items-center text-base">
-                  <span className="text-[var(--text-sec)] font-medium">Monto Esperado (Sistema):</span>
-                  <span className="font-bold text-xl text-[var(--text-main)]">${closeSummary.expectedAmount.toFixed(2)}</span>
+                  <span className="text-[var(--text-sec)] font-medium">Fondo Base (Apertura):</span>
+                  <span className="font-bold text-xl text-[var(--text-main)]">${activeShift?.initialAmount ? Number(activeShift.initialAmount).toFixed(2) : "0.00"}</span>
                 </div>
+                {canCloseDirectly && (
+                  <div className="flex justify-between items-center text-base">
+                    <span className="text-[var(--text-sec)] font-medium">Monto Esperado (Base + Ventas):</span>
+                    <span className="font-bold text-xl text-[var(--text-main)]">${closeSummary.expectedAmount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center text-base">
                   <span className="text-[var(--text-sec)] font-medium">Monto Contado (Real):</span>
                   <span className="font-bold text-xl text-[var(--text-main)]">${closeSummary.countedCash.toFixed(2)}</span>
                 </div>
-                <div className="pt-4 border-t border-[var(--border)] flex justify-between items-center">
-                  <span className="font-bold text-lg text-[var(--text-main)]">Diferencia:</span>
-                  <span className={cn("font-black text-3xl", closeSummary.difference < 0 ? "text-red-500" : "text-emerald-500")}>
-                    {closeSummary.difference > 0 ? "+" : ""}${closeSummary.difference.toFixed(2)}
-                  </span>
-                </div>
+                {canCloseDirectly && (
+                  <div className="pt-4 border-t border-[var(--border)] flex justify-between items-center">
+                    <span className="font-bold text-lg text-[var(--text-main)]">Diferencia:</span>
+                    <span className={cn("font-black text-3xl", closeSummary.difference < 0 ? "text-red-500" : "text-emerald-500")}>
+                      {closeSummary.difference > 0 ? "+" : ""}${closeSummary.difference.toFixed(2)}
+                    </span>
+                  </div>
+                )}
               </div>
               <DialogFooter className="pt-2 shrink-0">
                 <Button
@@ -1187,8 +1614,12 @@ export function POS() {
             </div>
           ) : (
             <div className="p-4 sm:p-6 pt-4 space-y-4 sm:space-y-6 overflow-y-auto flex-1">
-              {closeExpectedTotals && (
-                <div className="bg-blue-500/5 p-4 sm:p-5 rounded-2xl border border-blue-500/20 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 shadow-sm text-center">
+              {closeExpectedTotals && canCloseDirectly && (
+                <div className="bg-blue-500/5 p-4 sm:p-5 rounded-2xl border border-blue-500/20 grid grid-cols-1 sm:grid-cols-4 gap-4 sm:gap-6 shadow-sm text-center">
+                  <div className="flex flex-col items-center bg-[var(--bg)]/50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
+                    <span className="text-[10px] sm:text-xs text-blue-500 font-bold uppercase tracking-widest mb-1.5 opacity-80">Fondo Base</span>
+                    <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">${activeShift?.initialAmount ? Number(activeShift.initialAmount).toFixed(2) : "0.00"}</span>
+                  </div>
                   <div className="flex flex-col items-center bg-[var(--bg)]/50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
                     <span className="text-[10px] sm:text-xs text-blue-500 font-bold uppercase tracking-widest mb-1.5 opacity-80">Efectivo Esperado</span>
                     <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">${closeExpectedTotals.expectedAmount.toFixed(2)}</span>
@@ -1295,25 +1726,110 @@ export function POS() {
                 </div>
               </div>
 
-              <DialogFooter className="pt-4 border-t border-[var(--border)] flex flex-col-reverse sm:flex-row sm:justify-between w-full shrink-0 gap-3 sm:gap-0 mt-4 sm:mt-0">
-                <Button
-                  variant="ghost"
-                  onClick={() => setShowCloseShiftModal(false)}
-                  className="w-full sm:w-auto font-bold text-[var(--text-sec)] hover:bg-slate-100 h-12 px-8"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={handleCloseShift}
-                  disabled={loadingShift || calcBreakdownTotal(closeBills, closeCoins) <= 0}
-                  variant="destructive"
-                  className="w-full sm:w-auto text-lg h-12 px-12 shadow-lg shadow-rose-500/20"
-                >
-                  {loadingShift ? "Cerrando..." : "Confirmar Cierre"}
-                </Button>
-              </DialogFooter>
+              <DialogFooter className="mt-4 sm:mt-6 p-4 sm:p-6 pt-0 bg-[var(--bg)]/50 flex flex-col sm:flex-row gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowCloseShiftModal(false)}
+                    className="w-full sm:w-auto font-bold text-[var(--text-sec)] hover:bg-slate-100 h-12 px-8"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={canCloseDirectly ? handleCloseShift : handleRequestClose}
+                    disabled={loadingShift || calcBreakdownTotal(closeBills, closeCoins) <= 0}
+                    variant="destructive"
+                    className="w-full sm:w-auto text-lg h-12 px-12 shadow-lg shadow-rose-500/20"
+                  >
+                    {loadingShift ? "Procesando..." : (canCloseDirectly ? "Confirmar Cierre" : "Enviar Solicitud")}
+                  </Button>
+                </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Transferencia a Caja Fuerte */}
+      <Dialog open={showTransferSafeModal} onOpenChange={setShowTransferSafeModal}>
+        <DialogContent className="sm:max-w-2xl p-0 max-h-[90vh] flex flex-col">
+          <div className="p-4 sm:p-6 pb-4 border-b border-[var(--border)] bg-[var(--bg)]/50 shrink-0">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-3 text-xl sm:text-2xl font-black text-emerald-600">
+                <div className="p-2 sm:p-2.5 bg-emerald-50 rounded-xl sm:rounded-2xl text-emerald-600 shadow-sm">
+                  <DollarSign size={24} className="sm:w-7 sm:h-7" />
+                </div>
+                Transferencia a Caja Fuerte
+              </DialogTitle>
+              <DialogDescription className="text-sm sm:text-base font-medium opacity-80 mt-1">
+                Ingresa el desglose del dinero que vas a transferir a la caja fuerte. Solo se imprimirá un ticket.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+              <div className="bg-[var(--card)] p-5 rounded-2xl border border-[var(--border)] shadow-sm">
+                <div className="flex items-center gap-3 mb-5 border-b border-[var(--border)] pb-3">
+                  <h3 className="font-bold text-lg">Billetes</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    { key: 'd100', label: '$100' },
+                    { key: 'd50',  label: '$50'  },
+                    { key: 'd20',  label: '$20'  },
+                    { key: 'd10',  label: '$10'  },
+                    { key: 'd5',   label: '$5'   },
+                    { key: 'd1',   label: '$1'   },
+                  ].map(({ key, label }) => (
+                    <div key={key} className="space-y-1.5">
+                      <label className="text-xs font-bold text-[var(--text-sec)]">{label}</label>
+                      <NumberInput
+                        value={transferBills[key as keyof BillsBreakdown]}
+                        onValueChange={(val) => setTransferBills(prev => ({ ...prev, [key]: val ?? 0 }))}
+                        min={0} max={500} step={1} placeholder="0" className="h-11"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-[var(--card)] p-5 rounded-2xl border border-[var(--border)] shadow-sm">
+                <div className="flex items-center gap-3 mb-5 border-b border-[var(--border)] pb-3">
+                  <h3 className="font-bold text-lg">Monedas</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    { key: 'c25', label: '$0.25' },
+                    { key: 'c10', label: '$0.10' },
+                    { key: 'c5',  label: '$0.05' },
+                    { key: 'c1',  label: '$0.01' },
+                  ].map(({ key, label }) => (
+                    <div key={key} className="space-y-1.5">
+                      <label className="text-xs font-bold text-[var(--text-sec)]">{label}</label>
+                      <NumberInput
+                        value={transferCoins[key as keyof CoinsBreakdown]}
+                        onValueChange={(val) => setTransferCoins(prev => ({ ...prev, [key]: val ?? 0 }))}
+                        min={0} max={2000} step={1} placeholder="0" className="h-11"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-between items-center rounded-xl border-2 border-emerald-500/20 bg-emerald-50 px-6 h-[72px] shadow-inner mt-4">
+              <span className="text-sm font-bold text-emerald-600 uppercase tracking-widest">Total a Transferir</span>
+              <span className="text-4xl font-black text-emerald-600 tracking-tight">
+                ${calcBreakdownTotal(transferBills, transferCoins).toFixed(2)}
+              </span>
+            </div>
+          </div>
+          <DialogFooter className="p-4 sm:p-6 border-t border-[var(--border)] bg-[var(--bg)]/50 shrink-0">
+            <Button variant="ghost" onClick={() => setShowTransferSafeModal(false)} className="w-full sm:w-auto h-12 px-8 font-bold">Cancelar</Button>
+            <Button
+              onClick={printSafeTransferTicket}
+              disabled={calcBreakdownTotal(transferBills, transferCoins) <= 0}
+              className="w-full sm:w-auto h-12 px-8 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg"
+            >
+              <Printer size={18} className="mr-2" /> Imprimir Ticket
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -1354,7 +1870,7 @@ export function POS() {
             <Button variant="outline" onClick={() => setShowQuoteModal(false)}>Cancelar</Button>
             <Button
               ref={quoteBtnRef}
-              onPointerDown={() => {
+              onClick={() => {
                 if (!isQuoteSubmittingGlobal) handleSaveQuote();
               }}
               disabled={loading || quoteValidDays === ""}
@@ -1387,6 +1903,143 @@ export function POS() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Cobro Mixto */}
+      <Dialog open={showMixedPaymentModal} onOpenChange={setShowMixedPaymentModal}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black flex items-center gap-2">
+              <DollarSign className="text-[var(--primary)]" size={28} />
+              Confirmar Cobro
+            </DialogTitle>
+            <DialogDescription>
+              Verifique o divida el pago en múltiples métodos.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4 space-y-4">
+            <div className="flex justify-between items-center p-4 bg-[var(--card)] border border-[var(--border)] rounded-xl">
+              <span className="text-lg font-bold text-[var(--text-sec)]">Total a Cobrar</span>
+              <span className="text-3xl font-black text-[var(--text-main)]">${total.toFixed(2)}</span>
+            </div>
+
+            <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
+              {payments.map((payment, index) => (
+                <div key={index} className="flex flex-col gap-2 p-3 bg-[var(--bg)] border border-[var(--border)] rounded-xl">
+                  <div className="flex justify-between items-center">
+                    <Select
+                      value={payment.paymentMethod}
+                      onValueChange={(val: any) => {
+                        const newPayments = [...payments];
+                        newPayments[index].paymentMethod = val;
+                        setPayments(newPayments);
+                      }}
+                    >
+                      <SelectTrigger className="w-[160px] h-9 text-xs font-bold bg-[var(--card)]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["EFECTIVO", "TARJETA", "TRANSFERENCIA", "CREDITO"]
+                          .filter(method => {
+                            if (method === "CREDITO" && sysConfig?.allowCreditSales === false) return false;
+                            if (!branchPaymentConfig) return true;
+                            if (method === "EFECTIVO" && !branchPaymentConfig.acceptsCash) return false;
+                            if (method === "TARJETA" && !branchPaymentConfig.acceptsCard) return false;
+                            if (method === "TRANSFERENCIA" && !branchPaymentConfig.acceptsTransfer) return false;
+                            if (method === "CREDITO" && !branchPaymentConfig.acceptsCredit) return false;
+                            return true;
+                          })
+                          .map(m => (
+                            <SelectItem key={m} value={m}>{m}</SelectItem>
+                          ))
+                        }
+                      </SelectContent>
+                    </Select>
+
+                    <div className="flex items-center gap-2">
+                      <div className="relative">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-black text-[var(--primary)]">$</span>
+                        <NumberInput
+                          value={payment.amount}
+                          onValueChange={(val) => {
+                            const newPayments = [...payments];
+                            newPayments[index].amount = val || 0;
+                            setPayments(newPayments);
+                          }}
+                          min={0}
+                          step={0.01}
+                          hideControls={true}
+                          className="w-28 h-9 pl-5 pr-3 text-right font-black text-[var(--primary)] text-lg [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none focus-visible:ring-0"
+                        />
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 text-rose-500 hover:bg-rose-100 shrink-0"
+                        onClick={() => {
+                          if (payments.length > 1) {
+                            setPayments(payments.filter((_, i) => i !== index));
+                          }
+                        }}
+                        disabled={payments.length === 1}
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
+                  </div>
+                  {(payment.paymentMethod === 'TARJETA' || payment.paymentMethod === 'TRANSFERENCIA') && (
+                    <Input
+                      placeholder="N° Referencia / Voucher (Opcional)"
+                      value={payment.reference || ''}
+                      onChange={(e) => {
+                        const newPayments = [...payments];
+                        newPayments[index].reference = e.target.value;
+                        setPayments(newPayments);
+                      }}
+                      className="h-8 text-xs bg-[var(--card)]"
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <Button
+              variant="outline"
+              className="w-full h-10 border-dashed border-[var(--primary)]/50 text-[var(--primary)] hover:bg-[var(--primary)]/10"
+              onClick={() => {
+                const currentSum = payments.reduce((sum, p) => sum + p.amount, 0);
+                const diff = total - currentSum;
+                setPayments([...payments, { paymentMethod: 'EFECTIVO', amount: diff > 0 ? diff : 0 }]);
+              }}
+            >
+              <Plus size={16} className="mr-2" /> Agregar otro método de pago
+            </Button>
+          </div>
+
+          <DialogFooter className="flex-col sm:flex-row gap-3 pt-4 border-t border-[var(--border)]">
+            <div className="flex-1 flex justify-between items-center w-full">
+              <span className="text-sm font-bold text-[var(--text-sec)]">Resta:</span>
+              <span className={cn("text-lg font-black", (total - payments.reduce((sum, p) => sum + p.amount, 0)) === 0 ? "text-emerald-500" : "text-rose-500")}>
+                ${(total - payments.reduce((sum, p) => sum + p.amount, 0)).toFixed(2)}
+              </span>
+            </div>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button variant="ghost" onClick={() => setShowMixedPaymentModal(false)} className="flex-1 sm:flex-none">
+                Cancelar
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!isCheckoutSubmittingGlobal) processSale();
+                }}
+                disabled={loading || Math.abs(payments.reduce((sum, p) => sum + p.amount, 0) - total) > 0.01}
+                className="flex-1 sm:flex-none bg-[var(--primary)] text-white"
+              >
+                {loading ? <RefreshCcw className="animate-spin size-4 mr-2" /> : "Confirmar Venta"}
+              </Button>
+            </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

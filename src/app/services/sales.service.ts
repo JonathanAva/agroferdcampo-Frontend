@@ -9,11 +9,20 @@ export interface SaleItemDto {
   productId: number;
   quantity: number;
   unitPrice: number;
+  unitType?: string;
+  unitFactor?: number;
+}
+
+export interface SalePaymentDto {
+  paymentMethod: 'EFECTIVO' | 'TARJETA' | 'TRANSFERENCIA' | 'CREDITO';
+  amount: number;
+  reference?: string;
 }
 
 export interface CreateSaleDto {
   customerId?: number;
-  paymentMethod: 'EFECTIVO' | 'TARJETA' | 'TRANSFERENCIA' | 'CREDITO';
+  paymentMethod?: 'EFECTIVO' | 'TARJETA' | 'TRANSFERENCIA' | 'CREDITO'; // Maintained for backwards compatibility
+  payments?: SalePaymentDto[];
   totalAmount: number;
   taxAmount: number;
   dueDate?: string;
