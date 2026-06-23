@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { 
   Wallet, DollarSign, TrendingUp, Search, 
-  ArrowDownCircle, ArrowUpCircle, Filter, CheckCircle2, XCircle, Clock, FileDown, FileSpreadsheet, FileText
+  ArrowDownCircle, ArrowUpCircle, Filter, CheckCircle2, XCircle, Clock, FileDown, FileSpreadsheet, FileText, Printer
 } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
 import { 
   generalCashService, GeneralCashEntry, GeneralCashSummary 
 } from '../services/general-cash.service';
@@ -247,9 +248,90 @@ export function Finance() {
   const handleExportShiftExcel = async (id: number) => {
     try {
       await reportsService.downloadReport(`cash-shifts/${id}/export/excel`, `cierre-turno-${id}.xlsx`);
-      toast.success('Reporte exportado correctamente');
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (e) {
+      toast.error('Error al exportar a Excel');
+    }
+  };
+
+  const handlePrintShiftTicket = (shift: any) => {
+    const totalVentas = (Number(shift.totalVentasEfectivo) || 0) + (Number(shift.totalVentasTarjeta) || 0) + (Number(shift.totalVentasTransferencia) || 0);
+    const date = new Date(shift.closedAt || new Date()).toLocaleString('es-ES');
+    let breakdownHtml = '';
+    
+    if (shift.closingBreakdown) {
+      const breakdown = typeof shift.closingBreakdown === 'string' ? JSON.parse(shift.closingBreakdown) : shift.closingBreakdown;
+      const { bills, coins } = breakdown;
+      
+      if (bills || coins) {
+        breakdownHtml += `<div class="divider">================================</div>
+          <div class="text-center bold">ARQUEO DE CAJA</div>
+          <div class="divider">--------------------------------</div>`;
+          
+        if (bills) {
+          Object.entries(bills).forEach(([denom, count]) => {
+            const denomValue = Number(denom.replace('d', ''));
+            if (Number(count) > 0) {
+              breakdownHtml += `<div class="flex-between"><span>Billetes $${denomValue} x${count}</span><span>$${(denomValue * Number(count)).toFixed(2)}</span></div>`;
+            }
+          });
+        }
+        if (coins) {
+          Object.entries(coins).forEach(([denom, count]) => {
+            const denomValue = Number(denom.replace('c', '')) / 100;
+            if (Number(count) > 0) {
+              breakdownHtml += `<div class="flex-between"><span>Monedas $${denomValue.toFixed(2)} x${count}</span><span>$${(denomValue * Number(count)).toFixed(2)}</span></div>`;
+            }
+          });
+        }
+      }
+    }
+
+    const html = `
+      <html>
+        <head>
+          <style>
+            body { font-family: monospace; width: 300px; margin: 0; padding: 10px; font-size: 14px; color: #000; }
+            .text-center { text-align: center; }
+            .bold { font-weight: bold; }
+            .flex-between { display: flex; justify-content: space-between; }
+            .divider { text-align: center; margin: 5px 0; }
+            h2, h3 { margin: 5px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="text-center">
+            <h2>Agroferretería</h2>
+            <h3>Recibo de Cierre de Caja</h3>
+          </div>
+          <div class="divider">================================</div>
+          <div>Turno #${shift.id}</div>
+          <div>Cajero: ${shift.user?.fullName || 'Usuario'}</div>
+          <div>Caja: ${shift.cashRegister?.name || 'General'}</div>
+          <div>Fecha: ${date}</div>
+          <div class="divider">--------------------------------</div>
+          <div class="flex-between"><span>Fondo Base:</span><span>$${Number(shift.initialAmount).toFixed(2)}</span></div>
+          <div class="flex-between"><span>Total Ventas:</span><span>$${totalVentas.toFixed(2)}</span></div>
+          <div class="flex-between"><span>Monto Esperado:</span><span>$${Number(shift.expectedAmount).toFixed(2)}</span></div>
+          <div class="flex-between"><span>Monto Contado:</span><span>$${Number(shift.countedAmount).toFixed(2)}</span></div>
+          <div class="flex-between bold"><span>Diferencia:</span><span>$${Number(shift.difference).toFixed(2)}</span></div>
+          ${breakdownHtml}
+          <div class="divider">================================</div>
+          <div class="text-center" style="margin-top: 30px;">
+            _______________________<br>Firma Cajero
+          </div>
+          <div class="text-center" style="margin-top: 30px;">
+            _______________________<br>Firma Supervisor
+          </div>
+          <script>
+            window.onload = () => { window.print(); }
+          </script>
+        </body>
+      </html>
+    `;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
     }
   };
 
@@ -274,7 +356,8 @@ export function Finance() {
       setAdminCloseLoading(true);
       await cashShiftsService.closeShiftById(adminCloseShiftId, {
         countedCash: Number(adminCloseCash),
-        notes: adminCloseNotes
+        notes: adminCloseNotes,
+        breakdown: adminCloseTotals?.closingBreakdown
       });
       toast.success('Cierre de caja aprobado exitosamente');
       setAdminCloseShiftId(null);
@@ -663,12 +746,24 @@ export function Finance() {
                         <TableCell className="text-center">
                           {s.status === 'CERRADO' ? (
                             <div className="flex gap-2 justify-center">
-                              <Button variant="ghost" size="icon" onClick={() => handleExportShiftPdf(s.id)} title="Exportar PDF">
-                                <FileText size={18} className="text-rose-500" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => handleExportShiftExcel(s.id)} title="Exportar Excel">
-                                <FileSpreadsheet size={18} className="text-emerald-500" />
-                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="outline" size="sm" className="font-bold border-indigo-200 text-indigo-700 hover:bg-indigo-50">
+                                    <FileDown size={14} className="mr-2" /> Exportar
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48">
+                                  <DropdownMenuItem onClick={() => handlePrintShiftTicket(s)} className="cursor-pointer font-semibold text-[var(--text-main)]">
+                                    <Printer size={16} className="mr-2 text-slate-500" /> Imprimir Recibo
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleExportShiftPdf(s.id)} className="cursor-pointer font-semibold text-[var(--text-main)]">
+                                    <FileText size={16} className="mr-2 text-rose-500" /> Exportar PDF
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleExportShiftExcel(s.id)} className="cursor-pointer font-semibold text-[var(--text-main)]">
+                                    <FileSpreadsheet size={16} className="mr-2 text-emerald-500" /> Exportar Excel
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           ) : s.closeRequested ? (
                             user?.roleId && user.roleId <= 3 ? (

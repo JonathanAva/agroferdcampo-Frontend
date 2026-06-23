@@ -1003,7 +1003,7 @@ export function POS() {
           </Badge>
         </div>
         <div className="flex items-center gap-2">
-          {activeShift && (
+          {/* {activeShift && (
             <Button
               variant="outline" size="sm"
               className="border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 font-bold hover:border-emerald-300"
@@ -1011,7 +1011,7 @@ export function POS() {
             >
               <DollarSign size={14} className="mr-2 hidden sm:inline" /> Transferir a Caja Fuerte
             </Button>
-          )}
+          )} */}
           {activeShift && (
             <Button
               disabled={activeShift.closeRequested}
@@ -1192,8 +1192,8 @@ export function POS() {
 
                     <div className="space-y-2.5">
                       {item.selections.map((sel) => (
-                        <div key={sel.id} className="flex items-center justify-between gap-2 border-t border-[var(--border)]/50 pt-2 first:border-t-0 first:pt-0">
-                          <div className="flex-1 max-w-[100px]">
+                        <div key={sel.id} className="flex items-start justify-between gap-2 border-t border-[var(--border)]/50 pt-2 first:border-t-0 first:pt-0">
+                          <div className="flex-1 max-w-[100px] h-7 flex items-center">
                             {item.units && item.units.length > 0 ? (
                               <select
                                 value={sel.unitType}
@@ -1248,11 +1248,11 @@ export function POS() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="size-6 text-red-400 hover:bg-red-50 hover:text-red-500 shrink-0"
+                            className="size-7 text-red-400 hover:bg-red-50 hover:text-red-500 shrink-0"
                             onClick={() => removeSelection(item.id, sel.id)}
                             disabled={item.selections.length === 1}
                           >
-                            <Trash2 size={10} />
+                            <Trash2 size={12} />
                           </Button>
                         </div>
                       ))}

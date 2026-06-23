@@ -57,7 +57,6 @@ export function NewQuote() {
   const [loading, setLoading] = useState(false);
 
   // Quote State
-  const [applySupplierCredit, setApplySupplierCredit] = useState(false);
   const [validDays, setValidDays] = useState<number | "">(15);
   const [notes, setNotes] = useState("");
 
@@ -201,6 +200,8 @@ export function NewQuote() {
       newMargin = ((val - cost) / cost) * 100;
     } else if (cost > 0 && val <= cost) {
       newMargin = val === cost ? 0 : -1;
+    } else if (cost === 0 && val > 0) {
+      newMargin = 100;
     }
     setMarginForm({ ...marginForm, unitPrice: val, marginPercent: newMargin });
   };
@@ -294,9 +295,7 @@ export function NewQuote() {
   };
 
   // Decide margin options based on supplier credit
-  const marginOptions = applySupplierCredit 
-    ? [2, 5, 8, 10, 15] // Tighter margins
-    : [10, 15, 20, 30, 50]; // Normal margins
+  const marginOptions = [10, 15, 20, 30, 50]; // Normal margins
 
   return (
     <div className="flex h-full gap-6 max-h-[calc(100vh-80px)] overflow-hidden">
@@ -327,7 +326,7 @@ export function NewQuote() {
         
         <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
           {products.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
               {products.map((product) => {
                 const stock = Number(product.stock);
                 return (
@@ -380,7 +379,7 @@ export function NewQuote() {
       </div>
 
       {/* RIGHT PANEL - CART & DETAILS */}
-      <div className="w-[400px] flex flex-col bg-[var(--card)] rounded-xl border border-[var(--border)] shadow-sm overflow-hidden flex-shrink-0">
+      <div className="w-[300px] lg:w-[360px] xl:w-[420px] 2xl:w-[480px] flex flex-col bg-[var(--card)] rounded-xl border border-[var(--border)] shadow-sm overflow-hidden flex-shrink-0">
         <ScrollArea className="flex-1 p-4">
           <div className="space-y-6">
             {/* Cliente */}
@@ -408,10 +407,6 @@ export function NewQuote() {
                   <p className="font-bold text-sm text-[var(--primary)] pr-6 truncate">{selectedCustomer.name}</p>
                   <div className="flex gap-2 mt-1 flex-wrap">
                     <Badge variant="outline" className="text-[10px] bg-white dark:bg-black/20 border-[var(--border)]">{selectedCustomer.customerType.replace('_', ' ')}</Badge>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between border-t border-[var(--primary)]/10 pt-2">
-                    <Label className="text-[10px] font-bold text-[var(--text-sec)] uppercase">Aplicar Crédito a Proveedor</Label>
-                    <Switch checked={applySupplierCredit} onCheckedChange={setApplySupplierCredit} />
                   </div>
                 </div>
               ) : (
@@ -462,6 +457,15 @@ export function NewQuote() {
                 </div>
               </div>
               <Input placeholder="Notas adicionales..." value={notes} onChange={e => setNotes(e.target.value)} className="h-9 text-sm bg-[var(--bg)]" />
+              
+              <div className="pt-2">
+                <TransportSelector
+                  customerId={selectedCustomer?.id}
+                  value={transportData}
+                  onChange={setTransportData}
+                  disabled={loading}
+                />
+              </div>
             </div>
 
             <div className="border-t border-[var(--border)] pt-4">

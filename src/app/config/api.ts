@@ -24,6 +24,7 @@ export async function apiRequest<T>(
 
   try {
     const response = await fetch(url, {
+      cache: 'no-store', // Prevent browser caching to ensure fresh data
       ...options,
       headers,
     });

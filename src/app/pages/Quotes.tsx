@@ -362,19 +362,20 @@ export function Quotes() {
                 <TableHead>Vence En</TableHead>
                 <TableHead className="text-right">Total</TableHead>
                 <TableHead className="text-center">Estado</TableHead>
+                <TableHead className="text-center">Envío</TableHead>
                 <TableHead className="text-center">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-32 text-center text-[var(--text-sec)] animate-pulse">
+                  <TableCell colSpan={8} className="h-32 text-center text-[var(--text-sec)] animate-pulse">
                     Cargando cotizaciones...
                   </TableCell>
                 </TableRow>
               ) : quotes.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-32 text-center text-[var(--text-sec)] font-medium">
+                  <TableCell colSpan={8} className="h-32 text-center text-[var(--text-sec)] font-medium">
                     No se encontraron cotizaciones con estos filtros
                   </TableCell>
                 </TableRow>
@@ -406,6 +407,23 @@ export function Quotes() {
                     </TableCell>
                     <TableCell className="text-center">
                       {getStatusBadge(quote)}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {(() => {
+                        if (!quote.requiresTransport) return <span className="text-gray-400 text-xs font-medium">N/A</span>;
+                        const dNotes = quote.sale?.deliveryNotes || [];
+                        if (dNotes.length > 0) {
+                          const dn = dNotes[0];
+                          if (dn.status === 'ENTREGADO') return <span className="text-emerald-500 font-bold text-[11px] bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20">Entregado</span>;
+                          if (dn.status === 'EN_RUTA') return <span className="text-blue-500 font-bold text-[11px] bg-blue-500/10 px-2 py-1 rounded-md border border-blue-500/20">En Ruta</span>;
+                          if (dn.status === 'CANCELADO') return <span className="text-rose-500 font-bold text-[11px] bg-rose-500/10 px-2 py-1 rounded-md border border-rose-500/20">Cancelado</span>;
+                          return <span className="text-amber-500 font-bold text-[11px] bg-amber-500/10 px-2 py-1 rounded-md border border-amber-500/20">Pendiente Envío</span>;
+                        }
+                        if (quote.status === 'CONFIRMADA') {
+                          return <span className="text-amber-500 font-bold text-[11px] bg-amber-500/10 px-2 py-1 rounded-md border border-amber-500/20">Pendiente Envío</span>;
+                        }
+                        return <span className="text-indigo-500 font-bold text-[11px] bg-indigo-500/10 px-2 py-1 rounded-md border border-indigo-500/20">Con Envío</span>;
+                      })()}
                     </TableCell>
                     <TableCell className="text-center">
                       <DropdownMenu>
@@ -810,7 +828,7 @@ export function Quotes() {
 
           <div className="py-4">
             <Label className="text-xs font-bold uppercase text-[var(--text-sec)] mb-3 block">Método de Pago</Label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div 
                 onClick={() => setSelectedPaymentMethod('EFECTIVO')}
                 className={cn(
@@ -846,6 +864,18 @@ export function Quotes() {
               >
                 <CreditCard size={24} />
                 <span className="text-sm">Tarjeta</span>
+              </div>
+              <div 
+                onClick={() => setSelectedPaymentMethod('CREDITO')}
+                className={cn(
+                  "border rounded-xl p-3 flex flex-col items-center gap-2 cursor-pointer transition-all",
+                  selectedPaymentMethod === 'CREDITO' 
+                    ? "border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400 font-bold" 
+                    : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]/50"
+                )}
+              >
+                <Clock size={24} />
+                <span className="text-sm">Crédito</span>
               </div>
             </div>
             {quoteToConfirm && (

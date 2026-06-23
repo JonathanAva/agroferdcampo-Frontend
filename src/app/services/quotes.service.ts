@@ -42,6 +42,13 @@ export interface QuoteResponse {
     email?: string;
     phone?: string;
   };
+  sale?: {
+    id: number;
+    deliveryNotes?: Array<{
+      id: number;
+      status: string;
+    }>;
+  };
   user?: {
     id: number;
     fullName: string;

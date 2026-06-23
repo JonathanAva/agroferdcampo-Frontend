@@ -65,6 +65,7 @@ interface CatalogProduct {
   internalCode?: string;
   barcode?: string;
   description?: string;
+  costPrice?: number | string;
   unit: string;
   trackStock: boolean;
   isActive: boolean;
@@ -290,7 +291,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         description: product.description || "",
         unit: product.unit,
         categoryId: product.category?.id ? String(product.category.id) : "",
-        costPrice: "", // Cost usually not editable this way or not returned
+        costPrice: product.costPrice?.toString() || "",
         trackStock: product.trackStock,
         prices: product.prices.map((p) => ({
           id: p.id,
@@ -362,7 +363,6 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       barcode: data.barcode?.trim() || undefined,
       description: data.description?.trim() || undefined,
       units: data.units?.map((u) => ({
-        id: u.id,
         unit: u.unit,
         factor: Number(u.factor),
         priceDetalle: u.priceDetalle ? Number(u.priceDetalle) : null,
@@ -761,28 +761,26 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                     />
                   </div>
 
-                  {!editingProduct && (
-                    <div className="space-y-2">
-                      <Label className="text-sm font-bold">
-                        Costo de Adquisición
-                      </Label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                          $
-                        </span>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          {...register("costPrice")}
-                          placeholder="0.00"
-                          className="h-11 pl-7 rounded-xl bg-[var(--card)]"
-                        />
-                      </div>
-                      <p className="text-[10px] opacity-60 ml-1">
-                        Lo que te cuesta comprarlo (Opcional)
-                      </p>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-bold">
+                      Costo de Adquisición
+                    </Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                        $
+                      </span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        {...register("costPrice")}
+                        placeholder="0.00"
+                        className="h-11 pl-7 rounded-xl bg-[var(--card)]"
+                      />
                     </div>
-                  )}
+                    <p className="text-[10px] opacity-60 ml-1">
+                      Lo que te cuesta comprarlo (Opcional)
+                    </p>
+                  </div>
 
                   <div className="pt-4 border-t border-[var(--border)]">
                     <div className="flex items-center justify-between">

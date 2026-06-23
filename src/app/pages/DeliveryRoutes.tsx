@@ -60,7 +60,7 @@ export default function DeliveryRoutes({ hideTitle }: { hideTitle?: boolean } = 
     notes?: string;
   }>({});
   const [conductores, setConductores] = useState<any[]>([]);
-  const { vehicles } = useVehicles({ status: 'DISPONIBLE' });
+  const { vehicles } = useVehicles({ status: 'ALL' });
   const [availableNotes, setAvailableNotes] = useState<DeliveryNote[]>([]);
   const [selectedNotes, setSelectedNotes] = useState<number[]>([]);
   const [creating, setCreating] = useState(false);
@@ -653,7 +653,9 @@ export default function DeliveryRoutes({ hideTitle }: { hideTitle?: boolean } = 
                   <SelectTrigger><SelectValue placeholder="Seleccione vehículo disponible" /></SelectTrigger>
                   <SelectContent>
                     {vehicles.map(v => (
-                      <SelectItem key={v.id} value={v.id.toString()}>{v.plate} - {v.capacityKg ? `${v.capacityKg}kg` : ''}</SelectItem>
+                      <SelectItem key={v.id} value={v.id.toString()}>
+                        {v.plate} - {v.capacityKg ? `${v.capacityKg}kg` : ''} {v.status !== 'DISPONIBLE' ? `(${v.status})` : ''}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

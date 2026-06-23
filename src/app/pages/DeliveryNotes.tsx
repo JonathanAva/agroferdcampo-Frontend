@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, Eye, Filter, Calendar as CalendarIcon, 
-  TruckIcon, CheckCircle2, Trash2, X, PackageCheck, Plus, Mail, MapPin, PenTool, BarChart3, Camera, Ban
+  TruckIcon, CheckCircle2, Trash2, X, PackageCheck, Plus, Mail, MapPin, PenTool, BarChart3, Camera, Ban, Copy
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSearchParams } from 'react-router';
@@ -119,6 +119,11 @@ function DeliveryNotesList() {
   const [closingNote, setClosingNote] = useState<any>(null);
   const [closing, setClosing] = useState(false);
 
+  // Duplicate Note state
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+  const [noteToDuplicate, setNoteToDuplicate] = useState<DeliveryNoteResponse | null>(null);
+  const [duplicating, setDuplicating] = useState(false);
+
   const deliveryNotesFilters: FilterConfig[] = useMemo(() => [
     { id: 'status', label: 'Estado', type: 'category', options: [
       { label: 'Emitido', value: 'EMITIDO' },
@@ -219,6 +224,38 @@ function DeliveryNotesList() {
       fetchStats();
     } catch (e: any) {
       toast.error(e.message || 'Error al cancelar');
+    }
+  };
+
+  const handleOpenDuplicate = (note: DeliveryNoteResponse) => {
+    setNoteToDuplicate(note);
+    setDuplicateModalOpen(true);
+  };
+
+  const confirmDuplicate = async () => {
+    if (!noteToDuplicate) return;
+    setDuplicating(true);
+    try {
+      const fullNote = await deliveryNotesService.getDeliveryNoteDetail(noteToDuplicate.id);
+      await deliveryNotesService.createDeliveryNote({
+        type: fullNote.type,
+        saleId: fullNote.saleId,
+        toBranchId: fullNote.toBranchId,
+        customerId: fullNote.customerId,
+        notes: `Re-emisión de Albarán #${(noteToDuplicate as any).number || fullNote.id}. ` + (fullNote.notes || ''),
+        items: fullNote.items.map(i => ({ productId: Number(i.productId), quantity: Number(i.quantity) })),
+        requiresTransport: true,
+        deliveryAddress: fullNote.deliveryAddress,
+      });
+      toast.success('Albarán re-emitido correctamente');
+      fetchNotes();
+      fetchStats();
+      setDuplicateModalOpen(false);
+      setNoteToDuplicate(null);
+    } catch(e: any) {
+      toast.error(e.message || 'Error al re-emitir el albarán');
+    } finally {
+      setDuplicating(false);
     }
   };
 
@@ -888,6 +925,11 @@ function DeliveryNotesList() {
                               </DropdownMenuItem>
                             </>
                           )}
+                          {(note.status === 'CANCELADO' || note.status === 'CON_DIFERENCIAS') && (
+                            <DropdownMenuItem onClick={() => handleOpenDuplicate(note)} className="font-bold cursor-pointer text-blue-600">
+                              <Copy size={14} className="mr-2" /> Re-emitir Albarán
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -1241,6 +1283,29 @@ function DeliveryNotesList() {
             <Button variant="outline" onClick={() => { setCloseObservationModalOpen(false); setObservationText(''); setClosingNote(null); }}>Cancelar</Button>
             <Button onClick={handleCloseWithObservation} disabled={closing || !observationText.trim()} className="bg-emerald-600 text-white hover:bg-emerald-700">
               {closing ? 'Cerrando...' : 'Cerrar Albarán'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL RE-EMITIR ALBARÁN */}
+      <Dialog open={duplicateModalOpen} onOpenChange={setDuplicateModalOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-blue-600">
+              <Copy size={18} /> Re-emitir Albarán
+            </DialogTitle>
+            <DialogDescription>
+              ¿Deseas generar un nuevo Albarán con los mismos productos para re-enviarlo?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 text-sm text-[var(--text-main)]">
+            Se creará un nuevo albarán en estado <b>EMITIDO</b> con el mismo cliente, dirección y productos, listo para ser asignado a una nueva ruta. El albarán actual ({noteToDuplicate && (noteToDuplicate as any).number}) se mantendrá como parte del historial.
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => { setDuplicateModalOpen(false); setNoteToDuplicate(null); }}>Cancelar</Button>
+            <Button onClick={confirmDuplicate} disabled={duplicating} className="bg-blue-600 text-white hover:bg-blue-700">
+              {duplicating ? 'Re-emitiendo...' : 'Generar Albarán'}
             </Button>
           </DialogFooter>
         </DialogContent>
