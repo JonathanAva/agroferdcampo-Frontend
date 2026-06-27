@@ -29,6 +29,7 @@ import { DeliveryNotes } from "./pages/DeliveryNotes";
 import { Credit } from "./pages/Credit";
 import Vehicles from "./pages/Vehicles";
 import DeliveryRoutes from "./pages/DeliveryRoutes";
+import { Audit } from "./pages/Audit";
 
 export const router = createBrowserRouter([
   {
@@ -59,6 +60,7 @@ export const router = createBrowserRouter([
         element: <Dashboard />,
       },
       {
+
         path: "ui-showcase",
         element: <UIComponentsShowcase />,
       },
@@ -106,6 +108,7 @@ export const router = createBrowserRouter([
           { path: "vehicles", element: <Vehicles /> },
           { path: "delivery-routes", element: <DeliveryRoutes /> },
           { path: "reports", element: <Reports /> },
+          { path: "audit", element: <Audit /> },
           { path: "settings", element: <Settings /> },
           { path: "settings/theme", element: <ThemeCustomizer /> },
           { path: "settings/branches", element: <BranchesPage /> },

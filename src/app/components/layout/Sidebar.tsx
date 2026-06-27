@@ -20,7 +20,8 @@ import {
   Wallet,
   Landmark,
   Route,
-  History
+  History,
+  ShieldAlert
 } from "lucide-react";
 
 const navLinks = [
@@ -35,6 +36,8 @@ const navLinks = [
   { path: "/credit", icon: Landmark, label: "Cuentas por Cobrar", roles: [1, 2, 3, 4] },
   { path: "/finance", icon: Wallet, label: "Finanzas y Caja", roles: [1, 2, 3, 4] },
   { path: "/rrhh", icon: Briefcase, label: "Recursos Humanos", roles: [1, 2, 3] },
+  { path: "/reports", icon: FileText, label: "Reportes", roles: [1, 2] },
+  { path: "/audit", icon: ShieldAlert, label: "Auditoría", roles: [1, 2] },
 ];
 
 interface SidebarProps {
