@@ -22,6 +22,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
 import { Label } from '../components/ui/label';
 import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
+import { Switch } from '../components/ui/switch';
 
 export function Purchases() {
   const [activeTab, setActiveTab] = useState<'compras' | 'proveedores' | 'pagar'>('compras');
@@ -253,6 +254,7 @@ export function Purchases() {
       await purchasesService.createPurchase({
         supplierId: newPurchase.supplierId,
         notes: finalNotes || undefined,
+        applyrent: newPurchase.applyrent,
         items: newPurchase.items.map(i => ({
           productId: Number(i.productId),
           quantity: Number(i.quantity) || 1,
@@ -937,6 +939,21 @@ export function Purchases() {
                   onChange={e => setNewPurchase({...newPurchase, referenceDoc: e.target.value})}
                   className="bg-[var(--card)]"
                 />
+              </div>
+              <div className="space-y-2 flex flex-col justify-center">
+                <div className="flex items-center gap-3 mt-4">
+                  <Switch 
+                    checked={newPurchase.applyrent || false} 
+                    onCheckedChange={checked => setNewPurchase({...newPurchase, applyrent: checked})}
+                    id="applyrent"
+                  />
+                  <Label htmlFor="applyrent" className="font-bold cursor-pointer">
+                    Retener 10% de Renta (Sujeto Excluido)
+                  </Label>
+                </div>
+                <p className="text-[10px] text-[var(--text-sec)]">
+                  Marque esta opción si la compra es a un Sujeto Excluido y se trata de servicios u honorarios.
+                </p>
               </div>
             </div>
 

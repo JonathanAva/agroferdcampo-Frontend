@@ -31,6 +31,18 @@ import Vehicles from "./pages/Vehicles";
 import DeliveryRoutes from "./pages/DeliveryRoutes";
 import { Audit } from "./pages/Audit";
 
+// Roles definidos como strings — coinciden exactamente con el enum BranchRole del backend
+const ROLES = {
+  PROPIETARIO: "PROPIETARIO",
+  ADMINISTRADOR: "ADMINISTRADOR",
+  SUPERVISOR: "SUPERVISOR",
+  CAJERO: "CAJERO",
+  BODEGUERO: "BODEGUERO",
+  CONDUCTOR: "CONDUCTOR",
+} as const;
+
+const { PROPIETARIO, ADMINISTRADOR, SUPERVISOR, CAJERO, BODEGUERO } = ROLES;
+
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -60,13 +72,12 @@ export const router = createBrowserRouter([
         element: <Dashboard />,
       },
       {
-
         path: "ui-showcase",
         element: <UIComponentsShowcase />,
       },
-      // Roles 1, 2, 3, 4 (Cajero y Supervisor)
+      // Propietario, Admin, Supervisor, Cajero
       {
-        element: <ProtectedRoute allowedRoles={[1, 2, 3, 4]} />,
+        element: <ProtectedRoute allowedRoles={[PROPIETARIO, ADMINISTRADOR, SUPERVISOR, CAJERO]} />,
         children: [
           { path: "pos", element: <POS /> },
           { path: "sales", element: <SalesHistory /> },
@@ -75,33 +86,27 @@ export const router = createBrowserRouter([
           { path: "customers", element: <Customers /> },
           { path: "credit", element: <Credit /> },
           { path: "finance", element: <Finance /> },
-        ]
+        ],
       },
-      // Roles 1, 2, 3, 5 (Bodeguero)
+      // Todos los roles — inventario, compras, albaranes
       {
-        element: <ProtectedRoute allowedRoles={[1, 2, 3, 5]} />,
+        element: <ProtectedRoute allowedRoles={[PROPIETARIO, ADMINISTRADOR, SUPERVISOR, CAJERO, BODEGUERO, ROLES.CONDUCTOR]} />,
         children: [
           { path: "inventory", element: <Inventory /> },
           { path: "delivery-notes", element: <DeliveryNotes /> },
-        ]
-      },
-      // Roles 1, 2, 5 (Compras)
-      {
-        element: <ProtectedRoute allowedRoles={[1, 2, 5]} />,
-        children: [
           { path: "purchases", element: <Purchases /> },
-        ]
+        ],
       },
-      // Roles 1, 2, 3 (Supervisor)
+      // Propietario, Admin, Supervisor
       {
-        element: <ProtectedRoute allowedRoles={[1, 2, 3]} />,
+        element: <ProtectedRoute allowedRoles={[PROPIETARIO, ADMINISTRADOR, SUPERVISOR]} />,
         children: [
           { path: "rrhh", element: <HumanResources /> },
-        ]
+        ],
       },
-      // Roles 1, 2 (Propietario y Admin)
+      // Solo Propietario y Admin
       {
-        element: <ProtectedRoute allowedRoles={[1, 2]} />,
+        element: <ProtectedRoute allowedRoles={[PROPIETARIO, ADMINISTRADOR]} />,
         children: [
           { path: "catalog", element: <Catalog /> },
           { path: "users", element: <UsersPage /> },
@@ -114,7 +119,7 @@ export const router = createBrowserRouter([
           { path: "settings/branches", element: <BranchesPage /> },
           { path: "settings/cash-registers", element: <CashRegisters /> },
           { path: "settings/global", element: <SystemConfig /> },
-        ]
+        ],
       },
     ],
   },

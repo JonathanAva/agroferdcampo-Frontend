@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { User, Building2, UserCheck, ShieldCheck } from 'lucide-react';
 import { cn } from '../ui/utils';
 import { useAuth } from '../../context/AuthContext';
+import { departments, zones as municipalities, districts, economicActivities } from '../../types/catalogs';
 
 interface CustomerDialogProps {
   open: boolean;
@@ -24,7 +25,7 @@ interface CustomerDialogProps {
 
 export function CustomerDialog({ open, onOpenChange, customer, onSuccess }: CustomerDialogProps) {
   const { user } = useAuth();
-  const isAdmin = user?.roleId === 1 || user?.roleId === 2;
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'OWNER';
   const [loading, setLoading] = useState(false);
   const isEdit = !!customer;
 
@@ -41,6 +42,7 @@ export function CustomerDialog({ open, onOpenChange, customer, onSuccess }: Cust
     email: '',
     department: '',
     municipality: '',
+    district: '',
     addressComplement: '',
     activityCode: '',
     activityDescription: '',
@@ -61,6 +63,7 @@ export function CustomerDialog({ open, onOpenChange, customer, onSuccess }: Cust
         email: customer.email || '',
         department: customer.department || '',
         municipality: customer.municipality || '',
+        district: customer.district || '',
         addressComplement: customer.addressComplement || '',
         activityCode: customer.activityCode || '',
         activityDescription: customer.activityDescription || '',
@@ -80,6 +83,7 @@ export function CustomerDialog({ open, onOpenChange, customer, onSuccess }: Cust
         email: '',
         department: '',
         municipality: '',
+        district: '',
         addressComplement: '',
         activityCode: '',
         activityDescription: '',
@@ -231,48 +235,91 @@ export function CustomerDialog({ open, onOpenChange, customer, onSuccess }: Cust
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <Label>Código Actividad (MH)</Label>
-                  <Input 
-                    required 
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Actividad Económica (MH)</Label>
+                  <Select 
                     value={formData.activityCode} 
-                    onChange={(e) => handleChange('activityCode', e.target.value)}
-                    placeholder="Ej. 4752"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Descripción Actividad</Label>
-                  <Input 
-                    required 
-                    value={formData.activityDescription} 
-                    onChange={(e) => handleChange('activityDescription', e.target.value)}
-                    placeholder="Ej. VENTA AL POR MENOR..."
-                  />
+                    onValueChange={(v) => {
+                      const activity = economicActivities.find(a => a.value === v);
+                      handleChange('activityCode', v);
+                      handleChange('activityDescription', activity ? activity.label : '');
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccione la actividad económica" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {economicActivities.map((act) => (
+                        <SelectItem key={act.value} value={act.value}>
+                          {act.value} - {act.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
               {formData.customerType === 'CONTRIBUYENTE' && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label>Departamento (Cod)</Label>
-                    <Input 
-                      required 
-                      maxLength={2}
+                    <Label>Departamento</Label>
+                    <Select 
                       value={formData.department} 
-                      onChange={(e) => handleChange('department', e.target.value)}
-                      placeholder="06"
-                    />
+                      onValueChange={(v) => {
+                        handleChange('department', v);
+                        handleChange('municipality', '');
+                        handleChange('district', '');
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccione departamento" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {departments.filter(d => d.value !== "00").map((dept) => (
+                          <SelectItem key={dept.value} value={dept.value}>
+                            {dept.value} - {dept.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Municipio (Cod)</Label>
-                    <Input 
-                      required 
-                      maxLength={2}
+                    <Label>Municipio</Label>
+                    <Select 
                       value={formData.municipality} 
-                      onChange={(e) => handleChange('municipality', e.target.value)}
-                      placeholder="14"
-                    />
+                      onValueChange={(v) => handleChange('municipality', v)}
+                      disabled={!formData.department}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccione municipio" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {municipalities.filter(m => m.departmentId === formData.department).map((mun) => (
+                          <SelectItem key={mun.value} value={mun.value}>
+                            {mun.value} - {mun.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Distrito</Label>
+                    <Select 
+                      value={formData.district} 
+                      onValueChange={(v) => handleChange('district', v)}
+                      disabled={!formData.department}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccione distrito" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {districts.filter(d => d.departmentId === formData.department).map((dist) => (
+                          <SelectItem key={dist.value} value={dist.value}>
+                            {dist.value} - {dist.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   {isAdmin && (
                     <div className="space-y-2">

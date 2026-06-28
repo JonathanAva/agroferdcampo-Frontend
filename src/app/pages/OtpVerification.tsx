@@ -51,6 +51,13 @@ export function OtpVerification() {
     if (e.key === "Backspace" && !otp[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const codeStr = otp.join("");
+      if (codeStr.length === 6) {
+        handleSubmit();
+      }
+    }
   };
 
   const handleSubmit = async (e?: FormEvent) => {
@@ -65,7 +72,7 @@ export function OtpVerification() {
     setLoading(true);
 
     try {
-      const data = await apiRequest<{ accessToken: string; deviceId: string }>("/auth/verify-email-code", {
+      const data = await apiRequest<any>("/auth/verify-email-code", {
         method: "POST",
         body: JSON.stringify({
           email,
@@ -74,33 +81,55 @@ export function OtpVerification() {
         }),
       });
 
-      if (data.accessToken) {
+      // Guardar el identificador del dispositivo si se devolvió
+      if (data.deviceId) {
+        localStorage.setItem("agro-device-id", data.deviceId);
+      }
+
+      if (data.accessToken && !data.requireBranchSelection) {
         localStorage.setItem("agro-token", data.accessToken);
-        
-        // Guardar el identificador del dispositivo si se solicitó recordar
-        if (data.deviceId) {
-          localStorage.setItem("agro-device-id", data.deviceId);
-        }
         
         // Obtener datos del usuario tras verificación exitosa
         const backendUser = await apiRequest<any>("/auth/me", {
           headers: { Authorization: `Bearer ${data.accessToken}` }
         });
         
+        const mapRoleToId = (r?: string): number | undefined => {
+          if (!r) return undefined;
+          switch (r.toUpperCase()) {
+            case 'PROPIETARIO': return 1;
+            case 'ADMINISTRADOR': return 2;
+            case 'GERENTE': return 3;
+            case 'VENDEDOR':
+            case 'CAJERO': return 4;
+            case 'BODEGUERO': return 5;
+            default: return undefined;
+          }
+        };
+
         const mappedUser = {
           id: backendUser.id.toString(),
           name: backendUser.fullName,
           email: backendUser.email,
-          role: backendUser.role,
-          roleId: backendUser.roleId,
+          role: data.branches?.[0]?.role || backendUser.role,
+          roleId: mapRoleToId(data.branches?.[0]?.role || backendUser.role),
           phone: backendUser.phone,
           dui: backendUser.dui,
-          branch: 'Todas'
+          branchId: data.branches?.[0]?.id,
+          branch: data.branches?.[0]?.name || 'Todas'
         };
         
         setUser(mappedUser);
         localStorage.setItem("agro-user", JSON.stringify(mappedUser));
         navigate("/home");
+      } else if (data.requireBranchSelection) {
+        // El usuario tiene múltiples sucursales, hay que redirigirlo al paso 2 de Login
+        localStorage.setItem("agro-available-branches", JSON.stringify(data.branches));
+        if (data.user) {
+          localStorage.setItem("agro-temp-user", JSON.stringify(data.user));
+        }
+        // Navegamos al login para que vea el selector de sucursales
+        navigate("/", { state: { requireBranchSelection: true, branches: data.branches, user: data.user } });
       }
     } catch (err: any) {
       setError(err.message || "Código inválido o expirado");
@@ -116,12 +145,12 @@ export function OtpVerification() {
         method: "POST",
         body: JSON.stringify({ email }),
       });
-      setTimer(60);
+      setTimer(600);
       setOtp(["", "", "", "", "", ""]);
       inputRefs.current[0]?.focus();
       setError("");
     } catch (err: any) {
-      setError("No se pudo reenviar el código");
+      setError(err.message || "Error al reenviar el código");
     }
   };
 
@@ -133,7 +162,7 @@ export function OtpVerification() {
       style={{ backgroundColor: "var(--bg)" }}
     >
       <div
-        className="w-full max-w-md p-8 rounded-2xl border shadow-lg"
+        className="w-full max-w-xl p-10 rounded-2xl border shadow-lg"
         style={{
           backgroundColor: "var(--card)",
           borderColor: "var(--border)",
@@ -208,9 +237,9 @@ export function OtpVerification() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-lg font-semibold transition-all"
+            className="w-full py-4 rounded-xl font-bold text-lg transition-all"
             style={{
-              backgroundColor: "var(--accent)",
+              backgroundColor: "var(--primary)",
               color: "#ffffff",
               opacity: loading ? 0.7 : 1,
             }}

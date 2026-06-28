@@ -1,0 +1,17 @@
+export const departments = [
+  { value: "00", label: "Otro (Para extranjeros)" },
+  { value: "01", label: "Ahuachapán" },
+  { value: "02", label: "Santa Ana" },
+  { value: "03", label: "Sonsonate" },
+  { value: "04", label: "Chalatenango" },
+  { value: "05", label: "La Libertad" },
+  { value: "06", label: "San Salvador" },
+  { value: "07", label: "Cuscatlán" },
+  { value: "08", label: "La Paz" },
+  { value: "09", label: "Cabañas" },
+  { value: "10", label: "San Vicente" },
+  { value: "11", label: "Usulután" },
+  { value: "12", label: "San Miguel" },
+  { value: "13", label: "Morazán" },
+  { value: "14", label: "La Unión" },
+];

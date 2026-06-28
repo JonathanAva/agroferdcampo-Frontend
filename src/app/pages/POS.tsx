@@ -176,7 +176,14 @@ export function POS() {
   const quoteBtnRef = useRef<HTMLButtonElement>(null);
   const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('pos-cart');
+      return saved ? (JSON.parse(saved) as CartItem[]) : [];
+    } catch {
+      return [];
+    }
+  });
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<
@@ -257,6 +264,19 @@ export function POS() {
       loadBranchPaymentConfig();
     }
   }, [user]);
+
+  // Persistir carrito en sessionStorage para sobrevivir recargas de página
+  useEffect(() => {
+    try {
+      if (cart.length > 0) {
+        sessionStorage.setItem('pos-cart', JSON.stringify(cart));
+      } else {
+        sessionStorage.removeItem('pos-cart');
+      }
+    } catch {
+      // sessionStorage no disponible
+    }
+  }, [cart]);
 
   const loadBranchPaymentConfig = async () => {
     try {

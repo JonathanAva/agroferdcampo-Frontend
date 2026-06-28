@@ -2,7 +2,7 @@ import { Navigate, Outlet } from "react-router";
 import { useAuth } from "../../context/AuthContext";
 
 interface ProtectedRouteProps {
-  allowedRoles?: number[];
+  allowedRoles?: string[];
 }
 
 export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
@@ -12,7 +12,7 @@ export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
     return <Navigate to="/" replace />;
   }
 
-  if (allowedRoles && user.roleId && !allowedRoles.includes(user.roleId)) {
+  if (allowedRoles && user.role && !allowedRoles.includes(user.role)) {
     return <Navigate to="/home" replace />;
   }
 

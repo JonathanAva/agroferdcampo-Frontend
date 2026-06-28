@@ -44,7 +44,7 @@ interface LoginResponse {
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<LoginResponse>;
+  login: (email: string, password: string, deviceId?: string) => Promise<LoginResponse>;
   selectBranch: (userId: number, branchId: number) => Promise<LoginResponse>;
   logout: () => void;
   isAuthenticated: boolean;
@@ -102,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             phone: backendUser.phone,
             dui: backendUser.dui,
             branchId: decodedBranchId || user.branchId,
+            roleId: user.roleId,
           });
         }
       } catch (error) {
@@ -116,11 +117,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (
     email: string,
     password: string,
+    deviceId?: string
   ): Promise<LoginResponse> => {
     try {
       const data = await apiRequest<LoginResponse>("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, deviceId }),
       });
       console.log("Datos procesados en AuthContext.login:", data);
 
@@ -179,9 +181,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             "Datos del usuario encontrados para completar el login:",
             currentUserData.email,
           );
-          const selectedBranch = availableBranches.find(
+          let selectedBranch = availableBranches.find(
             (b) => b.id === branchId,
           );
+          
+          if (!selectedBranch) {
+            const storedBranches = localStorage.getItem("agro-available-branches");
+            if (storedBranches) {
+              const parsed = JSON.parse(storedBranches);
+              selectedBranch = parsed.find((b: Branch) => b.id === branchId);
+            }
+          }
+
+          console.log("Sucursal seleccionada para auth:", selectedBranch);
+
           handleAuthSuccess(
             data.accessToken,
             {
@@ -219,18 +232,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   ) => {
     localStorage.setItem("agro-token", token);
 
-    // Mapear el rol del backend a roleId (Insensible a mayúsculas)
-    const normalizedRole = roleString?.toUpperCase() || "";
-    const roleMap: Record<string, number> = {
-      PROPIETARIO: 1,
-      ADMINISTRADOR: 2,
-      SUPERVISOR: 3,
-      CAJERO: 4,
-      BODEGUERO: 5,
-    };
-
-    const roleId = roleMap[normalizedRole] || undefined;
-
     let branchId: number | undefined = undefined;
     try {
       if (token) {
@@ -243,12 +244,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("Error decoding token", e);
     }
 
+    const mapRoleToId = (r?: string): number | undefined => {
+      if (!r) return undefined;
+      switch (r.toUpperCase()) {
+        case 'PROPIETARIO': return 1;
+        case 'ADMINISTRADOR': return 2;
+        case 'GERENTE': return 3;
+        case 'VENDEDOR':
+        case 'CAJERO': return 4;
+        case 'BODEGUERO': return 5;
+        default: return undefined;
+      }
+    };
+
     const mappedUser: User = {
       id: backendUser.id.toString(),
       name: backendUser.fullName,
       email: backendUser.email,
-      role: roleString || "ADMIN",
-      roleId: roleId,
+      role: roleString?.toUpperCase() || null,
+      roleId: mapRoleToId(roleString),
       phone: backendUser.phone,
       dui: backendUser.dui,
       branch: branchName || "Principal",

@@ -13,6 +13,7 @@ export interface CreatePurchaseDto {
   referenceDoc?: string;
   expectedDate?: string;
   notes?: string;
+  applyrent?: boolean;
   items: PurchaseItemDto[];
 }
 
@@ -56,6 +57,7 @@ export interface PurchaseResponse {
   dueDate?: string;
   receivedAt?: string;
   notes?: string;
+  applyrent?: boolean;
   isPaid: boolean;
   paymentMethod?: string;
   createdAt: string;

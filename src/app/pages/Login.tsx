@@ -1,9 +1,9 @@
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect } from "react";
 import logo from "../../assets/logo.png";
 
-import { useNavigate, Link } from "react-router";
+import { useNavigate, useLocation, Link } from "react-router";
 import { useAuth, Branch } from "../context/AuthContext";
-import { Mail, Lock, AlertCircle, MapPin, ArrowLeft } from "lucide-react";
+import { Mail, Lock, AlertCircle, MapPin, ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from "../components/ui/alert";
 export function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<"login" | "select-branch">("login");
@@ -20,6 +21,18 @@ export function Login() {
 
   const { login, selectBranch } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state?.requireBranchSelection) {
+      setBranches(location.state.branches || []);
+      setUserId(location.state.user?.id || null);
+      setStep("select-branch");
+      
+      // Limpiar el estado para no quedarse en un loop si recarga
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.state, navigate, location.pathname]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -28,10 +41,13 @@ export function Login() {
 
     try {
       console.log('Iniciando login para:', email);
-      const response = await login(email, password);
+      const deviceId = localStorage.getItem("agro-device-id") || undefined;
+      const response = await login(email, password, deviceId);
       console.log('Respuesta de login:', response);
 
-      if (response.requireBranchSelection) {
+      if (response.status === "MFA_REQUIRED") {
+        navigate("/verify-otp", { state: { email } });
+      } else if (response.requireBranchSelection) {
         console.log('Requiere selección de sucursal. Sucursales:', response.branches);
         setBranches(response.branches || []);
         setUserId(response.user?.id || null);
@@ -45,6 +61,16 @@ export function Login() {
       setError(err.message || "Credenciales incorrectas. Intenta de nuevo.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      // Solo hacer el submit si hay email y password
+      if (email && password) {
+        handleSubmit(e as unknown as React.FormEvent);
+      }
     }
   };
 
@@ -117,9 +143,12 @@ export function Login() {
                 />
                 <Input
                   id="email"
+                  name="email"
+                  autoComplete="username"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  onKeyDown={handleKeyDown}
                   placeholder="usuario@ejemplo.com"
                   required
                   className="pl-10"
@@ -136,13 +165,24 @@ export function Login() {
                 />
                 <Input
                   id="password"
-                  type="password"
+                  name="password"
+                  autoComplete="current-password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={handleKeyDown}
                   placeholder="••••••••"
                   required
-                  className="pl-10"
+                  className="pl-10 pr-10"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 focus:outline-none"
+                  style={{ color: "var(--text-sec)" }}
+                >
+                  {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
+                </button>
               </div>
             </div>
 

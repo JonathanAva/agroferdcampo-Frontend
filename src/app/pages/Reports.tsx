@@ -6,6 +6,7 @@ import {
   RotateCcw, BarChart3, FileDown, Info, Receipt, LucideIcon
 } from 'lucide-react';
 import { reportsService } from '../services/reports.service';
+import { apiRequest } from '../config/api';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -39,7 +40,6 @@ interface ReportType {
   endpointPrefix: string;
   filter: ReportFilter;
   category: 'ventas' | 'compras' | 'inventario' | 'cartera' | 'caja';
-  badge?: string; // 'Nuevo' | 'Mejorado' | undefined
 }
 
 const REPORTS: ReportType[] = [
@@ -68,7 +68,6 @@ const REPORTS: ReportType[] = [
       ]
     },
     category: 'ventas',
-    badge: 'Mejorado',
   },
   {
     id: 'period_sales',
@@ -113,7 +112,6 @@ const REPORTS: ReportType[] = [
     endpointPrefix: 'sales/by-cashier',
     filter: { type: 'range' },
     category: 'ventas',
-    badge: 'Nuevo',
   },
   {
     id: 'returns',
@@ -123,7 +121,6 @@ const REPORTS: ReportType[] = [
     endpointPrefix: 'returns/period',
     filter: { type: 'range' },
     category: 'ventas',
-    badge: 'Nuevo',
   },
 
   // ── COMPRAS ──
@@ -151,7 +148,6 @@ const REPORTS: ReportType[] = [
       ]
     },
     category: 'compras',
-    badge: 'Nuevo',
   },
   {
     id: 'payables',
@@ -161,7 +157,6 @@ const REPORTS: ReportType[] = [
     endpointPrefix: 'payables',
     filter: { type: 'none' },
     category: 'compras',
-    badge: 'Nuevo',
   },
 
   // ── INVENTARIO ──
@@ -198,7 +193,6 @@ const REPORTS: ReportType[] = [
       ]
     },
     category: 'inventario',
-    badge: 'Nuevo',
   },
   {
     id: 'inventory_low_stock',
@@ -258,7 +252,6 @@ const REPORTS: ReportType[] = [
       ]
     },
     category: 'inventario',
-    badge: 'Nuevo',
   },
   {
     id: 'no_movement',
@@ -304,7 +297,6 @@ const REPORTS: ReportType[] = [
       ]
     },
     category: 'cartera',
-    badge: 'Mejorado',
   },
   {
     id: 'receivables_aging',
@@ -314,7 +306,6 @@ const REPORTS: ReportType[] = [
     endpointPrefix: 'receivables/aging',
     filter: { type: 'none' },
     category: 'cartera',
-    badge: 'Mejorado',
   },
 
   // ── CAJA ──
@@ -335,7 +326,6 @@ const REPORTS: ReportType[] = [
     endpointPrefix: 'cash/detail',
     filter: { type: 'range' },
     category: 'caja',
-    badge: 'Nuevo',
   },
 ];
 
@@ -349,12 +339,27 @@ export function Reports() {
   const [dateRange, setDateRange] = useState({ start: thirtyDaysAgo, end: today });
   const [extraValues, setExtraValues] = useState<Record<string, string>>({});
   const [downloading, setDownloading] = useState<'excel' | 'pdf' | null>(null);
+  const [categoryOptions, setCategoryOptions] = useState<{ value: string; label: string }[]>([
+    { value: 'ALL', label: 'Todas las categorías' }
+  ]);
+
+  useEffect(() => {
+    apiRequest<{ id: number; name: string }[]>('/catalog/categories')
+      .then(cats => {
+        setCategoryOptions([
+          { value: 'ALL', label: 'Todas las categorías' },
+          ...cats.map(c => ({ value: String(c.id), label: c.name }))
+        ]);
+      })
+      .catch(() => {});
+  }, []);
 
   // Al cambiar reporte, limpiar extraValues y pre-set defaults
   useEffect(() => {
     const defaults: Record<string, string> = {};
     selectedReport.filter.extraFilters?.forEach(f => {
       if (f.options?.[0]) defaults[f.key] = f.options[0].value;
+      else if (f.key === 'categoryId') defaults[f.key] = 'ALL';
     });
     setExtraValues(defaults);
   }, [selectedReport.id]);
@@ -587,15 +592,15 @@ export function Reports() {
                     <div key={ef.key} className="space-y-2">
                       <Label className="text-[var(--text-main)] font-semibold">{ef.label}</Label>
                       {ef.type === 'select' ? (
-                        <Select 
-                          value={extraValues[ef.key] || ''} 
+                        <Select
+                          value={extraValues[ef.key] || ''}
                           onValueChange={v => setExtraValues(prev => ({ ...prev, [ef.key]: v }))}
                         >
                           <SelectTrigger className="bg-[var(--bg)] border-[var(--border)] h-11">
                             <SelectValue placeholder="Seleccionar opción..." />
                           </SelectTrigger>
                           <SelectContent>
-                            {ef.options?.map(opt => (
+                            {(ef.key === 'categoryId' ? categoryOptions : ef.options ?? []).map(opt => (
                               <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                             ))}
                           </SelectContent>
