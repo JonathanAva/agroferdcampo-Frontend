@@ -268,6 +268,12 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
       <td class="tr">${fmt(Number(i.unitPrice))}</td>
       <td class="tr">${fmt(Number(i.totalPrice))}</td>
     </tr>`).join("")}
+    <tr style="border-top:1px solid #000">
+      <td colspan="5" style="padding-top:4px">
+        <span style="display:inline-block;width:13px;height:13px;border:2px solid #000;vertical-align:middle;margin-right:5px"></span>
+        <span style="font-weight:bold;font-size:10px">Todos los productos fueron entregados en su totalidad</span>
+      </td>
+    </tr>
   </tbody>
 </table>
 

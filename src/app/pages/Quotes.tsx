@@ -1,7 +1,8 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { 
+import logo from '../../assets/logo.png';
+import {
   Search, FileText, Eye, CheckCircle2, AlertCircle, Calendar as CalendarIcon, RefreshCcw, Filter, X,
-  Mail, UserCog, Clock, Send, Plus, Banknote, CreditCard, Smartphone, Trash2, Truck as TruckIcon
+  Mail, UserCog, Clock, Send, Plus, Banknote, CreditCard, Smartphone, Trash2, Truck as TruckIcon, Printer
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { quotesService, QuoteResponse } from '../services/quotes.service';
@@ -29,6 +30,30 @@ import {
   CommandGroup, 
   CommandItem 
 } from '../components/ui/command';
+
+function _qEnteroALetras(n: number): string {
+  if (n === 0) return 'Cero';
+  const w29 = ['','Uno','Dos','Tres','Cuatro','Cinco','Seis','Siete','Ocho','Nueve',
+    'Diez','Once','Doce','Trece','Catorce','Quince','Dieciséis','Diecisiete','Dieciocho','Diecinueve',
+    'Veinte','Veintiuno','Veintidós','Veintitrés','Veinticuatro','Veinticinco',
+    'Veintiséis','Veintisiete','Veintiocho','Veintinueve'];
+  const dec = ['','','Veinte','Treinta','Cuarenta','Cincuenta','Sesenta','Setenta','Ochenta','Noventa'];
+  const cen = ['','Ciento','Doscientos','Trescientos','Cuatrocientos','Quinientos',
+    'Seiscientos','Setecientos','Ochocientos','Novecientos'];
+  const w1  = ['','Uno','Dos','Tres','Cuatro','Cinco','Seis','Siete','Ocho','Nueve'];
+  if (n <= 29) return w29[n];
+  if (n < 100) return dec[Math.floor(n / 10)] + (n % 10 ? ' Y ' + w1[n % 10] : '');
+  if (n === 100) return 'Cien';
+  if (n < 1000) return cen[Math.floor(n / 100)] + (n % 100 ? ' ' + _qEnteroALetras(n % 100) : '');
+  if (n < 2000) return 'Mil' + (n % 1000 ? ' ' + _qEnteroALetras(n % 1000) : '');
+  if (n < 1_000_000) return _qEnteroALetras(Math.floor(n / 1000)) + ' Mil' + (n % 1000 ? ' ' + _qEnteroALetras(n % 1000) : '');
+  return n.toString();
+}
+function _qNumerosALetras(n: number): string {
+  const intPart = Math.floor(n);
+  const cents = Math.round((n - intPart) * 100);
+  return `${_qEnteroALetras(intPart)} dólares${cents > 0 ? ` con ${cents}/100` : ''}`;
+}
 
 const quotesFilters: FilterConfig[] = [
   { id: 'search', label: 'Buscar Cotización', type: 'text', placeholder: 'N°, Cliente, Total...' },
@@ -96,6 +121,12 @@ export function Quotes() {
   const [destinationEmail, setDestinationEmail] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
 
+  const [sysConfig, setSysConfig] = useState<any>(null);
+
+  useEffect(() => {
+    apiRequest<any>('/system-config').then(setSysConfig).catch(() => {});
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchQuotes();
@@ -127,6 +158,131 @@ export function Quotes() {
   };
 
 
+
+  const printQuote = async (quote: QuoteResponse) => {
+    let fullQuote = quote;
+    try {
+      fullQuote = await quotesService.getQuoteDetail(quote.id);
+    } catch {
+      toast.error('Error al cargar la cotización');
+      return;
+    }
+
+    const fmt = (n: number) => `$${n.toFixed(2)}`;
+    const totalNum  = Number(fullQuote.totalAmount);
+    const createdAt = new Date(fullQuote.createdAt);
+    const validUntil = new Date(fullQuote.validUntil);
+
+    const companyName     = sysConfig?.companyName     || "AGROFERRETERÍA D'CAMPO";
+    const companyAddress  = sysConfig?.companyAddress  || '';
+    const companyNit      = sysConfig?.companyNit      || '';
+    const companyNrc      = sysConfig?.companyNrc      || '';
+    const companyPhone    = sysConfig?.companyPhone    || '';
+    const companyActivity = sysConfig?.companyActivity || '';
+
+    const customerName  = fullQuote.customer?.name  || 'CONSUMIDOR FINAL';
+    const customerPhone = fullQuote.customer?.phone || '';
+    const customerEmail = fullQuote.customer?.email || '';
+    const customerNit   = fullQuote.customer?.nit   || '';
+
+    const quoteNumber  = String(fullQuote.id).padStart(6, '0');
+    const totalInWords = _qNumerosALetras(totalNum);
+    const dateStr      = createdAt.toLocaleDateString('es-SV');
+    const timeStr      = createdAt.toLocaleTimeString('es-SV', { hour: '2-digit', minute: '2-digit' });
+    const validStr     = validUntil.toLocaleDateString('es-SV');
+
+    const notes = (fullQuote as any).notes || '';
+
+    const statusLabel: Record<string, string> = {
+      PENDIENTE:  'Pendiente',
+      CONFIRMADA: 'Confirmada',
+      EXPIRADA:   'Expirada',
+      CANCELADA:  'Cancelada',
+    };
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Cotización ${quoteNumber}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Courier New',monospace;font-size:11px;width:80mm;padding:8px;color:#000}
+  h1{font-size:14px;text-align:center;font-weight:bold;margin-bottom:2px}
+  h2{font-size:12px;text-align:center;font-weight:bold;letter-spacing:2px;margin:4px 0}
+  .center{text-align:center} .bold{font-weight:bold}
+  hr{border:none;border-top:1px solid #000;margin:5px 0}
+  hr.d{border-top:1px dashed #000}
+  table{width:100%;border-collapse:collapse;font-size:10px}
+  th{font-weight:bold;text-align:left;padding:1px 2px}
+  td{padding:1px 2px;vertical-align:top}
+  .tr{text-align:right}
+  .row{display:flex;justify-content:space-between;gap:4px;margin:1px 0;font-size:10.5px}
+  .stitle{font-weight:bold;margin:3px 0 1px}
+  @media print{@page{margin:0;size:80mm auto}body{margin:0;padding:4px}}
+</style></head><body>
+
+<div class="center"><img src="${window.location.origin}${logo}" style="width:72px;height:auto;margin-bottom:4px" alt="logo"></div>
+<h1>${companyName}</h1>
+<div class="center" style="font-size:9.5px">${companyAddress}</div>
+<div class="center">NIT: ${companyNit}</div>
+<div class="center">NRC: ${companyNrc}</div>
+<div class="center" style="font-size:10px">Actividad económica: ${companyActivity}</div>
+<div class="center" style="font-size:10px">Tipo de establecimiento: Casa matriz</div>
+${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ''}
+
+<hr>
+<h2>— COTIZACIÓN —</h2>
+<hr>
+
+<div class="row"><span class="bold">No. Cotización:</span><span>${quoteNumber}</span></div>
+<div class="row"><span>Fecha:</span><span>${dateStr} ${timeStr}</span></div>
+<div class="row"><span>Válida hasta:</span><span class="bold">${validStr}</span></div>
+<div class="row"><span>Estado:</span><span>${statusLabel[fullQuote.status] || fullQuote.status}</span></div>
+<div class="row"><span>Elaborada por:</span><span>${fullQuote.user?.fullName || '-'}</span></div>
+
+<hr>
+
+<div class="stitle">Datos del cliente</div>
+<div class="row"><span>Nombre:</span><span>${customerName}</span></div>
+${customerNit   ? `<div class="row"><span>NIT:</span><span>${customerNit}</span></div>` : ''}
+${customerPhone ? `<div class="row"><span>Teléfono:</span><span>${customerPhone}</span></div>` : ''}
+${customerEmail ? `<div class="row"><span>Correo:</span><span>${customerEmail}</span></div>` : ''}
+
+<hr>
+
+<table>
+  <thead><tr>
+    <th>Cant</th><th>Descripción</th><th class="tr">P/Unit</th><th class="tr">Total</th>
+  </tr></thead>
+  <tbody>
+    ${fullQuote.items.map(i => `<tr>
+      <td>${Number(i.quantity)}</td>
+      <td>${i.product?.name || ''}</td>
+      <td class="tr">${fmt(Number(i.unitPrice))}</td>
+      <td class="tr">${fmt(Number(i.totalPrice))}</td>
+    </tr>`).join('')}
+  </tbody>
+</table>
+
+<hr>
+
+<div class="row bold" style="font-size:13px"><span>Total:</span><span>${fmt(totalNum)}</span></div>
+<div class="row" style="margin-top:2px"><span class="bold">Total en letras:</span><span>${totalInWords}</span></div>
+
+<hr>
+
+${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;margin-bottom:4px">${notes}</div><hr>` : ''}
+
+<div class="center" style="font-size:9.5px;margin-top:4px">Esta cotización es válida hasta el <strong>${validStr}</strong>.</div>
+<div class="center" style="font-size:9.5px">Los precios pueden variar sin previo aviso.</div>
+
+<script>window.onload=function(){window.print();setTimeout(function(){window.close()},1500)}</script>
+</body></html>`;
+
+    const win = window.open('', '_blank', 'width=520,height=820');
+    if (!win) return;
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+  };
 
   const handleOpenDetail = async (quote: QuoteResponse) => {
     try {
@@ -433,6 +589,10 @@ export function Quotes() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => handleOpenDetail(quote)} className="font-bold cursor-pointer">
                             <Eye size={14} className="mr-2 text-[var(--primary)]" /> Ver Detalle
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem onClick={() => printQuote(quote)} className="font-bold cursor-pointer">
+                            <Printer size={14} className="mr-2 text-blue-600" /> Imprimir Cotización
                           </DropdownMenuItem>
 
                           <DropdownMenuItem onClick={() => handleOpenEmailModal(quote)} className="font-bold cursor-pointer">
