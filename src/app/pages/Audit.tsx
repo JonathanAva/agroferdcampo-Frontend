@@ -1,35 +1,32 @@
 import { useState, useEffect } from "react";
 import {
   ShieldAlert,
-  Search,
-  Download,
   Eye,
   FileSpreadsheet,
-  FileText,
+  Download,
   Activity,
   History,
-  Info,
   Clock,
   User as UserIcon,
-  Database
+  Database,
+  FileText,
+  Globe,
+  Zap,
+  LogIn,
+  LogOut,
+  Plus,
+  Pencil,
+  Trash2,
+  Share2,
 } from "lucide-react";
 import { apiRequest, API_BASE_URL } from "../config/api";
 import { useAuth } from "../context/AuthContext";
-import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { InlinePills } from "../components/ui/inline-pills";
 import { useSearchParams } from "react-router";
 import { SmartFilter, FilterConfig } from "../components/ui/smart-filter";
 import { toast } from "sonner";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -54,21 +51,47 @@ interface AuditLog {
   duration: number | null;
   metadata: any;
   createdAt: string;
-  user?: {
-    id: number;
-    fullName: string;
-    email: string;
-  };
+  user?: { id: number; fullName: string; email: string };
 }
 
 interface PaginatedResponse {
   data: AuditLog[];
-  meta: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  };
+  meta: { total: number; page: number; limit: number; totalPages: number };
+}
+
+const ACTION_CONFIG: Record<string, { color: string; bg: string; border: string; icon: any; label: string }> = {
+  CREATE: { color: '#10b981', bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.25)', icon: Plus, label: 'Creación' },
+  UPDATE: { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.25)', icon: Pencil, label: 'Actualización' },
+  DELETE: { color: '#ef4444', bg: 'rgba(239,68,68,0.1)', border: 'rgba(239,68,68,0.25)', icon: Trash2, label: 'Eliminación' },
+  LOGIN:  { color: '#3b82f6', bg: 'rgba(59,130,246,0.1)', border: 'rgba(59,130,246,0.25)', icon: LogIn, label: 'Inicio de sesión' },
+  LOGOUT: { color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)', border: 'rgba(139,92,246,0.25)', icon: LogOut, label: 'Cierre de sesión' },
+  EXPORT: { color: '#06b6d4', bg: 'rgba(6,182,212,0.1)', border: 'rgba(6,182,212,0.25)', icon: Share2, label: 'Exportación' },
+};
+
+const getActionCfg = (action: string) =>
+  ACTION_CONFIG[action] ?? { color: '#64748b', bg: 'rgba(100,116,139,0.1)', border: 'rgba(100,116,139,0.25)', icon: Zap, label: action };
+
+function JsonBlock({ data, label, color }: { data: any; label: string; color: string }) {
+  const isEmpty = !data || (typeof data === 'object' && Object.keys(data).length === 0);
+  return (
+    <div className="flex flex-col gap-2">
+      <span
+        className="text-xs font-bold px-2.5 py-1 rounded-lg border w-fit"
+        style={{ color, backgroundColor: `${color}15`, borderColor: `${color}30` }}
+      >
+        {label}
+      </span>
+      {isEmpty ? (
+        <div className="flex items-center justify-center h-20 rounded-xl border border-dashed border-[var(--border)] text-[var(--text-sec)] text-xs">
+          Sin datos
+        </div>
+      ) : (
+        <pre className="bg-[var(--bg)] text-[var(--text-main)] p-4 rounded-xl overflow-auto text-xs max-h-[280px] border border-[var(--border)] custom-scrollbar font-mono">
+          <code>{JSON.stringify(data, null, 2)}</code>
+        </pre>
+      )}
+    </div>
+  );
 }
 
 export function Audit() {
@@ -76,40 +99,31 @@ export function Audit() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState({ total: 0, page: 1, limit: 50, totalPages: 1 });
-  
   const [actionsList, setActionsList] = useState<string[]>([]);
   const [entitiesList, setEntitiesList] = useState<string[]>([]);
-
   const [searchParams, setSearchParams] = useSearchParams();
+  const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
   const currentPage = parseInt(searchParams.get('page') || '1');
   const actionFilter = searchParams.get('action') || 'all';
   const entityFilter = searchParams.get('entity') || 'all';
   const startDate = searchParams.get('startDate') || '';
   const endDate = searchParams.get('endDate') || '';
 
-  const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
-  const [showModal, setShowModal] = useState(false);
-  const [exporting, setExporting] = useState(false);
-
-  useEffect(() => {
-    fetchMetadata();
-  }, []);
-
-  useEffect(() => {
-    fetchLogs();
-  }, [currentPage, actionFilter, entityFilter, startDate, endDate]);
+  useEffect(() => { fetchMetadata(); }, []);
+  useEffect(() => { fetchLogs(); }, [currentPage, actionFilter, entityFilter, startDate, endDate]);
 
   const fetchMetadata = async () => {
     try {
       const [actions, entities] = await Promise.all([
         apiRequest<string[]>("/audit/actions"),
-        apiRequest<string[]>("/audit/entities")
+        apiRequest<string[]>("/audit/entities"),
       ]);
       setActionsList(actions);
       setEntitiesList(entities);
-    } catch (error) {
-      console.error("Error fetching audit metadata:", error);
-    }
+    } catch { /* silent */ }
   };
 
   const fetchLogs = async () => {
@@ -118,22 +132,17 @@ export function Audit() {
       const params = new URLSearchParams();
       params.append('page', currentPage.toString());
       params.append('limit', '50');
-      
       if (actionFilter !== 'all') params.append('action', actionFilter);
       if (entityFilter !== 'all') params.append('entity', entityFilter);
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
-      
-      // If the user is an admin but not owner, maybe limit to their branch? 
-      // The backend handles this if they only have branch access, but currently we send branchId if needed.
       if (currentUser?.roleId !== 1 && currentUser?.branchId) {
         params.append('branchId', currentUser.branchId.toString());
       }
-
       const response = await apiRequest<PaginatedResponse>(`/audit?${params.toString()}`);
       setLogs(response.data);
       setMeta(response.meta);
-    } catch (error) {
+    } catch {
       toast.error("Error al cargar registros de auditoría");
     } finally {
       setLoading(false);
@@ -142,240 +151,217 @@ export function Audit() {
 
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > meta.totalPages) return;
-    const newParams = new URLSearchParams(searchParams);
-    newParams.set('page', newPage.toString());
-    setSearchParams(newParams);
+    const p = new URLSearchParams(searchParams);
+    p.set('page', newPage.toString());
+    setSearchParams(p);
   };
 
   const handleExport = async (format: 'excel' | 'pdf') => {
     setExporting(true);
     try {
       const params = new URLSearchParams(searchParams);
-      params.delete('page'); // Export all based on current filters
-      
+      params.delete('page');
       const token = localStorage.getItem("agro-token");
-      const url = `${API_BASE_URL}/audit/export/${format}?${params.toString()}`;
-      
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+      const response = await fetch(`${API_BASE_URL}/audit/export/${format}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-      
-      if (!response.ok) throw new Error(`Error al exportar a ${format}`);
-      
+      if (!response.ok) throw new Error(`Error al exportar`);
       const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
+      const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = downloadUrl;
-      a.download = `Auditoria_${new Date().getTime()}.${format === 'excel' ? 'xlsx' : 'pdf'}`;
+      a.href = url;
+      a.download = `Auditoria_${Date.now()}.${format === 'excel' ? 'xlsx' : 'pdf'}`;
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(downloadUrl);
+      window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      toast.success(`Exportación a ${format.toUpperCase()} exitosa`);
-    } catch (error: any) {
-      toast.error(error.message || "Error al exportar");
+      toast.success(`Exportado a ${format.toUpperCase()}`);
+    } catch (e: any) {
+      toast.error(e.message || "Error al exportar");
     } finally {
       setExporting(false);
     }
   };
 
-  const openDetails = (log: AuditLog) => {
-    setSelectedLog(log);
-    setShowModal(true);
-  };
-
-  const getActionColor = (action: string) => {
-    switch (action) {
-      case 'CREATE': return 'success';
-      case 'UPDATE': return 'warning';
-      case 'DELETE': return 'destructive';
-      case 'LOGIN': return 'info';
-      case 'LOGOUT': return 'default';
-      default: return 'outline';
-    }
-  };
-
   const filters: FilterConfig[] = [
-    { 
-      id: 'action', 
-      label: 'Acción', 
-      type: 'category', 
-      options: actionsList.map(a => ({ label: a, value: a })) 
-    },
-    { 
-      id: 'entity', 
-      label: 'Módulo/Entidad', 
-      type: 'category', 
-      options: entitiesList.map(e => ({ label: e.toUpperCase(), value: e })) 
-    },
-    { 
-      id: 'dateRange', 
-      label: 'Fecha', 
-      type: 'date_range' 
-    }
+    { id: 'action', label: 'Acción', type: 'category', options: actionsList.map(a => ({ label: a, value: a })) },
+    { id: 'entity', label: 'Módulo/Entidad', type: 'category', options: entitiesList.map(e => ({ label: e.toUpperCase(), value: e })) },
+    { id: 'dateRange', label: 'Fecha', type: 'date_range' },
   ];
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
+    <div className="flex flex-col gap-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-[var(--text-main)] mb-2 flex items-center gap-2">
-            <ShieldAlert className="text-[var(--primary)]" />
+          <h1 className="text-3xl font-bold text-[var(--text-main)] flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-[var(--primary)]/10 flex items-center justify-center">
+              <ShieldAlert size={20} className="text-[var(--primary)]" />
+            </div>
             Auditoría de Sistema
           </h1>
-          <InlinePills
-            metrics={[
-              { label: 'Registros Encontrados', value: meta.total, icon: Database, color: 'var(--primary)' },
-              { label: 'Página Actual', value: `${meta.page} de ${meta.totalPages || 1}`, icon: FileText, color: '#10b981' },
-            ]}
-          />
+          <div className="mt-2">
+            <InlinePills
+              metrics={[
+                { label: 'Registros Encontrados', value: meta.total, icon: Database, color: 'var(--primary)' },
+                { label: 'Página Actual', value: `${meta.page} de ${meta.totalPages || 1}`, icon: FileText, color: '#10b981' },
+              ]}
+            />
+          </div>
         </div>
         <div className="flex gap-2">
           <Button
             variant="outline"
             onClick={() => handleExport('excel')}
             disabled={exporting || logs.length === 0}
-            className="gap-2 border-[var(--border)] bg-[var(--card)] hover:bg-[#107c41]/10 hover:text-[#107c41] hover:border-[#107c41]/30 transition-all"
+            className="gap-2 border-[var(--border)] bg-[var(--card)] hover:bg-emerald-500/10 hover:text-emerald-600 hover:border-emerald-500/30 transition-all"
           >
-            <FileSpreadsheet size={18} />
+            <FileSpreadsheet size={16} />
             Excel
           </Button>
           <Button
             variant="outline"
             onClick={() => handleExport('pdf')}
             disabled={exporting || logs.length === 0}
-            className="gap-2 border-[var(--border)] bg-[var(--card)] hover:bg-[#e11d48]/10 hover:text-[#e11d48] hover:border-[#e11d48]/30 transition-all"
+            className="gap-2 border-[var(--border)] bg-[var(--card)] hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/30 transition-all"
           >
-            <Download size={18} />
+            <Download size={16} />
             PDF
           </Button>
         </div>
       </div>
 
-      <div className="mb-6 bg-[var(--card)] p-4 rounded-xl border border-[var(--border)] shadow-sm">
+      {/* Filters */}
+      <div className="bg-[var(--card)] p-4 rounded-2xl border border-[var(--border)] shadow-sm">
         <SmartFilter config={filters} />
       </div>
 
-      {/* Audit Logs Table */}
-      <Card className="rounded-xl border overflow-hidden shadow-sm bg-[var(--card)] border-[var(--border)] flex flex-col min-h-[500px]">
+      {/* Table */}
+      <Card className="rounded-2xl border border-[var(--border)] overflow-hidden shadow-sm bg-[var(--card)] flex flex-col min-h-[500px]">
         <div className="overflow-x-auto flex-1">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-[var(--bg)]/50 border-b border-[var(--border)]">
-                <TableHead className="font-bold text-[var(--text-main)]">Fecha y Hora</TableHead>
-                <TableHead className="font-bold text-[var(--text-main)]">Usuario</TableHead>
-                <TableHead className="font-bold text-[var(--text-main)] text-center">Acción</TableHead>
-                <TableHead className="font-bold text-[var(--text-main)]">Entidad</TableHead>
-                <TableHead className="font-bold text-[var(--text-main)] text-center">Detalles</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-[var(--border)] bg-[var(--bg)]/60">
+                <th className="text-left px-4 py-3 text-[11px] font-black uppercase tracking-widest text-[var(--text-sec)]">Fecha y Hora</th>
+                <th className="text-left px-4 py-3 text-[11px] font-black uppercase tracking-widest text-[var(--text-sec)]">Usuario</th>
+                <th className="text-center px-4 py-3 text-[11px] font-black uppercase tracking-widest text-[var(--text-sec)]">Acción</th>
+                <th className="text-left px-4 py-3 text-[11px] font-black uppercase tracking-widest text-[var(--text-sec)]">Entidad</th>
+                <th className="text-center px-4 py-3 text-[11px] font-black uppercase tracking-widest text-[var(--text-sec)]">Detalles</th>
+              </tr>
+            </thead>
+            <tbody>
               {loading ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-64 text-center">
+                <tr>
+                  <td colSpan={5} className="h-64 text-center">
                     <div className="flex flex-col items-center justify-center gap-3 text-[var(--text-sec)]">
-                      <Activity className="animate-spin text-[var(--primary)]" size={32} />
-                      <span className="font-bold animate-pulse">Cargando registros...</span>
+                      <Activity className="animate-spin text-[var(--primary)]" size={28} />
+                      <span className="text-sm font-semibold animate-pulse">Cargando registros...</span>
                     </div>
-                  </TableCell>
-                </TableRow>
+                  </td>
+                </tr>
               ) : logs.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-64 text-center text-[var(--text-sec)] font-medium">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <History size={48} className="opacity-20 mb-2" />
-                      No se encontraron registros de auditoría
+                <tr>
+                  <td colSpan={5} className="h-64 text-center">
+                    <div className="flex flex-col items-center justify-center gap-3 text-[var(--text-sec)]">
+                      <History size={40} className="opacity-20" />
+                      <span className="text-sm font-medium">No se encontraron registros</span>
                     </div>
-                  </TableCell>
-                </TableRow>
+                  </td>
+                </tr>
               ) : (
-                logs.map((log) => (
-                  <TableRow key={log.id} className="group hover:bg-[var(--bg)]/30 transition-colors border-b border-[var(--border)]">
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-bold text-[var(--text-main)]">
-                          {new Date(log.createdAt).toLocaleDateString()}
-                        </span>
-                        <span className="text-xs text-[var(--text-sec)] flex items-center gap-1">
-                          <Clock size={12} />
-                          {new Date(log.createdAt).toLocaleTimeString()}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="size-8 rounded-lg bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center font-bold">
-                          {log.user ? log.user.fullName.charAt(0).toUpperCase() : 'S'}
-                        </div>
+                logs.map((log) => {
+                  const cfg = getActionCfg(log.action);
+                  const Icon = cfg.icon;
+                  return (
+                    <tr
+                      key={log.id}
+                      className="group border-b border-[var(--border)] hover:bg-[var(--bg)]/40 transition-colors"
+                      style={{ borderLeft: `3px solid ${cfg.color}` }}
+                    >
+                      {/* Fecha */}
+                      <td className="px-4 py-3">
                         <div className="flex flex-col">
-                          <span className="font-bold text-sm text-[var(--text-main)]">
-                            {log.user ? log.user.fullName : 'Sistema'}
+                          <span className="text-sm font-bold text-[var(--text-main)]">
+                            {new Date(log.createdAt).toLocaleDateString('es-SV', { day: '2-digit', month: 'short', year: 'numeric' })}
                           </span>
-                          <span className="text-[10px] text-[var(--text-sec)] flex items-center gap-1 opacity-70">
-                            {log.ipAddress || 'IP desconocida'}
+                          <span className="text-xs text-[var(--text-sec)] flex items-center gap-1 mt-0.5">
+                            <Clock size={11} />
+                            {new Date(log.createdAt).toLocaleTimeString('es-SV', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                           </span>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant={getActionColor(log.action) as any} className="font-black text-[10px] tracking-wide py-1 px-3">
-                        {log.action}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-bold text-sm text-[var(--text-main)] capitalize">
-                          {log.entity}
-                        </span>
-                        {log.entityId && (
-                          <span className="text-xs font-mono text-[var(--text-sec)] bg-[var(--bg)] px-1 rounded inline-block w-fit mt-1">
-                            ID: {log.entityId}
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openDetails(log)}
-                        className="text-[var(--primary)] hover:bg-[var(--primary)]/10 rounded-lg font-bold"
-                      >
-                        <Eye size={16} className="mr-2" />
-                        Ver Cambios
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
+                      </td>
+
+                      {/* Usuario */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black shrink-0"
+                            style={{ backgroundColor: cfg.bg, color: cfg.color }}
+                          >
+                            {log.user ? log.user.fullName.charAt(0).toUpperCase() : 'S'}
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-sm font-semibold text-[var(--text-main)] truncate">
+                              {log.user?.fullName || 'Sistema'}
+                            </span>
+                            {log.ipAddress && (
+                              <span className="text-[11px] text-[var(--text-sec)] flex items-center gap-1">
+                                <Globe size={10} />
+                                {log.ipAddress}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Acción */}
+                      <td className="px-4 py-3 text-center">
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold" style={{ backgroundColor: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
+                          <Icon size={11} />
+                          {log.action}
+                        </div>
+                      </td>
+
+                      {/* Entidad */}
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-semibold text-[var(--text-main)] capitalize">{log.entity}</span>
+                          {log.entityId && (
+                            <span className="text-[11px] font-mono text-[var(--text-sec)] bg-[var(--bg)] px-1.5 py-0.5 rounded mt-0.5 w-fit">
+                              #{log.entityId}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Detalles */}
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          onClick={() => { setSelectedLog(log); setShowModal(true); }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[var(--primary)] hover:bg-[var(--primary)]/10 transition-colors"
+                        >
+                          <Eye size={13} />
+                          Ver
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
-            </TableBody>
-          </Table>
+            </tbody>
+          </table>
         </div>
 
-        {/* Pagination Controls */}
-        <div className="p-4 border-t border-[var(--border)] flex items-center justify-between bg-[var(--bg)]/50 mt-auto">
-          <span className="text-sm font-medium text-[var(--text-sec)]">
-            Mostrando página {meta.page} de {meta.totalPages || 1}
+        {/* Pagination */}
+        <div className="p-4 border-t border-[var(--border)] flex items-center justify-between bg-[var(--bg)]/30">
+          <span className="text-xs font-medium text-[var(--text-sec)]">
+            Página {meta.page} de {meta.totalPages || 1} · {meta.total} registros
           </span>
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={meta.page <= 1 || loading}
-              onClick={() => handlePageChange(meta.page - 1)}
-              className="bg-[var(--card)]"
-            >
+            <Button variant="outline" size="sm" disabled={meta.page <= 1 || loading} onClick={() => handlePageChange(meta.page - 1)} className="bg-[var(--card)] text-xs">
               Anterior
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={meta.page >= meta.totalPages || loading}
-              onClick={() => handlePageChange(meta.page + 1)}
-              className="bg-[var(--card)]"
-            >
+            <Button variant="outline" size="sm" disabled={meta.page >= meta.totalPages || loading} onClick={() => handlePageChange(meta.page + 1)} className="bg-[var(--card)] text-xs">
               Siguiente
             </Button>
           </div>
@@ -384,110 +370,90 @@ export function Audit() {
 
       {/* Detail Modal */}
       <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent 
-          className="max-w-3xl w-full"
+        <DialogContent
+          className="max-w-3xl w-full max-h-[90vh] overflow-y-auto"
           style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--text-main)" }}
         >
-          <DialogHeader className="border-b border-[var(--border)] pb-4">
-            <DialogTitle className="text-xl font-black flex items-center gap-2">
-              <Activity className="text-[var(--primary)]" />
-              Detalle de Auditoría #{selectedLog?.id}
-            </DialogTitle>
-            <DialogDescription>
-              Información detallada sobre la operación y los cambios registrados.
-            </DialogDescription>
-          </DialogHeader>
+          {selectedLog && (() => {
+            const cfg = getActionCfg(selectedLog.action);
+            const Icon = cfg.icon;
+            return (
+              <>
+                <DialogHeader className="pb-4 border-b border-[var(--border)]">
+                  <DialogTitle className="flex items-center gap-2.5 text-lg font-black">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: cfg.bg }}>
+                      <Icon size={16} style={{ color: cfg.color }} />
+                    </div>
+                    Registro #{selectedLog.id}
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold ml-1" style={{ backgroundColor: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
+                      {selectedLog.action}
+                    </div>
+                  </DialogTitle>
+                  <DialogDescription className="text-[var(--text-sec)]">
+                    Información detallada sobre la operación registrada.
+                  </DialogDescription>
+                </DialogHeader>
 
-          {selectedLog && (
-            <div className="py-4 space-y-6">
-              {/* Meta Info */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-[var(--bg)] p-3 rounded-lg border border-[var(--border)] flex flex-col gap-1">
-                  <span className="text-[10px] uppercase font-bold text-[var(--text-sec)] opacity-70 flex items-center gap-1">
-                    <UserIcon size={12} /> Usuario
-                  </span>
-                  <span className="font-bold text-sm truncate">{selectedLog.user?.fullName || 'Sistema'}</span>
-                </div>
-                <div className="bg-[var(--bg)] p-3 rounded-lg border border-[var(--border)] flex flex-col gap-1">
-                  <span className="text-[10px] uppercase font-bold text-[var(--text-sec)] opacity-70 flex items-center gap-1">
-                    <Activity size={12} /> Acción
-                  </span>
-                  <Badge variant={getActionColor(selectedLog.action) as any} className="w-fit">{selectedLog.action}</Badge>
-                </div>
-                <div className="bg-[var(--bg)] p-3 rounded-lg border border-[var(--border)] flex flex-col gap-1">
-                  <span className="text-[10px] uppercase font-bold text-[var(--text-sec)] opacity-70 flex items-center gap-1">
-                    <Database size={12} /> Entidad
-                  </span>
-                  <span className="font-bold text-sm capitalize">{selectedLog.entity} {selectedLog.entityId ? `#${selectedLog.entityId}` : ''}</span>
-                </div>
-                <div className="bg-[var(--bg)] p-3 rounded-lg border border-[var(--border)] flex flex-col gap-1">
-                  <span className="text-[10px] uppercase font-bold text-[var(--text-sec)] opacity-70 flex items-center gap-1">
-                    <Clock size={12} /> Fecha
-                  </span>
-                  <span className="font-bold text-sm truncate">{new Date(selectedLog.createdAt).toLocaleString()}</span>
-                </div>
-              </div>
-
-              {/* Network Info */}
-              <div className="bg-[var(--bg)]/50 p-4 rounded-xl border border-[var(--border)] text-sm text-[var(--text-sec)] flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <Info size={14} className="opacity-70" />
-                  <span className="font-bold opacity-70 w-24">IP Address:</span>
-                  <span className="font-mono text-[var(--text-main)]">{selectedLog.ipAddress || 'N/A'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Info size={14} className="opacity-70" />
-                  <span className="font-bold opacity-70 w-24">User Agent:</span>
-                  <span className="font-mono truncate flex-1 text-[var(--text-main)]">{selectedLog.userAgent || 'N/A'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Info size={14} className="opacity-70" />
-                  <span className="font-bold opacity-70 w-24">Duration:</span>
-                  <span className="font-mono text-[var(--text-main)]">{selectedLog.duration ? `${selectedLog.duration}ms` : 'N/A'}</span>
-                </div>
-              </div>
-
-              {/* JSON Diff View */}
-              <div className="space-y-2">
-                <h3 className="font-bold flex items-center gap-2 text-sm uppercase opacity-80">
-                  <FileText size={16} /> Datos Registrados (Payload)
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Old Values (if any) or Metadata */}
-                  <div className="flex flex-col gap-2">
-                    <span className="text-xs font-bold px-2 py-1 bg-amber-500/10 text-amber-500 rounded border border-amber-500/20 w-fit">
-                      {selectedLog.action === 'UPDATE' ? 'Valores Anteriores' : 'Metadata / Request'}
-                    </span>
-                    <pre className="bg-[#1e1e1e] text-[#d4d4d4] p-4 rounded-xl overflow-auto text-xs max-h-[300px] border border-[var(--border)] shadow-inner custom-scrollbar">
-                      <code>
-                        {JSON.stringify(
-                          selectedLog.oldValues || selectedLog.metadata || {}, 
-                          null, 
-                          2
-                        )}
-                      </code>
-                    </pre>
+                <div className="py-5 space-y-5">
+                  {/* Meta cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {[
+                      { label: 'Usuario', value: selectedLog.user?.fullName || 'Sistema', icon: UserIcon },
+                      { label: 'Entidad', value: `${selectedLog.entity}${selectedLog.entityId ? ` #${selectedLog.entityId}` : ''}`, icon: Database },
+                      { label: 'Duración', value: selectedLog.duration ? `${selectedLog.duration}ms` : 'N/A', icon: Zap },
+                      { label: 'Fecha', value: new Date(selectedLog.createdAt).toLocaleString('es-SV'), icon: Clock },
+                    ].map(({ label, value, icon: MIcon }) => (
+                      <div key={label} className="bg-[var(--bg)] p-3 rounded-xl border border-[var(--border)] flex flex-col gap-1.5">
+                        <span className="text-[10px] uppercase font-bold text-[var(--text-sec)] tracking-wider flex items-center gap-1">
+                          <MIcon size={10} /> {label}
+                        </span>
+                        <span className="text-sm font-semibold text-[var(--text-main)] truncate" title={value}>{value}</span>
+                      </div>
+                    ))}
                   </div>
-                  
-                  {/* New Values (if any) */}
-                  <div className="flex flex-col gap-2">
-                    <span className="text-xs font-bold px-2 py-1 bg-emerald-500/10 text-emerald-500 rounded border border-emerald-500/20 w-fit">
-                      {selectedLog.action === 'DELETE' ? 'Registro Eliminado' : 'Valores Nuevos / Response'}
-                    </span>
-                    <pre className="bg-[#1e1e1e] text-[#d4d4d4] p-4 rounded-xl overflow-auto text-xs max-h-[300px] border border-[var(--border)] shadow-inner custom-scrollbar">
-                      <code>
-                        {JSON.stringify(
-                          selectedLog.newValues || selectedLog.changes || {}, 
-                          null, 
-                          2
-                        )}
-                      </code>
-                    </pre>
+
+                  {/* Network info */}
+                  {(selectedLog.ipAddress || selectedLog.userAgent) && (
+                    <div className="bg-[var(--bg)]/60 rounded-xl border border-[var(--border)] px-4 py-3 space-y-1.5 text-xs">
+                      {selectedLog.ipAddress && (
+                        <div className="flex items-center gap-2">
+                          <Globe size={12} className="text-[var(--text-sec)] shrink-0" />
+                          <span className="text-[var(--text-sec)] w-20 shrink-0">IP Address:</span>
+                          <span className="font-mono text-[var(--text-main)]">{selectedLog.ipAddress}</span>
+                        </div>
+                      )}
+                      {selectedLog.userAgent && (
+                        <div className="flex items-start gap-2">
+                          <Activity size={12} className="text-[var(--text-sec)] shrink-0 mt-0.5" />
+                          <span className="text-[var(--text-sec)] w-20 shrink-0">User Agent:</span>
+                          <span className="font-mono truncate flex-1 text-[var(--text-main)]">{selectedLog.userAgent}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* JSON payload */}
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-[var(--text-sec)] flex items-center gap-1.5">
+                      <FileText size={13} /> Datos del Registro
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <JsonBlock
+                        data={selectedLog.oldValues || selectedLog.metadata || {}}
+                        label={selectedLog.action === 'UPDATE' ? 'Valores Anteriores' : 'Metadata / Request'}
+                        color="#f59e0b"
+                      />
+                      <JsonBlock
+                        data={selectedLog.newValues || selectedLog.changes || {}}
+                        label={selectedLog.action === 'DELETE' ? 'Registro Eliminado' : 'Valores Nuevos / Response'}
+                        color="#10b981"
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

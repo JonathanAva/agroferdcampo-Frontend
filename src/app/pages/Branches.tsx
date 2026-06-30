@@ -8,7 +8,6 @@ import {
   FileText,
   AlertCircle,
   Edit,
-  X,
   CheckCircle2,
   XCircle,
 } from "lucide-react";
@@ -21,21 +20,14 @@ import { Input } from "../components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Label } from "../components/ui/label";
-import { Textarea } from "../components/ui/textarea";
 import { cn } from "../components/ui/utils";
+import { AddressInput } from "../components/ui/AddressInput";
 import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogContent,
 } from "../components/ui/alert-dialog";
 import { ShieldAlert, ShieldCheck } from "lucide-react";
-
-interface PaymentConfig {
-  acceptsCash: boolean;
-  acceptsCard: boolean;
-  acceptsTransfer: boolean;
-  acceptsCredit: boolean;
-}
 
 interface Branch {
   id: number;
@@ -464,12 +456,11 @@ export function Branches() {
                 <Label className="text-[10px] uppercase font-black opacity-60 tracking-widest">
                   Dirección Completa
                 </Label>
-                <Textarea
-                  rows={3}
-                  placeholder="Ej. Final 4a Calle Poniente #23, Santa Tecla..."
+                <AddressInput
                   value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  className="bg-[var(--bg)] border-[var(--border)] font-bold px-4 py-3 rounded-xl focus-visible:ring-[var(--primary)]/20 resize-none"
+                  onChange={(v) => setFormData({ ...formData, address: v })}
+                  placeholder="Ej. Final 4a Calle Poniente #23, Santa Tecla..."
+                  rows={3}
                 />
               </div>
 
