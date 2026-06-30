@@ -8,6 +8,8 @@ import {
   Tag,
   ToggleLeft,
   ToggleRight,
+  Upload,
+  ImageIcon,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 import { apiRequest } from "../config/api";
@@ -69,6 +71,7 @@ interface CatalogProduct {
   unit: string;
   trackStock: boolean;
   isActive: boolean;
+  imageUrl?: string;
   category?: { id: number; name: string };
   prices: ProductPrice[];
   units?: {
@@ -189,6 +192,8 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   );
   const [isCatDialogOpen, setIsCatDialogOpen] = useState(false);
   const [newCatName, setNewCatName] = useState("");
+  const [productImageUrl, setProductImageUrl] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const isOwner = user?.roleId === 1;
   const canCreate = user?.roleId === 1 || user?.roleId === 2;
@@ -281,9 +286,30 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
     }
   };
 
+  const handleProductImageUpload = async (file: File) => {
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ""}/uploads/product-image`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${localStorage.getItem("accessToken")}` },
+        body: formData,
+      });
+      if (!res.ok) throw new Error("Error al subir imagen");
+      const data = await res.json();
+      setProductImageUrl(data.url);
+    } catch {
+      toast.error("No se pudo subir la imagen");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const openDialog = (product?: CatalogProduct) => {
     if (product) {
       setEditingProduct(product);
+      setProductImageUrl(product.imageUrl || null);
       reset({
         name: product.name,
         internalCode: product.internalCode || "",
@@ -311,6 +337,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       });
     } else {
       setEditingProduct(null);
+      setProductImageUrl(null);
       reset({
         name: "",
         internalCode: "",
@@ -362,6 +389,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       internalCode: data.internalCode?.trim() || undefined,
       barcode: data.barcode?.trim() || undefined,
       description: data.description?.trim() || undefined,
+      imageUrl: productImageUrl || undefined,
       units: data.units?.map((u) => ({
         unit: u.unit,
         factor: Number(u.factor),
@@ -569,13 +597,26 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
             filtered.map((product) => (
               <TableRow key={product.id} className="group cursor-pointer">
                 <TableCell>
-                  <div className="flex flex-col">
-                    <span className="font-bold text-[var(--text-main)] group-hover:text-[var(--primary)] transition-colors">
-                      {product.name}
-                    </span>
-                    <span className="text-[10px] font-mono font-bold opacity-40 uppercase tracking-tighter text-[var(--text-sec)]">
-                      {product.internalCode || product.barcode || "SIN-CÓDIGO"}
-                    </span>
+                  <div className="flex items-center gap-3">
+                    {product.imageUrl ? (
+                      <img
+                        src={product.imageUrl}
+                        alt={product.name}
+                        className="w-9 h-9 rounded-lg object-cover flex-shrink-0 border border-[var(--border)]"
+                      />
+                    ) : (
+                      <div className="w-9 h-9 rounded-lg flex-shrink-0 border border-[var(--border)] bg-[var(--card)] flex items-center justify-center opacity-30">
+                        <ImageIcon size={16} />
+                      </div>
+                    )}
+                    <div className="flex flex-col">
+                      <span className="font-bold text-[var(--text-main)] group-hover:text-[var(--primary)] transition-colors">
+                        {product.name}
+                      </span>
+                      <span className="text-[10px] font-mono font-bold opacity-40 uppercase tracking-tighter text-[var(--text-sec)]">
+                        {product.internalCode || product.barcode || "SIN-CÓDIGO"}
+                      </span>
+                    </div>
                   </div>
                 </TableCell>
                 <TableCell>
@@ -675,6 +716,49 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                   <p className="text-xs font-black uppercase tracking-widest opacity-60 text-[var(--text-sec)]">
                     Información General
                   </p>
+
+                  {/* Photo upload */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-bold">Foto del Producto</Label>
+                    <label className="block cursor-pointer">
+                      <input
+                        type="file"
+                        accept="image/jpg,image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) handleProductImageUpload(f);
+                          e.target.value = "";
+                        }}
+                      />
+                      <div className="relative w-full h-36 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--card)] flex items-center justify-center overflow-hidden hover:border-[var(--primary)] transition-colors group">
+                        {productImageUrl ? (
+                          <>
+                            <img
+                              src={productImageUrl}
+                              alt="Vista previa"
+                              className="w-full h-full object-contain"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
+                              <Upload size={20} className="text-white" />
+                              <span className="text-white text-xs font-bold">Cambiar foto</span>
+                            </div>
+                          </>
+                        ) : uploadingImage ? (
+                          <div className="flex flex-col items-center gap-2 opacity-60">
+                            <div className="w-6 h-6 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+                            <span className="text-xs font-bold">Subiendo...</span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center gap-2 opacity-40 group-hover:opacity-70 transition-opacity">
+                            <Upload size={24} />
+                            <span className="text-xs font-bold">Haz clic para subir foto</span>
+                            <span className="text-[10px] opacity-70">JPG, PNG o WEBP · máx 5 MB</span>
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  </div>
 
                   <div className="space-y-2">
                     <Label className="text-sm font-bold">
