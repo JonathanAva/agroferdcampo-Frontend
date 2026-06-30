@@ -51,7 +51,12 @@ interface AuditLog {
   duration: number | null;
   metadata: any;
   createdAt: string;
-  user?: { id: number; fullName: string; email: string };
+  user?: {
+    id: number;
+    fullName: string;
+    email: string;
+    branches?: { role: string; branchId: number }[];
+  };
 }
 
 interface PaginatedResponse {
@@ -71,22 +76,79 @@ const ACTION_CONFIG: Record<string, { color: string; bg: string; border: string;
 const getActionCfg = (action: string) =>
   ACTION_CONFIG[action] ?? { color: '#64748b', bg: 'rgba(100,116,139,0.1)', border: 'rgba(100,116,139,0.25)', icon: Zap, label: action };
 
+const ENTITY_LABELS: Record<string, string> = {
+  users: 'Usuarios', user: 'Usuarios',
+  sales: 'Ventas', sale: 'Ventas',
+  products: 'Productos', product: 'Productos',
+  categories: 'Categorías', category: 'Categorías',
+  branches: 'Sucursales', branch: 'Sucursales',
+  customers: 'Clientes', customer: 'Clientes',
+  inventory: 'Inventario',
+  purchases: 'Compras', purchase: 'Compras',
+  employees: 'Empleados', employee: 'Empleados',
+  credit: 'Crédito',
+  quotes: 'Cotizaciones', quote: 'Cotizaciones',
+  'cash-shifts': 'Turnos de Caja', cashshift: 'Turnos de Caja',
+  'delivery-notes': 'Albaranes',
+  'delivery-routes': 'Rutas de Entrega',
+  vehicles: 'Vehículos', vehicle: 'Vehículos',
+  'cash-registers': 'Cajas Registradoras',
+  suppliers: 'Proveedores', supplier: 'Proveedores',
+  'saved-addresses': 'Direcciones',
+  'pre-sales': 'Pre-ventas',
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  PROPIETARIO: 'Propietario',
+  ADMINISTRADOR: 'Administrador',
+  SUPERVISOR: 'Supervisor',
+  CAJERO: 'Cajero',
+  BODEGUERO: 'Bodeguero',
+  CONDUCTOR: 'Conductor',
+  VENDEDOR: 'Vendedor',
+};
+
+const getEntityLabel = (entity: string) =>
+  ENTITY_LABELS[entity] ?? ENTITY_LABELS[entity.toLowerCase()] ?? entity;
+
+const getUserRole = (log: AuditLog): string | null => {
+  if (!log.user?.branches?.length) return null;
+  const match = log.branchId
+    ? log.user.branches.find(b => b.branchId === log.branchId)
+    : log.user.branches[0];
+  return match?.role ?? null;
+};
+
+const getEntityRole = (log: AuditLog): string | null => {
+  const nv = log.newValues as any;
+  if (nv?.branches?.[0]?.role) return nv.branches[0].role;
+  if (nv?.role) return nv.role;
+  return null;
+};
+
 function JsonBlock({ data, label, color }: { data: any; label: string; color: string }) {
   const isEmpty = !data || (typeof data === 'object' && Object.keys(data).length === 0);
   return (
     <div className="flex flex-col gap-2">
       <span
-        className="text-xs font-bold px-2.5 py-1 rounded-lg border w-fit"
-        style={{ color, backgroundColor: `${color}15`, borderColor: `${color}30` }}
+        className="text-xs font-semibold px-2.5 py-1 rounded-md border w-fit"
+        style={{ color, backgroundColor: `${color}12`, borderColor: `${color}25` }}
       >
         {label}
       </span>
       {isEmpty ? (
-        <div className="flex items-center justify-center h-20 rounded-xl border border-dashed border-[var(--border)] text-[var(--text-sec)] text-xs">
+        <div className="flex items-center justify-center h-14 rounded-lg border border-dashed border-[var(--border)] text-[var(--text-sec)] text-xs">
           Sin datos
         </div>
       ) : (
-        <pre className="bg-[var(--bg)] text-[var(--text-main)] p-4 rounded-xl overflow-auto text-xs max-h-[280px] border border-[var(--border)] custom-scrollbar font-mono">
+        <pre
+          className="p-3 rounded-xl overflow-auto text-xs max-h-[260px] border font-mono leading-5"
+          style={{
+            background: '#0d1117',
+            color: '#c9d1d9',
+            borderColor: 'rgba(255,255,255,0.07)',
+          }}
+        >
           <code>{JSON.stringify(data, null, 2)}</code>
         </pre>
       )}
@@ -304,10 +366,9 @@ export function Audit() {
                             <span className="text-sm font-semibold text-[var(--text-main)] truncate">
                               {log.user?.fullName || 'Sistema'}
                             </span>
-                            {log.ipAddress && (
-                              <span className="text-[11px] text-[var(--text-sec)] flex items-center gap-1">
-                                <Globe size={10} />
-                                {log.ipAddress}
+                            {getUserRole(log) && (
+                              <span className="text-[10px] font-bold text-[var(--primary)] opacity-80">
+                                {ROLE_LABELS[getUserRole(log)!] ?? getUserRole(log)}
                               </span>
                             )}
                           </div>
@@ -324,11 +385,18 @@ export function Audit() {
 
                       {/* Entidad */}
                       <td className="px-4 py-3">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-semibold text-[var(--text-main)] capitalize">{log.entity}</span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-sm font-semibold text-[var(--text-main)]">
+                            {getEntityLabel(log.entity)}
+                          </span>
                           {log.entityId && (
-                            <span className="text-[11px] font-mono text-[var(--text-sec)] bg-[var(--bg)] px-1.5 py-0.5 rounded mt-0.5 w-fit">
+                            <span className="text-[11px] font-mono text-[var(--text-sec)] bg-[var(--bg)] px-1.5 py-0.5 rounded w-fit">
                               #{log.entityId}
+                            </span>
+                          )}
+                          {getEntityRole(log) && (
+                            <span className="text-[10px] font-bold text-[var(--primary)] opacity-80">
+                              {ROLE_LABELS[getEntityRole(log)!] ?? getEntityRole(log)}
                             </span>
                           )}
                         </div>
