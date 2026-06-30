@@ -228,13 +228,13 @@ export function Dashboard() {
             </span>
           </p>
         </div>
-        <Button
-          variant="outline"
+        <button
           onClick={() => loadData()}
-          className="rounded-xl border-[var(--border)] bg-[var(--card)] hover:bg-[var(--bg)] shadow-sm"
+          title="Actualizar datos"
+          className="w-9 h-9 rounded-xl border border-[var(--border)] bg-[var(--card)] flex items-center justify-center text-[var(--text-sec)] shrink-0"
         >
-          <RefreshCcw size={16} className="mr-2" /> Actualizar Datos
-        </Button>
+          <RefreshCcw size={16} />
+        </button>
       </div>
 
       {/* ── SELECTOR DE PERÍODO ── */}

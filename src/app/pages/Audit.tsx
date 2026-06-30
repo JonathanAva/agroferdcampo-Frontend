@@ -318,7 +318,7 @@ export function Audit() {
                       <td className="px-4 py-3 text-center">
                         <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold" style={{ backgroundColor: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
                           <Icon size={11} />
-                          {log.action}
+                          {cfg.label}
                         </div>
                       </td>
 
@@ -338,10 +338,10 @@ export function Audit() {
                       <td className="px-4 py-3 text-center">
                         <button
                           onClick={() => { setSelectedLog(log); setShowModal(true); }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[var(--primary)] hover:bg-[var(--primary)]/10 transition-colors"
+                          title="Ver detalle"
+                          className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-[var(--primary)] hover:bg-[var(--primary)]/10 transition-colors mx-auto"
                         >
-                          <Eye size={13} />
-                          Ver
+                          <Eye size={15} />
                         </button>
                       </td>
                     </tr>
@@ -371,7 +371,7 @@ export function Audit() {
       {/* Detail Modal */}
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent
-          className="max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+          className="max-w-2xl w-full max-h-[85vh] overflow-y-auto overflow-x-hidden"
           style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--text-main)" }}
         >
           {selectedLog && (() => {
@@ -386,7 +386,7 @@ export function Audit() {
                     </div>
                     Registro #{selectedLog.id}
                     <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold ml-1" style={{ backgroundColor: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
-                      {selectedLog.action}
+                      {cfg.label}
                     </div>
                   </DialogTitle>
                   <DialogDescription className="text-[var(--text-sec)]">
@@ -395,60 +395,55 @@ export function Audit() {
                 </DialogHeader>
 
                 <div className="py-5 space-y-5">
-                  {/* Meta cards */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {[
-                      { label: 'Usuario', value: selectedLog.user?.fullName || 'Sistema', icon: UserIcon },
-                      { label: 'Entidad', value: `${selectedLog.entity}${selectedLog.entityId ? ` #${selectedLog.entityId}` : ''}`, icon: Database },
-                      { label: 'Duración', value: selectedLog.duration ? `${selectedLog.duration}ms` : 'N/A', icon: Zap },
-                      { label: 'Fecha', value: new Date(selectedLog.createdAt).toLocaleString('es-SV'), icon: Clock },
-                    ].map(({ label, value, icon: MIcon }) => (
-                      <div key={label} className="bg-[var(--bg)] p-3 rounded-xl border border-[var(--border)] flex flex-col gap-1.5">
-                        <span className="text-[10px] uppercase font-bold text-[var(--text-sec)] tracking-wider flex items-center gap-1">
-                          <MIcon size={10} /> {label}
-                        </span>
-                        <span className="text-sm font-semibold text-[var(--text-main)] truncate" title={value}>{value}</span>
-                      </div>
-                    ))}
+                  {/* Meta info — 2 columnas */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-[var(--bg)] p-3 rounded-xl border border-[var(--border)] flex flex-col gap-1">
+                      <span className="text-[10px] uppercase font-bold text-[var(--text-sec)] tracking-wider flex items-center gap-1">
+                        <UserIcon size={10} /> Usuario
+                      </span>
+                      <span className="text-sm font-semibold text-[var(--text-main)] truncate">{selectedLog.user?.fullName || 'Sistema'}</span>
+                    </div>
+                    <div className="bg-[var(--bg)] p-3 rounded-xl border border-[var(--border)] flex flex-col gap-1">
+                      <span className="text-[10px] uppercase font-bold text-[var(--text-sec)] tracking-wider flex items-center gap-1">
+                        <Database size={10} /> Entidad
+                      </span>
+                      <span className="text-sm font-semibold text-[var(--text-main)]">
+                        {selectedLog.entity}{selectedLog.entityId ? ` #${selectedLog.entityId}` : ''}
+                      </span>
+                    </div>
+                    <div className="bg-[var(--bg)] p-3 rounded-xl border border-[var(--border)] flex flex-col gap-1">
+                      <span className="text-[10px] uppercase font-bold text-[var(--text-sec)] tracking-wider flex items-center gap-1">
+                        <Clock size={10} /> Fecha y hora
+                      </span>
+                      <span className="text-sm font-semibold text-[var(--text-main)]">
+                        {new Date(selectedLog.createdAt).toLocaleString('es-SV')}
+                      </span>
+                    </div>
+                    <div className="bg-[var(--bg)] p-3 rounded-xl border border-[var(--border)] flex flex-col gap-1">
+                      <span className="text-[10px] uppercase font-bold text-[var(--text-sec)] tracking-wider flex items-center gap-1">
+                        <Globe size={10} /> IP / Dispositivo
+                      </span>
+                      <span className="text-xs font-mono text-[var(--text-main)] truncate">
+                        {selectedLog.ipAddress || 'N/A'}
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Network info */}
-                  {(selectedLog.ipAddress || selectedLog.userAgent) && (
-                    <div className="bg-[var(--bg)]/60 rounded-xl border border-[var(--border)] px-4 py-3 space-y-1.5 text-xs">
-                      {selectedLog.ipAddress && (
-                        <div className="flex items-center gap-2">
-                          <Globe size={12} className="text-[var(--text-sec)] shrink-0" />
-                          <span className="text-[var(--text-sec)] w-20 shrink-0">IP Address:</span>
-                          <span className="font-mono text-[var(--text-main)]">{selectedLog.ipAddress}</span>
-                        </div>
-                      )}
-                      {selectedLog.userAgent && (
-                        <div className="flex items-start gap-2">
-                          <Activity size={12} className="text-[var(--text-sec)] shrink-0 mt-0.5" />
-                          <span className="text-[var(--text-sec)] w-20 shrink-0">User Agent:</span>
-                          <span className="font-mono truncate flex-1 text-[var(--text-main)]">{selectedLog.userAgent}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* JSON payload */}
+                  {/* JSON payload — apilados verticalmente */}
                   <div className="space-y-3">
                     <h3 className="text-xs font-black uppercase tracking-widest text-[var(--text-sec)] flex items-center gap-1.5">
                       <FileText size={13} /> Datos del Registro
                     </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <JsonBlock
-                        data={selectedLog.oldValues || selectedLog.metadata || {}}
-                        label={selectedLog.action === 'UPDATE' ? 'Valores Anteriores' : 'Metadata / Request'}
-                        color="#f59e0b"
-                      />
-                      <JsonBlock
-                        data={selectedLog.newValues || selectedLog.changes || {}}
-                        label={selectedLog.action === 'DELETE' ? 'Registro Eliminado' : 'Valores Nuevos / Response'}
-                        color="#10b981"
-                      />
-                    </div>
+                    <JsonBlock
+                      data={selectedLog.oldValues || selectedLog.metadata || {}}
+                      label={selectedLog.action === 'UPDATE' ? 'Valores anteriores' : 'Solicitud / Metadata'}
+                      color="#f59e0b"
+                    />
+                    <JsonBlock
+                      data={selectedLog.newValues || selectedLog.changes || {}}
+                      label={selectedLog.action === 'DELETE' ? 'Registro eliminado' : 'Valores nuevos / Respuesta'}
+                      color="#10b981"
+                    />
                   </div>
                 </div>
               </>
