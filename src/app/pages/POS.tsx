@@ -51,13 +51,22 @@ import { SystemConfigData } from "./SystemConfig";
 import { TransportSelector, TransportData } from "../components/transport/TransportSelector";
 
 // --- Types ---
+interface PriceOption {
+  type: string;
+  label: string;
+  price: number;
+}
+
 interface Product {
   id: number;
   internalCode: string;
   name: string;
   price: number;
+  priceOptions: PriceOption[];
   stock: number;
   category: { name: string };
+  subcategory?: { id: number; name: string } | null;
+  expirationDate?: string | null;
   unit: string;
   units?: {
     id: number;
@@ -68,6 +77,17 @@ interface Product {
   }[];
 }
 
+interface POSSubcategory {
+  id: number;
+  name: string;
+}
+
+interface POSCategory {
+  id: number;
+  name: string;
+  subcategories?: POSSubcategory[];
+}
+
 interface CartUnitSelection {
   id: string;
   unitType: string;
@@ -75,6 +95,31 @@ interface CartUnitSelection {
   quantity: number;
   price: number;
   originalPrice: number;
+  priceType: string;
+}
+
+const PRICE_TYPE_LABELS: Record<string, string> = {
+  PUBLICO: "General",
+  MAYOREO: "Mayoreo",
+  ESPECIAL: "Especial",
+};
+
+const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  EFECTIVO: "Efectivo",
+  TARJETA: "Tarjeta",
+  TRANSFERENCIA: "Transferencia",
+  CREDITO: "Crédito",
+};
+
+function formatExpirationDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString("es-SV", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" });
+}
+
+function isNearExpiration(dateStr: string): boolean {
+  const expDate = new Date(dateStr);
+  const daysLeft = (expDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+  return daysLeft <= 30;
 }
 
 interface CartItem extends Product {
@@ -206,6 +251,9 @@ export function POS() {
   const quoteBtnRef = useRef<HTMLButtonElement>(null);
   const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<POSCategory[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<number | null>(null);
   const [cart, setCart] = useState<CartItem[]>(() => {
     try {
       const saved = sessionStorage.getItem('pos-cart');
@@ -297,10 +345,20 @@ export function POS() {
     if (user) {
       checkActiveShift();
       searchProducts("");
+      loadCategories();
       loadSysConfig();
       loadBranchPaymentConfig();
     }
   }, [user]);
+
+  const loadCategories = async () => {
+    try {
+      const data = await apiRequest<POSCategory[]>("/catalog/categories");
+      setCategories(Array.isArray(data) ? data : []);
+    } catch {
+      // Silencioso: los filtros de categoría son un extra, no bloquean el POS
+    }
+  };
 
   // Persistir carrito en sessionStorage para sobrevivir recargas de página
   useEffect(() => {
@@ -325,6 +383,7 @@ export function POS() {
           acceptsCard: current.acceptsCard ?? true,
           acceptsTransfer: current.acceptsTransfer ?? true,
           acceptsCredit: current.acceptsCredit ?? true,
+          phone: current.phone,
         });
       }
     } catch (err) {
@@ -583,7 +642,7 @@ export function POS() {
     }
   };
 
-  // Debounce product search
+  // Debounce product search (también re-busca al cambiar filtros de categoría/subcategoría)
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       if (searchTerm.trim().length >= 2) {
@@ -594,7 +653,7 @@ export function POS() {
     }, 300);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [searchTerm]);
+  }, [searchTerm, selectedCategoryId, selectedSubcategoryId]);
 
   // Debounce customer search
   useEffect(() => {
@@ -613,9 +672,19 @@ export function POS() {
     setLoading(true);
     try {
       const isSearch = !!query;
+      const params = new URLSearchParams();
+      if (isSearch) {
+        params.set("q", query);
+      } else {
+        params.set("isActive", "true");
+        params.set("limit", "50");
+      }
+      if (selectedCategoryId) params.set("categoryId", String(selectedCategoryId));
+      if (selectedSubcategoryId) params.set("subcategoryId", String(selectedSubcategoryId));
+
       const endpoint = isSearch
-        ? `/catalog/products/search?q=${encodeURIComponent(query)}`
-        : `/catalog/products?isActive=true&limit=50`;
+        ? `/catalog/products/search?${params.toString()}`
+        : `/catalog/products?${params.toString()}`;
 
       const response = await apiRequest<any>(endpoint);
 
@@ -631,26 +700,41 @@ export function POS() {
         const inv = Array.isArray(p.inventory) ? p.inventory[0] : p.inventory;
         const stockValue = inv?.quantity ?? p.stock ?? 0;
 
-        let publicPrice = p.prices?.find(
-          (pr: any) => pr.priceType === "PUBLICO" && pr.branchId === Number(user?.branchId)
-        )?.price;
-
-        if (publicPrice === undefined || publicPrice === null) {
-          publicPrice = p.prices?.find(
-            (pr: any) => pr.priceType === "PUBLICO" && !pr.branchId
+        const resolveByType = (priceType: string) => {
+          let val = p.prices?.find(
+            (pr: any) => pr.priceType === priceType && pr.branchId === Number(user?.branchId)
           )?.price;
-        }
+          if (val === undefined || val === null) {
+            val = p.prices?.find(
+              (pr: any) => pr.priceType === priceType && !pr.branchId
+            )?.price;
+          }
+          return val === undefined || val === null ? null : Number(val);
+        };
 
-        if (publicPrice === undefined || publicPrice === null) {
-          publicPrice = p.prices?.[0]?.price || p.price || 0;
+        let publicPrice = resolveByType("PUBLICO");
+        if (publicPrice === null) {
+          publicPrice = Number(p.prices?.[0]?.price || p.price || 0);
         }
+        const mayoreoPrice = resolveByType("MAYOREO");
+        const especialPrice = resolveByType("ESPECIAL");
+
+        const priceOptions: PriceOption[] = [
+          { type: "PUBLICO", label: PRICE_TYPE_LABELS.PUBLICO, price: publicPrice },
+          ...(mayoreoPrice !== null ? [{ type: "MAYOREO", label: PRICE_TYPE_LABELS.MAYOREO, price: mayoreoPrice }] : []),
+          ...(especialPrice !== null ? [{ type: "ESPECIAL", label: PRICE_TYPE_LABELS.ESPECIAL, price: especialPrice }] : []),
+        ];
+
         return {
           id: p.id,
           internalCode: p.internalCode || p.barcode || "S/C",
           name: p.name,
           price: Number(publicPrice),
+          priceOptions,
           stock: Number(stockValue),
           category: p.category || { name: "General" },
+          subcategory: p.subcategory || null,
+          expirationDate: p.expirationDate || null,
           unit: p.unit,
           units: p.units || [],
         };
@@ -728,6 +812,7 @@ export function POS() {
                   quantity: 1,
                   price: resolvedPrice,
                   originalPrice: resolvedPrice,
+                  priceType: "PUBLICO",
                 }
               ]
             };
@@ -746,6 +831,7 @@ export function POS() {
             quantity: 1,
             price: resolvedPrice,
             originalPrice: resolvedPrice,
+            priceType: "PUBLICO",
           }
         ]
       }]);
@@ -913,8 +999,42 @@ export function POS() {
               quantity: 1,
               price: i.price,
               originalPrice: i.price,
+              priceType: "PUBLICO",
             }
           ]
+        };
+      }
+      return i;
+    }));
+  };
+
+  const updateSelectionPriceType = (productId: number, selectionId: string, newPriceType: string) => {
+    const item = cart.find((i) => i.id === productId);
+    if (!item) return;
+
+    const option = item.priceOptions?.find((o) => o.type === newPriceType);
+    if (!option) return;
+
+    const targetSel = item.selections.find((s) => s.id === selectionId);
+    if (!targetSel) return;
+
+    let newPrice = option.price;
+    if (targetSel.unitType !== item.unit) {
+      const u = item.units?.find((x) => x.unit === targetSel.unitType);
+      if (u) {
+        newPrice = newPriceType === "PUBLICO" && u.priceDetalle ? u.priceDetalle : option.price * u.factor;
+      }
+    }
+
+    setCart(cart.map((i) => {
+      if (i.id === productId) {
+        return {
+          ...i,
+          selections: i.selections.map((s) =>
+            s.id === selectionId
+              ? { ...s, priceType: newPriceType, price: newPrice, originalPrice: newPrice }
+              : s
+          )
         };
       }
       return i;
@@ -983,8 +1103,10 @@ export function POS() {
     setProcessingOverlay(true);
     setLoading(true);
 
+    const paymentsUsed = payments;
+
     try {
-      await createSale({
+      const sale = await createSale({
         customerId: selectedCustomer?.id,
         paymentMethod: payments[0]?.paymentMethod || 'EFECTIVO',
         payments: payments,
@@ -1010,6 +1132,7 @@ export function POS() {
       });
 
       toast.success("Venta registrada exitosamente");
+      printSaleReceipt(sale, paymentsUsed);
       if (transportData?.requiresTransport) {
         toast.success('Albarán de entrega generado automáticamente', {
           description: transportData.deliveryAddress 
@@ -1199,6 +1322,141 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
     win.document.close();
   };
 
+  const printSaleReceipt = (
+    sale: any,
+    paymentsUsed: { paymentMethod: string; amount: number }[],
+  ) => {
+    const fmt = (n: number) => `$${n.toFixed(2)}`;
+    const totalNum = Number(sale.totalAmount);
+    const taxNum = Number(sale.taxAmount);
+    const subtotal = totalNum - taxNum;
+    const createdAt = sale.createdAt ? new Date(sale.createdAt) : new Date();
+
+    const companyName     = sysConfig?.companyName     || "AGROFERRETERÍA D'CAMPO";
+    const companyAddress  = sysConfig?.companyAddress  || "";
+    const companyNit      = sysConfig?.companyNit      || "";
+    const companyNrc      = sysConfig?.companyNrc      || "";
+    const companyPhone    = sysConfig?.companyPhone    || branchPaymentConfig?.phone || "";
+    const companyActivity = sysConfig?.companyActivity || "";
+
+    const customerName     = sale.customer?.name || "CONSUMIDOR FINAL";
+    const customerAddress  = (sale.customer as any)?.address  || "Ciudad";
+    const customerPhone    = (sale.customer as any)?.phone    || "";
+    const customerEmail    = (sale.customer as any)?.email    || "";
+    const customerActivity = (sale.customer as any)?.activityDescription || "";
+
+    const saleNumber = String(sale?.id || "").padStart(6, "0");
+    const totalInWords = numerosALetras(totalNum);
+    const dateStr = createdAt.toLocaleDateString("es-SV");
+    const timeStr = createdAt.toLocaleTimeString("es-SV", { hour: "2-digit", minute: "2-digit" });
+
+    const isMixed = paymentsUsed.length > 1;
+    const paymentConditionHtml = isMixed
+      ? `<div class="row"><span class="bold">Condición de la operación:</span><span>Mixto</span></div>
+         ${paymentsUsed.map((p) => `<div class="row sm"><span>${PAYMENT_METHOD_LABEL[p.paymentMethod] || p.paymentMethod}:</span><span>${fmt(p.amount)}</span></div>`).join("")}`
+      : `<div class="row"><span class="bold">Condición de la operación:</span><span>${PAYMENT_METHOD_LABEL[paymentsUsed[0]?.paymentMethod] || paymentsUsed[0]?.paymentMethod || "Efectivo"}</span></div>`;
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Venta ${saleNumber}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Courier New',monospace;font-size:11px;width:80mm;padding:8px;color:#000}
+  h1{font-size:14px;text-align:center;font-weight:bold;margin-bottom:2px}
+  .center{text-align:center} .bold{font-weight:bold} .right{text-align:right}
+  hr{border:none;border-top:1px solid #000;margin:5px 0}
+  hr.d{border-top:1px dashed #000}
+  table{width:100%;border-collapse:collapse;font-size:10px}
+  th{font-weight:bold;text-align:left;padding:1px 2px}
+  td{padding:1px 2px;vertical-align:top}
+  .tr{text-align:right}
+  .row{display:flex;justify-content:space-between;gap:4px;margin:1px 0;font-size:10.5px}
+  .row.sm{font-size:9.5px}
+  .stitle{font-weight:bold;margin:3px 0 1px}
+  @media print{@page{margin:0;size:80mm auto}body{margin:0;padding:4px}}
+</style></head><body>
+
+<div class="center"><img src="${window.location.origin}${logo}" style="width:72px;height:auto;margin-bottom:4px" alt="logo"></div>
+<h1>${companyName}</h1>
+<div class="center" style="font-size:9.5px">${companyAddress}</div>
+<div class="center">NIT: ${companyNit}</div>
+<div class="center">NRC: ${companyNrc}</div>
+<div class="center" style="font-size:10px">Actividad económica: ${companyActivity}</div>
+<div class="center" style="font-size:10px">Tipo de establecimiento: Casa matriz</div>
+${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
+
+<hr>
+
+<div class="stitle">Envío</div>
+<div class="row"><span>Fecha y hora de generación:</span><span>${dateStr} ${timeStr}</span></div>
+<div class="row"><span>Emisor:</span><span>${sale.user?.fullName || "-"}</span></div>
+<div class="row"><span>Cajero/a:</span><span>${user?.name || "-"}</span></div>
+
+<hr>
+
+<div class="stitle">Datos del receptor</div>
+<div class="row"><span>Nombre:</span><span>${customerName}</span></div>
+<div class="row"><span>Dirección:</span><span>${customerAddress}</span></div>
+<div class="row"><span>Correo:</span><span>${customerEmail}</span></div>
+<div class="row"><span>Teléfono:</span><span>${customerPhone}</span></div>
+<div class="row"><span>Actividad económica:</span><span>${customerActivity}</span></div>
+<div class="row"><span>No. de Venta:</span><span>${saleNumber}</span></div>
+
+<hr>
+
+<table>
+  <thead><tr>
+    <th style="width:14px"></th><th>Cant</th><th>Descripción</th><th class="tr">Precio</th><th class="tr">Monto</th>
+  </tr></thead>
+  <tbody>
+    ${(sale.items || []).map((i: any) => `<tr>
+      <td><span style="display:inline-block;width:11px;height:11px;border:1.5px solid #000;vertical-align:middle"></span></td>
+      <td>${Number(i.quantity)}</td>
+      <td>${i.product?.name || ""}</td>
+      <td class="tr">${fmt(Number(i.unitPrice))}</td>
+      <td class="tr">${fmt(Number(i.totalPrice))}</td>
+    </tr>`).join("")}
+    <tr style="border-top:1px solid #000">
+      <td colspan="5" style="padding-top:4px">
+        <span style="display:inline-block;width:13px;height:13px;border:2px solid #000;vertical-align:middle;margin-right:5px"></span>
+        <span style="font-weight:bold;font-size:10px">Todos los productos fueron entregados en su totalidad</span>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<div class="row"><span>Subtotal:</span><span>${fmt(subtotal)}</span></div>
+<div class="row"><span>Descuentos:</span><span>${fmt(0)}</span></div>
+<div class="row"><span>Subtotal:</span><span>${fmt(subtotal)}</span></div>
+<div class="row sm"><span>Monto global Desc., Rebajas y otros a ventas no sujetas:</span><span>${fmt(0)}</span></div>
+<div class="row sm"><span>Monto global Desc., Rebajas y otros a ventas exentas:</span><span>${fmt(0)}</span></div>
+<div class="row sm"><span>Monto global Desc., Rebajas y otros a ventas gravadas:</span><span>${fmt(0)}</span></div>
+<div class="row"><span>Sub-Total:</span><span>${fmt(subtotal)}</span></div>
+<div class="row"><span>IVA retenido:</span><span>${fmt(0)}</span></div>
+<div class="row"><span>IVA percibido:</span><span>${fmt(0)}</span></div>
+<div class="row"><span>Retención renta:</span><span>${fmt(0)}</span></div>
+<div class="row bold"><span>Monto total de la operación:</span><span>${fmt(totalNum)}</span></div>
+<div class="row"><span>Total otros montos no afectos:</span><span>${fmt(0)}</span></div>
+<div class="row bold" style="font-size:13px"><span>Total a pagar:</span><span>${fmt(totalNum)}</span></div>
+
+<hr>
+
+<div class="row"><span class="bold">Total en letras:</span><span>${totalInWords}</span></div>
+${paymentConditionHtml}
+
+<hr class="d">
+<div class="center bold" style="margin-top:6px">Gracias por su compra</div>
+<script>window.onload=function(){window.print();setTimeout(function(){window.close()},1500)}</script>
+</body></html>`;
+
+    const win = window.open("", "_blank", "width=520,height=820");
+    if (!win) return;
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+  };
+
   return (
     <div className="h-[calc(100vh-140px)] flex flex-col gap-3 animate-in fade-in duration-300 overflow-hidden">
       {/* Header Compacto */}
@@ -1255,6 +1513,68 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
               />
               {loading && <div className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin h-4 w-4 border-2 border-[var(--primary)] border-t-transparent rounded-full" />}
             </div>
+
+            {/* Filtro visual por Categoría / Subcategoría */}
+            {categories.length > 0 && (
+              <div className="flex flex-col gap-1.5 mt-2">
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedCategoryId(null); setSelectedSubcategoryId(null); }}
+                    className={cn(
+                      "px-2.5 py-1 rounded-full text-[10px] font-bold border transition-colors",
+                      selectedCategoryId === null
+                        ? "bg-[var(--primary)] text-white border-[var(--primary)]"
+                        : "bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-[var(--primary)]"
+                    )}
+                  >
+                    Todas
+                  </button>
+                  {categories.map((cat) => (
+                    <button
+                      type="button"
+                      key={cat.id}
+                      onClick={() => {
+                        setSelectedCategoryId(selectedCategoryId === cat.id ? null : cat.id);
+                        setSelectedSubcategoryId(null);
+                      }}
+                      className={cn(
+                        "px-2.5 py-1 rounded-full text-[10px] font-bold border transition-colors",
+                        selectedCategoryId === cat.id
+                          ? "bg-[var(--primary)] text-white border-[var(--primary)]"
+                          : "bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-[var(--primary)]"
+                      )}
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
+                {selectedCategoryId !== null &&
+                  (categories.find((c) => c.id === selectedCategoryId)?.subcategories?.length || 0) > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pl-2">
+                      {categories
+                        .find((c) => c.id === selectedCategoryId)!
+                        .subcategories!.map((sub) => (
+                          <button
+                            type="button"
+                            key={sub.id}
+                            onClick={() =>
+                              setSelectedSubcategoryId(selectedSubcategoryId === sub.id ? null : sub.id)
+                            }
+                            className={cn(
+                              "px-2 py-0.5 rounded-full text-[9px] font-bold border transition-colors",
+                              selectedSubcategoryId === sub.id
+                                ? "bg-[var(--primary)]/20 text-[var(--primary)] border-[var(--primary)]"
+                                : "bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-[var(--primary)]"
+                            )}
+                          >
+                            {sub.name}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+              </div>
+            )}
           </div>
 
           {/* Grid Compacto */}
@@ -1283,14 +1603,30 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
                   <h3 className="font-bold text-sm leading-tight text-[var(--text-main)] line-clamp-2 mb-1">
                     {product.name}
                   </h3>
-                  <p className="text-[10px] font-mono text-[var(--text-sec)] mb-3">
+                  <p className="text-[10px] font-mono text-[var(--text-sec)] mb-1">
                     {product.internalCode}
                   </p>
-                  
+                  {product.expirationDate && (
+                    <p className={cn(
+                      "text-[9px] font-bold mb-2 flex items-center gap-1",
+                      isNearExpiration(product.expirationDate) ? "text-red-500" : "text-[var(--text-sec)]"
+                    )}>
+                      <CalendarIcon size={10} />
+                      Vence: {formatExpirationDate(product.expirationDate)}
+                    </p>
+                  )}
+
                   <div className="mt-auto flex items-center justify-between pt-2 border-t border-[var(--border)]">
-                    <span className="text-base font-black text-[var(--primary)]">
-                      ${product.price.toFixed(4)} <span className="text-[10px] font-normal text-[var(--text-sec)]">/ {product.unit}</span>
-                    </span>
+                    <div className="flex flex-col">
+                      <span className="text-base font-black text-[var(--primary)]">
+                        ${product.price.toFixed(4)} <span className="text-[10px] font-normal text-[var(--text-sec)]">/ {product.unit}</span>
+                      </span>
+                      {product.priceOptions.length > 1 && (
+                        <span className="text-[8px] font-bold uppercase text-[var(--text-sec)]">
+                          +{product.priceOptions.slice(1).map((o) => o.label).join(" / ")} disponible
+                        </span>
+                      )}
+                    </div>
                     <div className="size-6 rounded bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center">
                       <Plus size={14} />
                     </div>
@@ -1386,6 +1722,14 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
                       <div>
                         <p className="font-bold text-xs leading-tight text-[var(--text-main)]">{item.name}</p>
                         <p className="text-[9px] font-bold text-[var(--text-sec)]">Stock: {item.stock} {item.unit}</p>
+                        {item.expirationDate && (
+                          <p className={cn(
+                            "text-[9px] font-bold",
+                            isNearExpiration(item.expirationDate) ? "text-red-500" : "text-[var(--text-sec)]"
+                          )}>
+                            Vence: {formatExpirationDate(item.expirationDate)}
+                          </p>
+                        )}
                       </div>
                       <Button
                         variant="ghost"
@@ -1438,6 +1782,18 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
                           </div>
 
                           <div className="flex flex-col items-end gap-1">
+                            {item.priceOptions && item.priceOptions.length > 1 && (
+                              <select
+                                value={sel.priceType || "PUBLICO"}
+                                onChange={(e) => updateSelectionPriceType(item.id, sel.id, e.target.value)}
+                                className="text-[9px] font-bold h-5 px-1 w-20 bg-[var(--bg)] border border-[var(--border)] rounded text-[var(--text-sec)] focus:outline-none focus:border-[var(--primary)] cursor-pointer"
+                                title="Tipo de precio"
+                              >
+                                {item.priceOptions.map((o) => (
+                                  <option key={o.type} value={o.type}>{o.label}</option>
+                                ))}
+                              </select>
+                            )}
                             <div className="relative flex items-center justify-end w-20">
                               <span className="absolute left-2 text-xs font-black text-[var(--primary)] pointer-events-none">$</span>
                               <NumberInput

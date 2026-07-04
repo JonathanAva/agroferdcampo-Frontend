@@ -6,6 +6,8 @@ import {
   Trash2,
   PackagePlus,
   Tag,
+  Tags,
+  FolderTree,
   ToggleLeft,
   ToggleRight,
   Upload,
@@ -73,6 +75,9 @@ interface CatalogProduct {
   isActive: boolean;
   imageUrl?: string;
   category?: { id: number; name: string };
+  subcategory?: { id: number; name: string; categoryId: number };
+  tags?: { id: number; name: string }[];
+  expirationDate?: string | null;
   prices: ProductPrice[];
   units?: {
     id: number;
@@ -86,6 +91,18 @@ interface CatalogProduct {
 }
 
 interface Category {
+  id: number;
+  name: string;
+}
+
+interface Subcategory {
+  id: number;
+  name: string;
+  categoryId: number;
+  category?: { id: number; name: string };
+}
+
+interface ProductTag {
   id: number;
   name: string;
 }
@@ -123,6 +140,9 @@ const productSchema = z.object({
   description: z.string(),
   unit: z.string().min(1, "La unidad es obligatoria"),
   categoryId: z.string(),
+  subcategoryId: z.string(),
+  tagIds: z.array(z.string()),
+  expirationDate: z.string(),
   costPrice: z.string(),
   trackStock: z.boolean(),
   prices: z
@@ -170,6 +190,8 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
 
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
+  const [tags, setTags] = useState<ProductTag[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -192,6 +214,12 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   );
   const [isCatDialogOpen, setIsCatDialogOpen] = useState(false);
   const [newCatName, setNewCatName] = useState("");
+  const [isSubcatDialogOpen, setIsSubcatDialogOpen] = useState(false);
+  const [newSubcatName, setNewSubcatName] = useState("");
+  const [newSubcatCategoryId, setNewSubcatCategoryId] = useState("");
+  const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
+  const [newTagName, setNewTagName] = useState("");
+  const [quickTagName, setQuickTagName] = useState("");
   const [productImageUrl, setProductImageUrl] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
 
@@ -209,6 +237,9 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         description: "",
         unit: "UNIDAD",
         categoryId: "",
+        subcategoryId: "",
+        tagIds: [],
+        expirationDate: "",
         costPrice: "",
         trackStock: true,
         prices: [{ priceType: "PUBLICO", branchId: "global", price: "" }],
@@ -244,10 +275,49 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   });
 
   const watchTrackStock = watch("trackStock");
+  const watchCategoryId = watch("categoryId");
+  const watchTagIds = watch("tagIds") || [];
+
+  const availableSubcategories = useMemo(
+    () => subcategories.filter((s) => String(s.categoryId) === watchCategoryId),
+    [subcategories, watchCategoryId],
+  );
 
   useEffect(() => {
     fetchData();
   }, [showInactive]);
+
+  // Si la categoría cambia y la subcategoría seleccionada ya no le pertenece, la limpiamos
+  useEffect(() => {
+    const currentSubcatId = watch("subcategoryId");
+    if (currentSubcatId && !availableSubcategories.some((s) => String(s.id) === currentSubcatId)) {
+      setValue("subcategoryId", "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchCategoryId]);
+
+  const toggleTag = (tagId: string) => {
+    const current = watch("tagIds") || [];
+    setValue(
+      "tagIds",
+      current.includes(tagId) ? current.filter((t) => t !== tagId) : [...current, tagId],
+    );
+  };
+
+  const handleQuickAddTag = async () => {
+    if (!quickTagName.trim()) return;
+    try {
+      const created = await apiRequest<ProductTag>("/catalog/tags", {
+        method: "POST",
+        body: JSON.stringify({ name: quickTagName.trim() }),
+      });
+      setTags((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      setValue("tagIds", [...(watch("tagIds") || []), String(created.id)]);
+      setQuickTagName("");
+    } catch (err: any) {
+      toast.error(err.message || "Error al crear etiqueta");
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -257,11 +327,13 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         queryParams.append("isActive", "false");
       }
 
-      const [prodData, catData, brData] = await Promise.all([
+      const [prodData, catData, subcatData, tagData, brData] = await Promise.all([
         apiRequest<{ data: CatalogProduct[]; total: number }>(
           `/catalog/products?${queryParams.toString()}`,
         ),
         apiRequest<Category[]>("/catalog/categories").catch(() => []),
+        apiRequest<Subcategory[]>("/catalog/subcategories").catch(() => []),
+        apiRequest<ProductTag[]>("/catalog/tags").catch(() => []),
         apiRequest<Branch[]>("/branches").catch(() => []),
       ]);
 
@@ -278,6 +350,8 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
 
       setProducts(allProducts);
       setCategories(Array.isArray(catData) ? catData : []);
+      setSubcategories(Array.isArray(subcatData) ? subcatData : []);
+      setTags(Array.isArray(tagData) ? tagData : []);
       setBranches(Array.isArray(brData) ? brData : []);
     } catch {
       toast.error("Error al cargar el catálogo");
@@ -317,6 +391,9 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         description: product.description || "",
         unit: product.unit,
         categoryId: product.category?.id ? String(product.category.id) : "",
+        subcategoryId: product.subcategory?.id ? String(product.subcategory.id) : "",
+        tagIds: product.tags?.map((t) => String(t.id)) || [],
+        expirationDate: product.expirationDate ? product.expirationDate.slice(0, 10) : "",
         costPrice: product.costPrice?.toString() || "",
         trackStock: product.trackStock,
         prices: product.prices.map((p) => ({
@@ -345,6 +422,9 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         description: "",
         unit: "UNIDAD",
         categoryId: "",
+        subcategoryId: "",
+        tagIds: [],
+        expirationDate: "",
         costPrice: "",
         trackStock: true,
         prices: [{ priceType: "PUBLICO", branchId: "global", price: "" }],
@@ -385,6 +465,9 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       unit: data.unit,
       trackStock: data.trackStock,
       categoryId: data.categoryId ? Number(data.categoryId) : null,
+      subcategoryId: data.subcategoryId ? Number(data.subcategoryId) : null,
+      tagIds: data.tagIds.map(Number),
+      expirationDate: data.expirationDate || null,
       costPrice: data.costPrice ? Number(data.costPrice) : null,
       internalCode: data.internalCode?.trim() || undefined,
       barcode: data.barcode?.trim() || undefined,
@@ -474,6 +557,71 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
     }
   };
 
+  const handleCreateSubcategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSubcatName.trim() || !newSubcatCategoryId) return;
+
+    setFormLoading(true);
+    try {
+      await apiRequest("/catalog/subcategories", {
+        method: "POST",
+        body: JSON.stringify({
+          name: newSubcatName.trim(),
+          categoryId: Number(newSubcatCategoryId),
+        }),
+      });
+      toast.success("Subcategoría creada exitosamente");
+      setNewSubcatName("");
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Error al crear la subcategoría");
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleDeleteSubcategory = async (id: number, name: string) => {
+    if (!confirm(`¿Eliminar subcategoría "${name}"?`)) return;
+    try {
+      await apiRequest(`/catalog/subcategories/${id}`, { method: "DELETE" });
+      toast.success("Subcategoría eliminada");
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "No se puede eliminar la subcategoría");
+    }
+  };
+
+  const handleCreateTag = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTagName.trim()) return;
+
+    setFormLoading(true);
+    try {
+      await apiRequest("/catalog/tags", {
+        method: "POST",
+        body: JSON.stringify({ name: newTagName.trim() }),
+      });
+      toast.success("Etiqueta creada exitosamente");
+      setNewTagName("");
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Error al crear la etiqueta");
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleDeleteTag = async (id: number, name: string) => {
+    if (!confirm(`¿Eliminar etiqueta "${name}"?`)) return;
+    try {
+      await apiRequest(`/catalog/tags/${id}`, { method: "DELETE" });
+      toast.success("Etiqueta eliminada");
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "No se puede eliminar la etiqueta");
+    }
+  };
+
   const filtered = products.filter(
     (p) =>
       (categoryFilter === 'all' || p.category?.id.toString() === categoryFilter) &&
@@ -522,7 +670,23 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                 className="gap-2"
               >
                 <Tag size={16} />
-                Nueva Categoría
+                Categorías
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setIsSubcatDialogOpen(true)}
+                className="gap-2"
+              >
+                <FolderTree size={16} />
+                Subcategorías
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setIsTagDialogOpen(true)}
+                className="gap-2"
+              >
+                <Tags size={16} />
+                Etiquetas
               </Button>
               <Button
                 onClick={() => openDialog()}
@@ -620,12 +784,19 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge
-                    variant="secondary"
-                    className="font-bold tracking-tight"
-                  >
-                    {product.category?.name || "General"}
-                  </Badge>
+                  <div className="flex flex-col gap-1 items-start">
+                    <Badge
+                      variant="secondary"
+                      className="font-bold tracking-tight"
+                    >
+                      {product.category?.name || "General"}
+                    </Badge>
+                    {product.subcategory && (
+                      <span className="text-[9px] font-bold opacity-50 text-[var(--text-sec)] pl-1">
+                        {product.subcategory.name}
+                      </span>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <span className="text-xs font-mono font-bold text-[var(--text-sec)]">
@@ -834,6 +1005,100 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold">Subcategoría</Label>
+                      <Select
+                        value={watch("subcategoryId")}
+                        onValueChange={(v) => setValue("subcategoryId", v)}
+                        disabled={!watchCategoryId}
+                      >
+                        <SelectTrigger className="h-11 rounded-xl bg-[var(--card)]">
+                          <SelectValue
+                            placeholder={
+                              watchCategoryId ? "Sin subcategoría" : "Elige una categoría primero"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableSubcategories.map((s) => (
+                            <SelectItem key={s.id} value={String(s.id)}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold">
+                        Fecha de Vencimiento
+                      </Label>
+                      <Input
+                        type="date"
+                        {...register("expirationDate")}
+                        className="h-11 rounded-xl bg-[var(--card)]"
+                      />
+                      <p className="text-[10px] opacity-60 ml-1">Opcional</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-bold">Etiquetas</Label>
+                    <div className="p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-3">
+                      <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto">
+                        {tags.length === 0 && (
+                          <p className="text-[10px] opacity-50">
+                            Sin etiquetas registradas todavía.
+                          </p>
+                        )}
+                        {tags.map((t) => {
+                          const selected = watchTagIds.includes(String(t.id));
+                          return (
+                            <button
+                              type="button"
+                              key={t.id}
+                              onClick={() => toggleTag(String(t.id))}
+                              className={cn(
+                                "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
+                                selected
+                                  ? "bg-[var(--primary)] text-white border-[var(--primary)]"
+                                  : "bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-[var(--primary)]",
+                              )}
+                            >
+                              {t.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex gap-2 pt-2 border-t border-[var(--border)]">
+                        <Input
+                          value={quickTagName}
+                          onChange={(e) => setQuickTagName(e.target.value)}
+                          placeholder="Nueva etiqueta rápida..."
+                          className="h-8 text-xs rounded-lg"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleQuickAddTag();
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8"
+                          onClick={handleQuickAddTag}
+                        >
+                          <Plus size={14} />
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="text-[10px] opacity-60 ml-1">
+                      Solo se usan para buscar el producto por descripción, no dividen visualmente el catálogo.
+                    </p>
                   </div>
 
                   <div className="space-y-2">
@@ -1352,6 +1617,182 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
               variant="outline"
               className="w-full"
               onClick={() => setIsCatDialogOpen(false)}
+            >
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Gestionar Subcategorías */}
+      <Dialog open={isSubcatDialogOpen} onOpenChange={setIsSubcatDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Gestionar Subcategorías</DialogTitle>
+            <DialogDescription>
+              Divide una categoría en subcategorías (ej. Agroservicio → Tubería PVC, Concentrado, Agroquímicos).
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4 space-y-6">
+            <form onSubmit={handleCreateSubcategory} className="space-y-3">
+              <div className="space-y-2">
+                <Label>Categoría</Label>
+                <Select value={newSubcatCategoryId} onValueChange={setNewSubcatCategoryId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona una categoría..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="subcatName">Nombre de la Subcategoría</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="subcatName"
+                    value={newSubcatName}
+                    onChange={(e) => setNewSubcatName(e.target.value)}
+                    placeholder="Ej: Tubería PVC..."
+                    required
+                  />
+                  <Button
+                    type="submit"
+                    disabled={formLoading || !newSubcatCategoryId}
+                    variant="default"
+                    size="icon"
+                  >
+                    {formLoading ? "..." : <Plus size={18} />}
+                  </Button>
+                </div>
+              </div>
+            </form>
+
+            <div className="space-y-3">
+              <Label>Subcategorías Existentes</Label>
+              <div
+                className="max-h-[220px] overflow-y-auto rounded-xl border p-2 space-y-1"
+                style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)" }}
+              >
+                {subcategories.length === 0 && (
+                  <p className="text-xs text-center py-4 opacity-50" style={{ color: "var(--text-sec)" }}>
+                    Sin subcategorías registradas.
+                  </p>
+                )}
+                {subcategories.map((sub) => (
+                  <div
+                    key={sub.id}
+                    className="flex items-center justify-between p-2 rounded-lg hover:bg-[var(--card)] transition-colors group"
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                        {sub.name}
+                      </span>
+                      <span className="text-[10px] opacity-50" style={{ color: "var(--text-sec)" }}>
+                        {sub.category?.name || categories.find((c) => c.id === sub.categoryId)?.name}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteSubcategory(sub.id, sub.name)}
+                      className="p-1.5 rounded-md text-red-400 hover:text-red-600 hover:bg-red-50 transition-all"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => setIsSubcatDialogOpen(false)}
+            >
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Gestionar Etiquetas */}
+      <Dialog open={isTagDialogOpen} onOpenChange={setIsTagDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Gestionar Etiquetas</DialogTitle>
+            <DialogDescription>
+              Las etiquetas se usan solo para buscar productos por descripción (ej. "para tomate"), no dividen el catálogo visualmente.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4 space-y-6">
+            <form onSubmit={handleCreateTag} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="tagName">Nombre de la Nueva Etiqueta</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="tagName"
+                    value={newTagName}
+                    onChange={(e) => setNewTagName(e.target.value)}
+                    placeholder="Ej: para tomate..."
+                    required
+                  />
+                  <Button
+                    type="submit"
+                    disabled={formLoading}
+                    variant="default"
+                    size="icon"
+                  >
+                    {formLoading ? "..." : <Plus size={18} />}
+                  </Button>
+                </div>
+              </div>
+            </form>
+
+            <div className="space-y-3">
+              <Label>Etiquetas Existentes</Label>
+              <div
+                className="max-h-[200px] overflow-y-auto rounded-xl border p-2 space-y-1"
+                style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)" }}
+              >
+                {tags.length === 0 && (
+                  <p className="text-xs text-center py-4 opacity-50" style={{ color: "var(--text-sec)" }}>
+                    Sin etiquetas registradas.
+                  </p>
+                )}
+                {tags.map((t) => (
+                  <div
+                    key={t.id}
+                    className="flex items-center justify-between p-2 rounded-lg hover:bg-[var(--card)] transition-colors group"
+                  >
+                    <span className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                      {t.name}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteTag(t.id, t.name)}
+                      className="p-1.5 rounded-md text-red-400 hover:text-red-600 hover:bg-red-50 transition-all"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => setIsTagDialogOpen(false)}
             >
               Cerrar
             </Button>
