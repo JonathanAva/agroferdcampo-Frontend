@@ -255,6 +255,8 @@ export function POS() {
   const [categories, setCategories] = useState<POSCategory[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [cart, setCart] = useState<CartItem[]>(() => {
     try {
       const saved = sessionStorage.getItem('pos-cart');
@@ -643,7 +645,12 @@ export function POS() {
     }
   };
 
-  // Debounce product search (también re-busca al cambiar filtros de categoría/subcategoría)
+  // Volver a la página 1 cada vez que cambia el término de búsqueda o los filtros de categoría
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, selectedCategoryId, selectedSubcategoryId]);
+
+  // Debounce product search (también re-busca al cambiar filtros de categoría/subcategoría/página)
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       if (searchTerm.trim().length >= 2) {
@@ -654,7 +661,7 @@ export function POS() {
     }, 300);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [searchTerm, selectedCategoryId, selectedSubcategoryId]);
+  }, [searchTerm, selectedCategoryId, selectedSubcategoryId, page]);
 
   // Debounce customer search
   useEffect(() => {
@@ -678,7 +685,8 @@ export function POS() {
         params.set("q", query);
       } else {
         params.set("isActive", "true");
-        params.set("limit", "50");
+        params.set("limit", "30");
+        params.set("page", String(page));
       }
       if (selectedCategoryId) params.set("categoryId", String(selectedCategoryId));
       if (selectedSubcategoryId) params.set("subcategoryId", String(selectedSubcategoryId));
@@ -689,12 +697,14 @@ export function POS() {
 
       const response = await apiRequest<any>(endpoint);
 
-      // The list endpoint returns { data: [...] }, while search returns [...]
+      // The list endpoint returns { data: [...], totalPages }, while search returns [...] (sin paginar)
       const items = isSearch
         ? Array.isArray(response)
           ? response
           : []
         : response.data || [];
+
+      setTotalPages(isSearch ? 1 : response.totalPages || 1);
 
       const mapped = items.map((p: any) => {
         // Handle inventory differences: findAll flattens it, search keeps it as array
@@ -1587,71 +1597,99 @@ ${paymentConditionHtml}
                   key={product.id}
                   onClick={() => product.stock > 0 && addToCart(product)}
                   className={cn(
-                    "relative p-3 rounded-xl border transition-all flex flex-col cursor-pointer",
-                    product.stock > 0 
-                      ? "bg-[var(--card)] border-[var(--border)] hover:border-[var(--primary)] hover:shadow-md" 
+                    "group relative rounded-xl border overflow-hidden transition-all flex flex-col cursor-pointer",
+                    product.stock > 0
+                      ? "bg-[var(--card)] border-[var(--border)] hover:border-[var(--primary)] hover:shadow-md"
                       : "bg-[var(--bg)] border-[var(--border)] opacity-60 cursor-not-allowed"
                   )}
                 >
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-[9px] font-bold uppercase text-[var(--text-sec)] bg-[var(--bg)] px-1.5 py-0.5 rounded border border-[var(--border)]">
-                      {product.category.name}
-                    </span>
-                    <Badge variant={product.stock < 10 ? "destructive" : "secondary"} className="text-[9px] px-1.5 py-0">
-                      {product.stock}
-                    </Badge>
-                  </div>
-                  
-                  <div className="flex items-start gap-2 mb-1">
+                  <div className="relative w-full aspect-square bg-[var(--bg)] overflow-hidden">
                     {product.imageUrl ? (
                       <img
                         src={product.imageUrl}
                         alt={product.name}
-                        className="size-10 rounded-md object-cover border border-[var(--border)] flex-shrink-0"
+                        className="w-full h-full object-cover"
                       />
                     ) : (
-                      <div className="size-10 rounded-md border border-[var(--border)] bg-[var(--bg)] flex items-center justify-center flex-shrink-0 opacity-40">
-                        <Package size={16} />
+                      <div className="w-full h-full flex items-center justify-center opacity-25">
+                        <Package size={32} />
                       </div>
                     )}
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-sm leading-tight text-[var(--text-main)] line-clamp-2">
-                        {product.name}
-                      </h3>
-                      <p className="text-[10px] font-mono text-[var(--text-sec)]">
-                        {product.internalCode}
-                      </p>
-                    </div>
+                    <span className="absolute top-1.5 left-1.5 text-[9px] font-bold uppercase text-[var(--text-sec)] bg-[var(--card)]/90 backdrop-blur px-1.5 py-0.5 rounded border border-[var(--border)]">
+                      {product.category.name}
+                    </span>
+                    <Badge
+                      variant={product.stock < 10 ? "destructive" : "secondary"}
+                      className="absolute top-1.5 right-1.5 text-[9px] px-1.5 py-0"
+                    >
+                      {product.stock}
+                    </Badge>
                   </div>
-                  {product.expirationDate && (
-                    <p className={cn(
-                      "text-[9px] font-bold mb-2 flex items-center gap-1",
-                      isNearExpiration(product.expirationDate) ? "text-red-500" : "text-[var(--text-sec)]"
-                    )}>
-                      <CalendarIcon size={10} />
-                      Vence: {formatExpirationDate(product.expirationDate)}
-                    </p>
-                  )}
 
-                  <div className="mt-auto flex items-center justify-between pt-2 border-t border-[var(--border)]">
-                    <div className="flex flex-col">
-                      <span className="text-base font-black text-[var(--primary)]">
-                        ${product.price.toFixed(4)} <span className="text-[10px] font-normal text-[var(--text-sec)]">/ {product.unit}</span>
-                      </span>
-                      {product.priceOptions.length > 1 && (
-                        <span className="text-[8px] font-bold uppercase text-[var(--text-sec)]">
-                          +{product.priceOptions.slice(1).map((o) => o.label).join(" / ")} disponible
+                  <div className="p-2.5 flex flex-col flex-1">
+                    <h3 className="font-bold text-sm leading-tight text-[var(--text-main)] line-clamp-2 mb-0.5">
+                      {product.name}
+                    </h3>
+                    <p className="text-[10px] font-mono text-[var(--text-sec)] mb-1">
+                      {product.internalCode}
+                    </p>
+                    {product.expirationDate && (
+                      <p className={cn(
+                        "text-[9px] font-bold mb-1 flex items-center gap-1",
+                        isNearExpiration(product.expirationDate) ? "text-red-500" : "text-[var(--text-sec)]"
+                      )}>
+                        <CalendarIcon size={10} />
+                        Vence: {formatExpirationDate(product.expirationDate)}
+                      </p>
+                    )}
+
+                    <div className="mt-auto flex items-center justify-between pt-2 border-t border-[var(--border)]">
+                      <div className="flex flex-col">
+                        <span className="text-base font-black text-[var(--primary)]">
+                          ${product.price.toFixed(4)} <span className="text-[10px] font-normal text-[var(--text-sec)]">/ {product.unit}</span>
                         </span>
-                      )}
-                    </div>
-                    <div className="size-6 rounded bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center">
-                      <Plus size={14} />
+                        {product.priceOptions.length > 1 && (
+                          <span className="text-[8px] font-bold uppercase text-[var(--text-sec)]">
+                            +{product.priceOptions.slice(1).map((o) => o.label).join(" / ")} disponible
+                          </span>
+                        )}
+                      </div>
+                      <div className="size-6 rounded bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center group-hover:bg-[var(--primary)] group-hover:text-white transition-colors">
+                        <Plus size={14} />
+                      </div>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
           </div>
+
+          {/* Paginación (solo aplica cuando se navega el catálogo completo, no en búsqueda por texto) */}
+          {!searchTerm && totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3 p-2 border-t border-[var(--border)] bg-[var(--bg)]/50">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                disabled={page <= 1 || loading}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Anterior
+              </Button>
+              <span className="text-xs font-bold text-[var(--text-sec)]">
+                Página {page} de {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                disabled={page >= totalPages || loading}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Siguiente
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* PANEL DERECHO: CARRITO */}
