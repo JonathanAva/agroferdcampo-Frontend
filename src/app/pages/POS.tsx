@@ -1603,39 +1603,42 @@ ${paymentConditionHtml}
                       : "bg-[var(--bg)] border-[var(--border)] opacity-60 cursor-not-allowed"
                   )}
                 >
-                  <div className="relative w-full h-24 bg-[var(--bg)] overflow-hidden">
-                    {product.imageUrl ? (
-                      <img
-                        src={product.imageUrl}
-                        alt={product.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center opacity-25">
-                        <Package size={24} />
-                      </div>
-                    )}
-                    <span className="absolute top-1.5 left-1.5 text-[9px] font-bold uppercase text-[var(--text-sec)] bg-[var(--card)]/90 backdrop-blur px-1.5 py-0.5 rounded border border-[var(--border)]">
-                      {product.category.name}
-                    </span>
-                    <Badge
-                      variant={product.stock < 10 ? "destructive" : "secondary"}
-                      className="absolute top-1.5 right-1.5 text-[9px] px-1.5 py-0"
-                    >
-                      {product.stock}
-                    </Badge>
-                  </div>
+                  <div className="p-2.5 flex flex-col flex-1 items-center">
+                    <div className="w-full flex items-start justify-between mb-2">
+                      <span className="text-[9px] font-bold uppercase text-[var(--text-sec)] bg-[var(--bg)] px-1.5 py-0.5 rounded border border-[var(--border)]">
+                        {product.category.name}
+                      </span>
+                      <Badge
+                        variant={product.stock < 10 ? "destructive" : "secondary"}
+                        className="text-[9px] px-1.5 py-0"
+                      >
+                        {product.stock}
+                      </Badge>
+                    </div>
 
-                  <div className="p-2.5 flex flex-col flex-1">
-                    <h3 className="font-bold text-sm leading-tight text-[var(--text-main)] line-clamp-2 mb-0.5">
+                    <div className="w-24 h-24 rounded-lg overflow-hidden bg-[var(--bg)] border border-[var(--border)] mb-2 flex-shrink-0">
+                      {product.imageUrl ? (
+                        <img
+                          src={product.imageUrl}
+                          alt={product.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center opacity-25">
+                          <Package size={24} />
+                        </div>
+                      )}
+                    </div>
+
+                    <h3 className="w-full font-bold text-sm leading-tight text-[var(--text-main)] line-clamp-2 mb-0.5">
                       {product.name}
                     </h3>
-                    <p className="text-[10px] font-mono text-[var(--text-sec)] mb-1">
+                    <p className="w-full text-[10px] font-mono text-[var(--text-sec)] mb-1">
                       {product.internalCode}
                     </p>
                     {product.expirationDate && (
                       <p className={cn(
-                        "text-[9px] font-bold mb-1 flex items-center gap-1",
+                        "w-full text-[9px] font-bold mb-1 flex items-center gap-1",
                         isNearExpiration(product.expirationDate) ? "text-red-500" : "text-[var(--text-sec)]"
                       )}>
                         <CalendarIcon size={10} />
@@ -1643,7 +1646,7 @@ ${paymentConditionHtml}
                       </p>
                     )}
 
-                    <div className="mt-auto flex items-center justify-between pt-2 border-t border-[var(--border)]">
+                    <div className="w-full mt-auto flex items-center justify-between pt-2 border-t border-[var(--border)]">
                       <div className="flex flex-col">
                         <span className="text-base font-black text-[var(--primary)]">
                           ${product.price.toFixed(4)} <span className="text-[10px] font-normal text-[var(--text-sec)]">/ {product.unit}</span>
