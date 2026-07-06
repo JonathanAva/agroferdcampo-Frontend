@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 import { apiRequest } from "../config/api";
+import { uploadsService } from "../services/uploads.service";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 import { Badge } from "../components/ui/badge";
@@ -363,15 +364,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   const handleProductImageUpload = async (file: File) => {
     setUploadingImage(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch(`${import.meta.env.VITE_API_URL || ""}/uploads/product-image`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${localStorage.getItem("accessToken")}` },
-        body: formData,
-      });
-      if (!res.ok) throw new Error("Error al subir imagen");
-      const data = await res.json();
+      const data = await uploadsService.uploadProductImage(file);
       setProductImageUrl(data.url);
     } catch {
       toast.error("No se pudo subir la imagen");
