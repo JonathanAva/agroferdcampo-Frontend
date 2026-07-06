@@ -62,6 +62,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
@@ -252,6 +253,10 @@ export function HumanResources() {
   const [stats, setStats] = useState<HRStats | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [historyDate, setHistoryDate] = useState<string>("");
+  const [historyData, setHistoryData] = useState<AttendanceRecord[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [pendingLeaves, setPendingLeaves] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -337,6 +342,26 @@ export function HumanResources() {
       setEditHireDate(undefined);
     }
   }, [selectedEmployee]);
+
+  useEffect(() => {
+    if (isHistoryModalOpen && selectedBranch) {
+      const fetchHistory = async () => {
+        setHistoryLoading(true);
+        try {
+          const query = historyDate ? `?date=${historyDate}` : "";
+          const data = await apiRequest<AttendanceRecord[]>(
+            `/attendance/today/${selectedBranch.id}${query}`
+          );
+          setHistoryData(data);
+        } catch (error: any) {
+          toast.error("Error al cargar historial: " + error.message);
+        } finally {
+          setHistoryLoading(false);
+        }
+      };
+      fetchHistory();
+    }
+  }, [isHistoryModalOpen, historyDate, selectedBranch]);
 
   const loadData = async () => {
     setLoading(true);
@@ -1030,7 +1055,13 @@ export function HumanResources() {
                 </p>
               </div>
             </div>
-            <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-emerald-200 text-emerald-700 font-bold hover:bg-emerald-50 shadow-sm transition-all">
+            <button 
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-emerald-200 text-emerald-700 font-bold hover:bg-emerald-50 shadow-sm transition-all"
+              onClick={() => {
+                setHistoryDate(new Date().toLocaleDateString("en-CA")); // Format: YYYY-MM-DD
+                setIsHistoryModalOpen(true);
+              }}
+            >
               <History size={18} />
               Ver Historial
             </button>
@@ -2752,6 +2783,109 @@ export function HumanResources() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- MODAL: HISTORIAL DE ASISTENCIA --- */}
+      <Dialog open={isHistoryModalOpen} onOpenChange={setIsHistoryModalOpen}>
+        <DialogContent className="sm:max-w-[1000px] w-[95vw] max-h-[95vh] overflow-y-auto border-[var(--border)] bg-[var(--card)] shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black text-[var(--text-main)] uppercase tracking-tighter">
+              Historial de Asistencia
+            </DialogTitle>
+            <DialogDescription className="font-bold opacity-60">
+              Consulta la asistencia de todos los empleados en una fecha pasada.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 pt-4">
+            <div className="flex items-center gap-4 bg-[var(--bg)] p-4 rounded-xl border border-[var(--border)]">
+              <Label className="font-black uppercase tracking-widest text-xs opacity-60">
+                Seleccione una Fecha:
+              </Label>
+              <input
+                type="date"
+                className="px-4 py-2 rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--text-main)] font-bold shadow-sm focus:ring-2 focus:ring-[var(--primary)]"
+                value={historyDate}
+                onChange={(e) => setHistoryDate(e.target.value)}
+              />
+            </div>
+
+            <div className="rounded-xl border overflow-hidden shadow-sm bg-[var(--card)] border-[var(--border)]">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-[var(--bg)]/50 border-b border-[var(--border)]">
+                      <TableHead className="font-bold text-[var(--text-main)]">Empleado</TableHead>
+                      <TableHead className="font-bold text-[var(--text-main)] text-center">Entrada</TableHead>
+                      <TableHead className="font-bold text-[var(--text-main)] text-center">Salida</TableHead>
+                      <TableHead className="font-bold text-[var(--text-main)] text-center">Estado</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {historyLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center py-10 font-bold text-[var(--text-sec)]">
+                          Cargando historial...
+                        </TableCell>
+                      </TableRow>
+                    ) : historyData.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center py-10 font-bold text-[var(--text-sec)]">
+                          No se encontraron registros para esta fecha.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      historyData.map((rec) => (
+                        <TableRow key={rec.employeeId} className="border-b border-[var(--border)] hover:bg-[var(--bg)]/40 transition-colors">
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center font-black text-xs uppercase shadow-inner">
+                                {rec.fullName.charAt(0)}
+                              </div>
+                              <div>
+                                <div className="font-black text-[var(--text-main)] tracking-tight">
+                                  {rec.fullName}
+                                </div>
+                                <div className="text-[10px] text-[var(--text-sec)] font-bold uppercase tracking-widest opacity-60">
+                                  {rec.position || "Sin cargo"}
+                                </div>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center font-bold text-[var(--text-main)]">
+                            {rec.attendance?.checkIn
+                              ? new Date(rec.attendance.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                              : "--:--"}
+                          </TableCell>
+                          <TableCell className="text-center font-bold text-[var(--text-main)]">
+                            {rec.attendance?.checkOut
+                              ? new Date(rec.attendance.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                              : "--:--"}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {!rec.attendance ? (
+                              <Badge variant="outline" className="font-bold opacity-50 bg-red-500/10 text-red-600 border-red-500/20">FALTA</Badge>
+                            ) : rec.attendance.checkOut ? (
+                              <Badge className="bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 font-bold border-0 tracking-wider">COMPLETO</Badge>
+                            ) : (
+                              <Badge className="bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 font-bold border-0 tracking-wider">EN TURNO</Badge>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+            
+            <div className="flex justify-end pt-4 border-t border-[var(--border)]">
+              <Button type="button" onClick={() => setIsHistoryModalOpen(false)} className="px-8 font-black uppercase tracking-widest shadow-lg shadow-[var(--primary)]/20">
+                Cerrar Historial
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
