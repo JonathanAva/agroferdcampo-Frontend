@@ -12,12 +12,14 @@ export const uploadsService = {
       body: formData,
     });
 
+    const body = await response.json().catch(() => ({}));
+
     if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.message || 'Error al subir el archivo');
+      throw new Error(body.message || 'Error al subir el archivo');
     }
 
-    return response.json();
+    // El backend envuelve las respuestas exitosas en { success, data, timestamp }
+    return body && body.success === true && 'data' in body ? body.data : body;
   },
 
   uploadProductImage: async (file: File): Promise<{ url: string }> => {
@@ -31,11 +33,12 @@ export const uploadsService = {
       body: formData,
     });
 
+    const body = await response.json().catch(() => ({}));
+
     if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.message || 'Error al subir la imagen');
+      throw new Error(body.message || 'Error al subir la imagen');
     }
 
-    return response.json();
+    return body && body.success === true && 'data' in body ? body.data : body;
   },
 };
