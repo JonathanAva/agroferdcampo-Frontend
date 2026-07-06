@@ -1603,7 +1603,7 @@ ${paymentConditionHtml}
                       : "bg-[var(--bg)] border-[var(--border)] opacity-60 cursor-not-allowed"
                   )}
                 >
-                  <div className="relative w-full aspect-square bg-[var(--bg)] overflow-hidden">
+                  <div className="relative w-full h-24 bg-[var(--bg)] overflow-hidden">
                     {product.imageUrl ? (
                       <img
                         src={product.imageUrl}
@@ -1612,7 +1612,7 @@ ${paymentConditionHtml}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center opacity-25">
-                        <Package size={32} />
+                        <Package size={24} />
                       </div>
                     )}
                     <span className="absolute top-1.5 left-1.5 text-[9px] font-bold uppercase text-[var(--text-sec)] bg-[var(--card)]/90 backdrop-blur px-1.5 py-0.5 rounded border border-[var(--border)]">
