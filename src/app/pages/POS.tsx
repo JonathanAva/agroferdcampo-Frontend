@@ -67,6 +67,7 @@ interface Product {
   category: { name: string };
   subcategory?: { id: number; name: string } | null;
   expirationDate?: string | null;
+  imageUrl?: string | null;
   unit: string;
   units?: {
     id: number;
@@ -735,6 +736,7 @@ export function POS() {
           category: p.category || { name: "General" },
           subcategory: p.subcategory || null,
           expirationDate: p.expirationDate || null,
+          imageUrl: p.imageUrl || null,
           unit: p.unit,
           units: p.units || [],
         };
@@ -1600,12 +1602,27 @@ ${paymentConditionHtml}
                     </Badge>
                   </div>
                   
-                  <h3 className="font-bold text-sm leading-tight text-[var(--text-main)] line-clamp-2 mb-1">
-                    {product.name}
-                  </h3>
-                  <p className="text-[10px] font-mono text-[var(--text-sec)] mb-1">
-                    {product.internalCode}
-                  </p>
+                  <div className="flex items-start gap-2 mb-1">
+                    {product.imageUrl ? (
+                      <img
+                        src={product.imageUrl}
+                        alt={product.name}
+                        className="size-10 rounded-md object-cover border border-[var(--border)] flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="size-10 rounded-md border border-[var(--border)] bg-[var(--bg)] flex items-center justify-center flex-shrink-0 opacity-40">
+                        <Package size={16} />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-sm leading-tight text-[var(--text-main)] line-clamp-2">
+                        {product.name}
+                      </h3>
+                      <p className="text-[10px] font-mono text-[var(--text-sec)]">
+                        {product.internalCode}
+                      </p>
+                    </div>
+                  </div>
                   {product.expirationDate && (
                     <p className={cn(
                       "text-[9px] font-bold mb-2 flex items-center gap-1",
