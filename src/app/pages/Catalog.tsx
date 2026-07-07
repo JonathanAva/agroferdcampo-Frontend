@@ -698,21 +698,19 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
           metrics={[
             {
               label: "Total Productos",
-              value: products.length,
+              value: total,
               icon: Store,
               color: "var(--primary)",
             },
             {
-              label: "Activos",
+              label: "Visibles en pág. (Activos)",
               value: products.filter((p) => p.isActive).length,
               icon: ToggleRight,
               color: "#34d399",
             },
             {
               label: "Categorías",
-              value: new Set(
-                products.map((p) => p.category?.name).filter(Boolean),
-              ).size,
+              value: categories.length,
               icon: Tag,
               color: "#f59e0b",
             },

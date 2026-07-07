@@ -398,7 +398,7 @@ function InventoryList() {
     return matchesStatus && matchesBranch;
   });
 
-  const totalItemsCount = inventory.length;
+  const totalItemsCount = total;
   const lowStockCount = inventory.filter(
     (i) => getProductStatus(i) === "low",
   ).length;
