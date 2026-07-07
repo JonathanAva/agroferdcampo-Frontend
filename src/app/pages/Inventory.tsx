@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Package,
   Search,
@@ -155,10 +155,14 @@ function InventoryList() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const searchTerm = searchParams.get('search') || '';
   const filterStatus = (searchParams.get('status') as "all" | "active" | "low" | "critical") || "all";
   const filterBranch = searchParams.get('branch') || 'all';
+  
+  const page = parseInt(searchParams.get('page') || '1', 10);
+  const limit = 50;
+  const [total, setTotal] = useState(0);
 
   const inventoryFilters: FilterConfig[] = useMemo(() => [
     { id: 'search', label: 'Buscar producto...', type: 'text', placeholder: 'Buscar por nombre, código o categoría...' },
@@ -206,17 +210,31 @@ function InventoryList() {
   const [loadingAlerts, setLoadingAlerts] = useState(false);
 
   useEffect(() => {
+    if (page !== 1) {
+      setSearchParams(prev => { prev.set('page', '1'); return prev; });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, filterStatus, filterBranch]);
+
+  useEffect(() => {
     fetchData();
-  }, []);
+  }, [searchTerm, filterStatus, filterBranch, page]);
 
   const fetchData = async () => {
     try {
-      const [invData, branchData] = await Promise.all([
-        apiRequest<InventoryItem[]>("/inventory"),
+      setLoading(true);
+      const queryParams = new URLSearchParams();
+      queryParams.append("limit", limit.toString());
+      queryParams.append("page", page.toString());
+      if (searchTerm) queryParams.append("search", searchTerm);
+      
+      const [invRes, branchData] = await Promise.all([
+        apiRequest<{ data: InventoryItem[], total: number }>(`/inventory?${queryParams.toString()}`),
         apiRequest<Branch[]>("/branches"),
       ]);
-      setInventory(invData);
-      setBranches(branchData);
+      setInventory(invRes?.data || []);
+      setTotal(invRes?.total || 0);
+      setBranches(branchData || []);
     } catch (error) {
       toast.error("Error al cargar datos de inventario");
     } finally {
@@ -374,19 +392,10 @@ function InventoryList() {
 
   const filteredInventory = inventory.filter((item) => {
     const status = getProductStatus(item);
-    const matchesSearch =
-      item.product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.product.internalCode
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      item.product.category?.name
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase());
-
     const matchesStatus = filterStatus === "all" || status === filterStatus;
     const matchesBranch = filterBranch === "all" || String(item.branchId) === filterBranch;
 
-    return matchesSearch && matchesStatus && matchesBranch;
+    return matchesStatus && matchesBranch;
   });
 
   const totalItemsCount = inventory.length;
@@ -761,6 +770,33 @@ function InventoryList() {
               No se encontraron productos en el inventario.
             </div>
           )}
+
+          {/* Pagination Controls */}
+          <div className="flex items-center justify-between mt-4 text-[var(--text-sec)] px-4 pb-4">
+            <div className="text-sm font-medium">
+              Mostrando {inventory.length} de {total} productos (Página {page})
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={page === 1}
+                onClick={() => setSearchParams(prev => { prev.set('page', String(page - 1)); return prev; })}
+                className="border-[var(--border)] hover:bg-[var(--hover)] text-[var(--text-main)]"
+              >
+                Anterior
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={page * limit >= total}
+                onClick={() => setSearchParams(prev => { prev.set('page', String(page + 1)); return prev; })}
+                className="border-[var(--border)] hover:bg-[var(--hover)] text-[var(--text-main)]"
+              >
+                Siguiente
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
