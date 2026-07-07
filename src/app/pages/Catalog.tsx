@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Store,
   Search,
@@ -174,11 +174,15 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const searchTerm = searchParams.get('search') || '';
   const showInactive = searchParams.get('showInactive') === 'true';
   const categoryFilter = searchParams.get('category') || 'all';
+  const page = parseInt(searchParams.get('page') || '1', 10);
+  const limit = 50;
+
+  const [total, setTotal] = useState(0);
 
   const catalogFilters: FilterConfig[] = useMemo(() => [
     { id: 'search', label: 'Buscar producto...', type: 'text', placeholder: 'Buscar por nombre, código o categoría...' },
@@ -245,17 +249,27 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
 
   const watchTrackStock = watch("trackStock");
 
+  // Si cambia la búsqueda o categoría, reiniciamos a la página 1
+  useEffect(() => {
+    if (page !== 1) {
+      setSearchParams(prev => { prev.set('page', '1'); return prev; });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, categoryFilter, showInactive]);
+
   useEffect(() => {
     fetchData();
-  }, [showInactive]);
+  }, [searchTerm, categoryFilter, showInactive, page]);
 
   const fetchData = async () => {
     try {
+      setLoading(true);
       const queryParams = new URLSearchParams();
-      queryParams.append("limit", "100");
-      if (showInactive) {
-        queryParams.append("isActive", "false");
-      }
+      queryParams.append("limit", limit.toString());
+      queryParams.append("page", page.toString());
+      if (searchTerm) queryParams.append("search", searchTerm);
+      if (categoryFilter !== 'all') queryParams.append("categoryId", categoryFilter);
+      if (!showInactive) queryParams.append("isActive", "true");
 
       const [prodData, catData, brData] = await Promise.all([
         apiRequest<{ data: CatalogProduct[]; total: number }>(
@@ -265,18 +279,8 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         apiRequest<Branch[]>("/branches").catch(() => []),
       ]);
 
-      let allProducts = Array.isArray(prodData?.data) ? prodData.data : [];
-
-      if (showInactive) {
-        const activeRes = await apiRequest<{ data: CatalogProduct[] }>(
-          "/catalog/products?isActive=true&limit=100",
-        );
-        if (activeRes?.data) {
-          allProducts = [...allProducts, ...activeRes.data];
-        }
-      }
-
-      setProducts(allProducts);
+      setProducts(prodData?.data || []);
+      setTotal(prodData?.total || 0);
       setCategories(Array.isArray(catData) ? catData : []);
       setBranches(Array.isArray(brData) ? brData : []);
     } catch {
@@ -474,14 +478,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
     }
   };
 
-  const filtered = products.filter(
-    (p) =>
-      (categoryFilter === 'all' || p.category?.id.toString() === categoryFilter) &&
-      (p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.internalCode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.category?.name.toLowerCase().includes(searchTerm.toLowerCase())),
-  );
-
+  const filtered = products;
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-accent animate-pulse">
@@ -491,7 +488,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   }
 
   return (
-    <div className="animate-in fade-in duration-500">
+    <div className="animate-in fade-in duration-500 pb-10">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         {!hideTitle && (
@@ -572,17 +569,22 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       </div>
 
       {/* Table Section */}
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Producto</TableHead>
-            <TableHead>Categoría</TableHead>
-            <TableHead>Unidad</TableHead>
-            <TableHead className="text-right">Precio Público</TableHead>
-            <TableHead className="text-center">Estado</TableHead>
-            <TableHead className="text-center">Acciones</TableHead>
-          </TableRow>
-        </TableHeader>
+      <div
+        className="rounded-xl border overflow-hidden shadow-sm"
+        style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+      >
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="font-semibold text-foreground">Producto</TableHead>
+                <TableHead className="font-semibold text-foreground">Categoría</TableHead>
+                <TableHead className="font-semibold text-foreground">Unidad</TableHead>
+                <TableHead className="text-right font-semibold text-foreground">Precio Público</TableHead>
+                <TableHead className="text-center font-semibold text-foreground">Estado</TableHead>
+                <TableHead className="text-center font-semibold text-foreground">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
         <TableBody>
           {filtered.length === 0 ? (
             <TableRow>
@@ -686,6 +688,36 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
           )}
         </TableBody>
       </Table>
+
+      {/* Pagination Controls */}
+      <div className="flex items-center justify-between mt-4 text-[var(--text-sec)] px-4 pb-4">
+        <div className="text-sm font-medium">
+          Mostrando {products.length} de {total} productos (Página {page})
+        </div>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={page === 1}
+            onClick={() => setSearchParams(prev => { prev.set('page', String(page - 1)); return prev; })}
+            className="border-[var(--border)] hover:bg-[var(--hover)] text-[var(--text-main)]"
+          >
+            Anterior
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={page * limit >= total}
+            onClick={() => setSearchParams(prev => { prev.set('page', String(page + 1)); return prev; })}
+            className="border-[var(--border)] hover:bg-[var(--hover)] text-[var(--text-main)]"
+          >
+            Siguiente
+          </Button>
+        </div>
+      </div>
+      </div>
+      </div>
+
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent
