@@ -340,7 +340,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       queryParams.append("page", page.toString());
       if (searchTerm) queryParams.append("search", searchTerm);
       if (categoryFilter !== 'all') queryParams.append("categoryId", categoryFilter);
-      if (!showInactive) queryParams.append("isActive", "true");
+      queryParams.append("isActive", showInactive ? "false" : "true");
 
       const [prodData, catData, subcatData, tagData, brData] = await Promise.all([
         apiRequest<{ data: CatalogProduct[]; total: number }>(
@@ -703,8 +703,8 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
               color: "var(--primary)",
             },
             {
-              label: "Visibles en pág. (Activos)",
-              value: products.filter((p) => p.isActive).length,
+              label: showInactive ? "Visibles en pág. (Inactivos)" : "Visibles en pág. (Activos)",
+              value: products.length,
               icon: ToggleRight,
               color: "#34d399",
             },
