@@ -6,6 +6,7 @@ import { useBranch } from "../../context/BranchContext";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { NotificationsBell } from "./NotificationsBell";
+import { GlobalSearch } from "./GlobalSearch";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -44,22 +45,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           <Menu size={24} />
         </Button>
 
-        {/* Search Bar - Hidden on mobile, visible on tablet+ */}
-        <div
-          className="hidden sm:flex items-center gap-3 px-4 py-2 rounded-lg border w-48 md:w-80 transition-all"
-          style={{
-            backgroundColor: "var(--card)",
-            borderColor: "var(--border)",
-          }}
-        >
-          <Search size={18} style={{ color: "var(--text-sec)" }} />
-          <input
-            type="text"
-            placeholder="Buscar..."
-            className="flex-1 bg-transparent outline-none text-sm"
-            style={{ color: "var(--text-main)" }}
-          />
-        </div>
+        <GlobalSearch />
       </div>
 
       {/* Right Section */}

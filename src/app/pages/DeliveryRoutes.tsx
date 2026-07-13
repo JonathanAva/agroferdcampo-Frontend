@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   MapPin, Plus, Search, Filter, Truck, User, Play, CheckCircle2, XCircle, Printer, Eye, Trash2, PackageCheck, CalendarIcon
 } from 'lucide-react';
@@ -583,7 +583,7 @@ export default function DeliveryRoutes({ hideTitle }: { hideTitle?: boolean } = 
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {loading ? (
+                  {loading && routes.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="h-32 text-center animate-pulse">Cargando...</TableCell></TableRow>
                   ) : !Array.isArray(routes) || routes.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="h-32 text-center">No hay rutas</TableCell></TableRow>

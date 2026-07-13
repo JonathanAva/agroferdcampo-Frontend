@@ -479,13 +479,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   };
 
   const filtered = products;
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64 text-accent animate-pulse">
-        <Store size={48} />
-      </div>
-    );
-  }
+
 
   return (
     <div className="animate-in fade-in duration-500 pb-10">
@@ -584,7 +578,18 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
               </TableRow>
             </TableHeader>
         <TableBody>
-          {filtered.length === 0 ? (
+          {loading && products.length === 0 ? (
+            <TableRow>
+              <TableCell
+                colSpan={6}
+                className="h-32 text-center text-[var(--primary)] animate-pulse"
+              >
+                <div className="flex items-center justify-center">
+                  <Store size={32} />
+                </div>
+              </TableCell>
+            </TableRow>
+          ) : filtered.length === 0 ? (
             <TableRow>
               <TableCell
                 colSpan={6}
