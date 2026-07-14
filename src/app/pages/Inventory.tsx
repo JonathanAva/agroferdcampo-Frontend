@@ -98,10 +98,12 @@ interface Branch {
 // ── Component ──────────────────────────────────────────────────────────────────
 import { Catalog } from './Catalog';
 import { CategoriesManager } from './CategoriesManager';
-import { Tag } from "lucide-react";
+import { SubcategoriesManager } from './SubcategoriesManager';
+import { TagsManager } from './TagsManager';
+import { Tag, ListTree, Hash } from "lucide-react";
 
 export function Inventory() {
-  const [activeTab, setActiveTab] = useState<'inventario' | 'catalogo' | 'categorias'>('inventario');
+  const [activeTab, setActiveTab] = useState<'inventario' | 'catalogo' | 'categorias' | 'subcategorias' | 'etiquetas'>('inventario');
 
   return (
     <div className="flex flex-col gap-6 h-full">
@@ -143,11 +145,31 @@ export function Inventory() {
           <Tag size={18} />
           Categorías
         </button>
+        <button
+          onClick={() => setActiveTab('subcategorias')}
+          className={`px-6 py-3 font-bold text-sm transition-all border-b-2 -mb-[2px] cursor-pointer flex items-center gap-2 ${
+            activeTab === 'subcategorias' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--text-sec)]'
+          }`}
+        >
+          <ListTree size={16} />
+          Subcategorías
+        </button>
+        <button
+          onClick={() => setActiveTab('etiquetas')}
+          className={`px-6 py-3 font-bold text-sm transition-all border-b-2 -mb-[2px] cursor-pointer flex items-center gap-2 ${
+            activeTab === 'etiquetas' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--text-sec)]'
+          }`}
+        >
+          <Hash size={16} />
+          Etiquetas
+        </button>
       </div>
 
       {activeTab === 'inventario' && <InventoryList />}
       {activeTab === 'catalogo' && <Catalog hideTitle={true} />}
       {activeTab === 'categorias' && <CategoriesManager />}
+      {activeTab === 'subcategorias' && <SubcategoriesManager />}
+      {activeTab === 'etiquetas' && <TagsManager />}
     </div>
   );
 }
