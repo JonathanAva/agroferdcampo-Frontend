@@ -97,9 +97,11 @@ interface Branch {
 
 // ── Component ──────────────────────────────────────────────────────────────────
 import { Catalog } from './Catalog';
+import { CategoriesManager } from './CategoriesManager';
+import { Tag } from "lucide-react";
 
 export function Inventory() {
-  const [activeTab, setActiveTab] = useState<'inventario' | 'catalogo'>('inventario');
+  const [activeTab, setActiveTab] = useState<'inventario' | 'catalogo' | 'categorias'>('inventario');
 
   return (
     <div className="flex flex-col gap-6 h-full">
@@ -132,10 +134,20 @@ export function Inventory() {
           <Store size={18} />
           Catálogo
         </button>
+        <button
+          onClick={() => setActiveTab('categorias')}
+          className={`px-6 py-3 font-bold text-sm transition-all border-b-2 -mb-[2px] cursor-pointer flex items-center gap-2 ${
+            activeTab === 'categorias' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--text-sec)]'
+          }`}
+        >
+          <Tag size={18} />
+          Categorías
+        </button>
       </div>
 
       {activeTab === 'inventario' && <InventoryList />}
       {activeTab === 'catalogo' && <Catalog hideTitle={true} />}
+      {activeTab === 'categorias' && <CategoriesManager />}
     </div>
   );
 }
@@ -625,6 +637,33 @@ function InventoryList() {
         className="rounded-xl border overflow-hidden shadow-sm"
         style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
       >
+        {/* Pagination Controls */}
+        <div className="flex items-center justify-between p-4 border-b border-[var(--border)] text-[var(--text-sec)] bg-muted/20">
+          <div className="text-sm font-medium">
+            Mostrando {inventory.length} de {total} productos (Página {page})
+          </div>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={page === 1}
+              onClick={() => setSearchParams(prev => { prev.set('page', String(page - 1)); return prev; })}
+              className="border-[var(--border)] hover:bg-[var(--hover)] text-[var(--text-main)]"
+            >
+              Anterior
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={page * limit >= total}
+              onClick={() => setSearchParams(prev => { prev.set('page', String(page + 1)); return prev; })}
+              className="border-[var(--border)] hover:bg-[var(--hover)] text-[var(--text-main)]"
+            >
+              Siguiente
+            </Button>
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -769,33 +808,6 @@ function InventoryList() {
               <Package size={32} />
             </div>
           )}
-
-          {/* Pagination Controls */}
-          <div className="flex items-center justify-between mt-4 text-[var(--text-sec)] px-4 pb-4">
-            <div className="text-sm font-medium">
-              Mostrando {inventory.length} de {total} productos (Página {page})
-            </div>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={page === 1}
-                onClick={() => setSearchParams(prev => { prev.set('page', String(page - 1)); return prev; })}
-                className="border-[var(--border)] hover:bg-[var(--hover)] text-[var(--text-main)]"
-              >
-                Anterior
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={page * limit >= total}
-                onClick={() => setSearchParams(prev => { prev.set('page', String(page + 1)); return prev; })}
-                className="border-[var(--border)] hover:bg-[var(--hover)] text-[var(--text-main)]"
-              >
-                Siguiente
-              </Button>
-            </div>
-          </div>
         </div>
       </div>
 

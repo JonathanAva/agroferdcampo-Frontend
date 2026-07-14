@@ -194,8 +194,6 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   const [editingProduct, setEditingProduct] = useState<CatalogProduct | null>(
     null,
   );
-  const [isCatDialogOpen, setIsCatDialogOpen] = useState(false);
-  const [newCatName, setNewCatName] = useState("");
   const [productImageUrl, setProductImageUrl] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
 
@@ -457,27 +455,6 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
     }
   };
 
-  const handleCreateCategory = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCatName.trim()) return;
-
-    setFormLoading(true);
-    try {
-      await apiRequest("/catalog/categories", {
-        method: "POST",
-        body: JSON.stringify({ name: newCatName.trim() }),
-      });
-      toast.success("Categoría creada exitosamente");
-      setNewCatName("");
-      setIsCatDialogOpen(false);
-      fetchData();
-    } catch (err: any) {
-      toast.error(err.message || "Error al crear la categoría");
-    } finally {
-      setFormLoading(false);
-    }
-  };
-
   const filtered = products;
 
 
@@ -507,14 +484,6 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
           )}
           {canCreate && (
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setIsCatDialogOpen(true)}
-                className="gap-2"
-              >
-                <Tag size={16} />
-                Nueva Categoría
-              </Button>
               <Button
                 onClick={() => openDialog()}
                 variant="default"
@@ -565,6 +534,33 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         className="rounded-xl border overflow-hidden shadow-sm"
         style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
       >
+        {/* Pagination Controls */}
+        <div className="flex items-center justify-between p-4 border-b border-[var(--border)] text-[var(--text-sec)] bg-muted/20">
+          <div className="text-sm font-medium">
+            Mostrando {products.length} de {total} productos (Página {page})
+          </div>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={page === 1}
+              onClick={() => setSearchParams(prev => { prev.set('page', String(page - 1)); return prev; })}
+              className="border-[var(--border)] hover:bg-[var(--hover)] text-[var(--text-main)]"
+            >
+              Anterior
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={page * limit >= total}
+              onClick={() => setSearchParams(prev => { prev.set('page', String(page + 1)); return prev; })}
+              className="border-[var(--border)] hover:bg-[var(--hover)] text-[var(--text-main)]"
+            >
+              Siguiente
+            </Button>
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -692,33 +688,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         </TableBody>
       </Table>
 
-      {/* Pagination Controls */}
-      <div className="flex items-center justify-between mt-4 text-[var(--text-sec)] px-4 pb-4">
-        <div className="text-sm font-medium">
-          Mostrando {products.length} de {total} productos (Página {page})
         </div>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={page === 1}
-            onClick={() => setSearchParams(prev => { prev.set('page', String(page - 1)); return prev; })}
-            className="border-[var(--border)] hover:bg-[var(--hover)] text-[var(--text-main)]"
-          >
-            Anterior
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={page * limit >= total}
-            onClick={() => setSearchParams(prev => { prev.set('page', String(page + 1)); return prev; })}
-            className="border-[var(--border)] hover:bg-[var(--hover)] text-[var(--text-main)]"
-          >
-            Siguiente
-          </Button>
-        </div>
-      </div>
-      </div>
       </div>
 
 
@@ -1289,108 +1259,6 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
               </Button>
             </DialogFooter>
           </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog Gestionar Categorías */}
-      <Dialog open={isCatDialogOpen} onOpenChange={setIsCatDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Gestionar Categorías</DialogTitle>
-            <DialogDescription>
-              Crea o elimina categorías para organizar tus productos.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="py-4 space-y-6">
-            {/* Formulario Crear */}
-            <form onSubmit={handleCreateCategory} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="catName">Nombre de la Nueva Categoría</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="catName"
-                    value={newCatName}
-                    onChange={(e) => setNewCatName(e.target.value)}
-                    placeholder="Ej: Fertilizantes..."
-                    required
-                  />
-                  <Button
-                    type="submit"
-                    disabled={formLoading}
-                    variant="default"
-                    size="icon"
-                  >
-                    {formLoading ? "..." : <Plus size={18} />}
-                  </Button>
-                </div>
-              </div>
-            </form>
-
-            <div className="space-y-3">
-              <Label>Categorías Existentes</Label>
-              <div
-                className="max-h-[200px] overflow-y-auto rounded-xl border p-2 space-y-1"
-                style={{
-                  borderColor: "var(--border)",
-                  backgroundColor: "var(--bg)",
-                }}
-              >
-                {categories.length === 0 && (
-                  <p
-                    className="text-xs text-center py-4 opacity-50"
-                    style={{ color: "var(--text-sec)" }}
-                  >
-                    Sin categorías registradas.
-                  </p>
-                )}
-                {categories.map((cat) => (
-                  <div
-                    key={cat.id}
-                    className="flex items-center justify-between p-2 rounded-lg hover:bg-[var(--card)] transition-colors group"
-                  >
-                    <span
-                      className="text-sm font-medium"
-                      style={{ color: "var(--text-main)" }}
-                    >
-                      {cat.name}
-                    </span>
-                    <button
-                      onClick={async () => {
-                        if (!confirm(`¿Eliminar categoría "${cat.name}"?`))
-                          return;
-                        try {
-                          await apiRequest(`/catalog/categories/${cat.id}`, {
-                            method: "DELETE",
-                          });
-                          toast.success("Categoría eliminada");
-                          fetchData();
-                        } catch (err: any) {
-                          toast.error(
-                            err.message || "No se puede eliminar la categoría",
-                          );
-                        }
-                      }}
-                      className="p-1.5 rounded-md text-red-400 hover:text-red-600 hover:bg-red-50 transition-all"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => setIsCatDialogOpen(false)}
-            >
-              Cerrar
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
