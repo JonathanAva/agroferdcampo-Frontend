@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   FileText, AlertCircle, Plus, Eye, History, CreditCard, DollarSign, Upload, X as XIcon
 } from 'lucide-react';
@@ -175,7 +175,7 @@ export function Payables() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
+              {loading && purchases.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="h-32 text-center text-[var(--text-sec)] animate-pulse">
                     Cargando cuentas por pagar...

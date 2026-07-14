@@ -436,13 +436,7 @@ function InventoryList() {
     );
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64 text-primary animate-pulse">
-        <Package size={48} />
-      </div>
-    );
-  }
+
 
   return (
     <div className="animate-in fade-in duration-500 pb-10">
@@ -762,12 +756,17 @@ function InventoryList() {
               ))}
             </TableBody>
           </Table>
-          {filteredInventory.length === 0 && (
+          {filteredInventory.length === 0 && !loading && (
             <div
               className="p-12 text-center"
               style={{ color: "var(--text-sec)" }}
             >
               No se encontraron productos en el inventario.
+            </div>
+          )}
+          {loading && inventory.length === 0 && (
+            <div className="flex items-center justify-center h-32 text-[var(--primary)] animate-pulse">
+              <Package size={32} />
             </div>
           )}
 

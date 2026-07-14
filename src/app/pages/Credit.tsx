@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search, FileText, Filter, CheckCircle2,
   CreditCard, DollarSign, AlertCircle, Plus, Eye, History, Users as UsersIcon, RefreshCcw, Trash2, Printer,
@@ -411,7 +411,7 @@ export function Credit() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
+              {loading && groupedCredits.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="h-32 text-center text-[var(--text-sec)] animate-pulse">
                     Cargando cartera...
