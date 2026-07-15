@@ -15,6 +15,9 @@ import {
   ArrowDownLeft,
   Plus,
   CalendarClock,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 import { apiRequest } from "../config/api";
@@ -233,6 +236,10 @@ function InventoryList() {
   // Lotes (trazabilidad de vencimiento)
   const [lots, setLots] = useState<Lot[]>([]);
   const [loadingLots, setLoadingLots] = useState(false);
+  const [editingLotId, setEditingLotId] = useState<number | null>(null);
+  const [editExpirationDate, setEditExpirationDate] = useState("");
+  const [editLotCode, setEditLotCode] = useState("");
+  const [savingLot, setSavingLot] = useState(false);
 
   // 4. Form states
   const [adjustData, setAdjustData] = useState({
@@ -427,6 +434,39 @@ function InventoryList() {
   };
 
   const isLotExpired = (lot: Lot) => !!lot.expirationDate && new Date(lot.expirationDate) < new Date();
+
+  const startEditLot = (lot: Lot) => {
+    setEditingLotId(lot.id);
+    setEditExpirationDate(lot.expirationDate ? lot.expirationDate.slice(0, 10) : "");
+    setEditLotCode(lot.lotCode || "");
+  };
+
+  const cancelEditLot = () => {
+    setEditingLotId(null);
+    setEditExpirationDate("");
+    setEditLotCode("");
+  };
+
+  const handleSaveLotEdit = async () => {
+    if (!editingLotId) return;
+    setSavingLot(true);
+    try {
+      await apiRequest(`/inventory/lots/${editingLotId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          expirationDate: editExpirationDate || null,
+          lotCode: editLotCode || null,
+        }),
+      });
+      toast.success("Lote actualizado");
+      cancelEditLot();
+      if (selectedItem) fetchLots(selectedItem.product.id);
+    } catch (error: any) {
+      toast.error(error.message || "Error al actualizar el lote");
+    } finally {
+      setSavingLot(false);
+    }
+  };
 
   const fetchAlerts = async () => {
     setLoadingAlerts(true);
@@ -1234,27 +1274,88 @@ function InventoryList() {
                     <TableHead className="text-xs">Cantidad</TableHead>
                     <TableHead className="text-xs">Vence</TableHead>
                     <TableHead className="text-xs">Lote</TableHead>
+                    <TableHead className="text-xs text-center">Acción</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {lots.map((lot) => (
-                    <TableRow key={lot.id}>
-                      <TableCell className="text-xs font-bold">
-                        {Number(lot.quantity)} {selectedItem?.product.unit}
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        {lot.expirationDate ? (
-                          <Badge variant={isLotExpired(lot) ? "destructive" : "outline"}>
-                            {new Date(lot.expirationDate).toLocaleDateString()}
-                            {isLotExpired(lot) ? " (vencido)" : ""}
-                          </Badge>
-                        ) : (
-                          <span className="opacity-50">Sin fecha</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-xs">{lot.lotCode || "—"}</TableCell>
-                    </TableRow>
-                  ))}
+                  {lots.map((lot) =>
+                    editingLotId === lot.id ? (
+                      <TableRow key={lot.id}>
+                        <TableCell className="text-xs font-bold">
+                          {Number(lot.quantity)} {selectedItem?.product.unit}
+                        </TableCell>
+                        <TableCell className="p-1">
+                          <Input
+                            type="date"
+                            value={editExpirationDate}
+                            onChange={(e) => setEditExpirationDate(e.target.value)}
+                            className="h-8 text-xs bg-[var(--card)]"
+                          />
+                        </TableCell>
+                        <TableCell className="p-1">
+                          <Input
+                            type="text"
+                            placeholder="Opcional"
+                            value={editLotCode}
+                            onChange={(e) => setEditLotCode(e.target.value)}
+                            className="h-8 text-xs bg-[var(--card)]"
+                          />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={handleSaveLotEdit}
+                              disabled={savingLot}
+                              className="h-7 w-7 text-emerald-500 hover:bg-emerald-50"
+                              title="Guardar"
+                            >
+                              <Check size={14} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={cancelEditLot}
+                              disabled={savingLot}
+                              className="h-7 w-7 text-[var(--text-sec)]"
+                              title="Cancelar"
+                            >
+                              <X size={14} />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      <TableRow key={lot.id}>
+                        <TableCell className="text-xs font-bold">
+                          {Number(lot.quantity)} {selectedItem?.product.unit}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {lot.expirationDate ? (
+                            <Badge variant={isLotExpired(lot) ? "destructive" : "outline"}>
+                              {new Date(lot.expirationDate).toLocaleDateString()}
+                              {isLotExpired(lot) ? " (vencido)" : ""}
+                            </Badge>
+                          ) : (
+                            <span className="opacity-50">Sin fecha</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs">{lot.lotCode || "—"}</TableCell>
+                        <TableCell className="text-center">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => startEditLot(lot)}
+                            className="h-7 w-7 text-[var(--primary)]"
+                            title="Editar fecha/lote"
+                          >
+                            <Pencil size={14} />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  )}
                 </TableBody>
               </Table>
             )}

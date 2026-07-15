@@ -444,7 +444,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       categoryId: product.category?.id ? String(product.category.id) : "",
       subcategoryId: product.subcategory?.id ? String(product.subcategory.id) : "",
       tagIds: product.tags?.map((t) => String(t.id)) || [],
-      expirationDate: product.expirationDate ? product.expirationDate.slice(0, 10) : "",
+      expirationDate: "",
       costPrice: product.costPrice?.toString() || "",
       trackStock: product.trackStock,
       prices: product.prices.map((p) => ({
