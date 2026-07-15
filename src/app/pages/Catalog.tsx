@@ -22,7 +22,7 @@ import { Badge } from "../components/ui/badge";
 import { InlinePills } from "../components/ui/inline-pills";
 import { Button } from "../components/ui/button";
 import { Switch } from "../components/ui/switch";
-import { Edit } from "lucide-react";
+import { Edit, Copy } from "lucide-react";
 import { cn } from "../components/ui/utils";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -429,6 +429,38 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         stockRows: [],
       });
     }
+    setIsDialogOpen(true);
+  };
+
+  const openCopyDialog = (product: CatalogProduct) => {
+    setEditingProduct(null);
+    setProductImageUrl(product.imageUrl || null);
+    reset({
+      name: `${product.name} (Copia)`,
+      internalCode: "",
+      barcode: "",
+      description: product.description || "",
+      unit: product.unit,
+      categoryId: product.category?.id ? String(product.category.id) : "",
+      subcategoryId: product.subcategory?.id ? String(product.subcategory.id) : "",
+      tagIds: product.tags?.map((t) => String(t.id)) || [],
+      expirationDate: product.expirationDate ? product.expirationDate.slice(0, 10) : "",
+      costPrice: product.costPrice?.toString() || "",
+      trackStock: product.trackStock,
+      prices: product.prices.map((p) => ({
+        priceType: p.priceType,
+        branchId: p.branchId === null ? "global" : String(p.branchId),
+        price: String(p.price),
+      })),
+      units: product.units ? product.units.map((u) => ({
+        unit: u.unit,
+        factor: String(u.factor),
+        priceDetalle: u.priceDetalle ? String(u.priceDetalle) : "",
+        priceMayorista: u.priceMayorista ? String(u.priceMayorista) : "",
+        barcode: "",
+      })) : [],
+      stockRows: [],
+    });
     setIsDialogOpen(true);
   };
 
@@ -875,8 +907,18 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                       size="icon"
                       onClick={() => openDialog(product)}
                       className="h-8 w-8 text-[var(--primary)] hover:bg-[var(--primary)]/10 rounded-lg"
+                      title="Editar"
                     >
                       <Edit size={16} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => openCopyDialog(product)}
+                      className="h-8 w-8 text-[var(--primary)] hover:bg-[var(--primary)]/10 rounded-lg"
+                      title="Copiar Item"
+                    >
+                      <Copy size={16} />
                     </Button>
                     {isOwner && (
                       <Button
