@@ -20,12 +20,26 @@ export interface CreatePurchaseDto {
 export interface ReceivePurchaseItemDto {
   productId: number;
   received: number;
+  expirationDate?: string;
+  lotCode?: string;
 }
 
 export interface ReceivePurchaseDto {
   notes?: string;
   items: ReceivePurchaseItemDto[];
   linkedCashEntryId?: number;
+}
+
+export interface Lot {
+  id: number;
+  productId: number;
+  branchId: number;
+  lotCode: string | null;
+  quantity: number;
+  unitCost: number | null;
+  expirationDate: string | null;
+  purchaseReceiptItemId: number | null;
+  createdAt: string;
 }
 
 export interface PayPurchaseDto {
