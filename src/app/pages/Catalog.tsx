@@ -870,7 +870,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                 </TableCell>
                 <TableCell>
                   <span className="text-xs font-mono font-bold text-[var(--text-sec)]">
-                    {product.unit}
+                    {product.unit?.replace('_', ' ')}
                   </span>
                 </TableCell>
                 <TableCell className="text-right">
@@ -879,7 +879,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                       ${getPublicPrice(product.prices)}
                     </span>
                     <span className="text-[9px] font-bold opacity-40 text-[var(--text-sec)]">
-                      / {product.unit}
+                      / {product.unit?.replace('_', ' ')}
                     </span>
                   </div>
                 </TableCell>
@@ -1065,7 +1065,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                         <SelectContent>
                           {UNITS.map((u) => (
                             <SelectItem key={u} value={u}>
-                              {u}
+                              {u?.replace('_', ' ')}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -1284,7 +1284,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                               <SelectContent>
                                 {PRICE_TYPES.map((t) => (
                                   <SelectItem key={t} value={t}>
-                                    {t}
+                                    {t?.replace('_', ' ')}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -1405,7 +1405,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                               <SelectContent>
                                 {UNITS.map((t) => (
                                   <SelectItem key={t} value={t}>
-                                    {t}
+                                    {t?.replace('_', ' ')}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
