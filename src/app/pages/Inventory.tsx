@@ -14,10 +14,15 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   Plus,
+  CalendarClock,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 import { apiRequest } from "../config/api";
 import { formatSmartInventory } from "../utils/inventory";
+import { Lot } from "../services/purchases.service";
 
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
@@ -103,7 +108,7 @@ import { TagsManager } from './TagsManager';
 import { Tag, ListTree, Hash } from "lucide-react";
 
 export function Inventory() {
-  const [activeTab, setActiveTab] = useState<'inventario' | 'catalogo' | 'categorias' | 'subcategorias' | 'etiquetas'>('inventario');
+  const [activeTab, setActiveTab] = useState<'inventario' | 'catalogo' | 'categorias' | 'subcategorias' | 'etiquetas' | 'vencidos'>('inventario');
 
   return (
     <div className="flex flex-col gap-6 h-full">
@@ -163,6 +168,15 @@ export function Inventory() {
           <Hash size={16} />
           Etiquetas
         </button>
+        <button
+          onClick={() => setActiveTab('vencidos')}
+          className={`px-6 py-3 font-bold text-sm transition-all border-b-2 -mb-[2px] cursor-pointer flex items-center gap-2 ${
+            activeTab === 'vencidos' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--text-sec)]'
+          }`}
+        >
+          <AlertCircle size={18} />
+          Vencidos
+        </button>
       </div>
 
       {activeTab === 'inventario' && <InventoryList />}
@@ -170,6 +184,7 @@ export function Inventory() {
       {activeTab === 'categorias' && <CategoriesManager />}
       {activeTab === 'subcategorias' && <SubcategoriesManager />}
       {activeTab === 'etiquetas' && <TagsManager />}
+      {activeTab === 'vencidos' && <ExpiredProductsList />}
     </div>
   );
 }
@@ -214,8 +229,17 @@ function InventoryList() {
   const [isNewEntryOpen, setIsNewEntryOpen] = useState(false);
   const [isMinStockOpen, setIsMinStockOpen] = useState(false);
   const [isAlertsOpen, setIsAlertsOpen] = useState(false);
+  const [isLotsOpen, setIsLotsOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+
+  // Lotes (trazabilidad de vencimiento)
+  const [lots, setLots] = useState<Lot[]>([]);
+  const [loadingLots, setLoadingLots] = useState(false);
+  const [editingLotId, setEditingLotId] = useState<number | null>(null);
+  const [editExpirationDate, setEditExpirationDate] = useState("");
+  const [editLotCode, setEditLotCode] = useState("");
+  const [savingLot, setSavingLot] = useState(false);
 
   // 4. Form states
   const [adjustData, setAdjustData] = useState({
@@ -227,6 +251,7 @@ function InventoryList() {
     toBranchId: "",
     quantity: "",
     reference: "",
+    lotId: "",
   });
 
   // 5. New Entry Form states
@@ -316,11 +341,12 @@ function InventoryList() {
           productId: selectedItem.product.id,
           quantity: Number(transferData.quantity),
           reference: transferData.reference || "Traslado entre sucursales",
+          ...(transferData.lotId ? { lotId: Number(transferData.lotId) } : {}),
         }),
       });
       toast.success("Traslado completado");
       setIsTransferOpen(false);
-      setTransferData({ toBranchId: "", quantity: "", reference: "" });
+      setTransferData({ toBranchId: "", quantity: "", reference: "", lotId: "" });
       fetchData();
     } catch (error: any) {
       toast.error(error.message || "Error al realizar traslado");
@@ -391,6 +417,54 @@ function InventoryList() {
       toast.error(error.message || "Error al actualizar stock mínimo");
     } finally {
       setFormLoading(false);
+    }
+  };
+
+  const fetchLots = async (productId: number) => {
+    setLoadingLots(true);
+    try {
+      const data = await apiRequest<Lot[]>(`/inventory/lots/${productId}`);
+      setLots(data || []);
+    } catch (error: any) {
+      toast.error("Error al cargar los lotes");
+      setLots([]);
+    } finally {
+      setLoadingLots(false);
+    }
+  };
+
+  const isLotExpired = (lot: Lot) => !!lot.expirationDate && new Date(lot.expirationDate) < new Date();
+
+  const startEditLot = (lot: Lot) => {
+    setEditingLotId(lot.id);
+    setEditExpirationDate(lot.expirationDate ? lot.expirationDate.slice(0, 10) : "");
+    setEditLotCode(lot.lotCode || "");
+  };
+
+  const cancelEditLot = () => {
+    setEditingLotId(null);
+    setEditExpirationDate("");
+    setEditLotCode("");
+  };
+
+  const handleSaveLotEdit = async () => {
+    if (!editingLotId) return;
+    setSavingLot(true);
+    try {
+      await apiRequest(`/inventory/lots/${editingLotId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          expirationDate: editExpirationDate || null,
+          lotCode: editLotCode || null,
+        }),
+      });
+      toast.success("Lote actualizado");
+      cancelEditLot();
+      if (selectedItem) fetchLots(selectedItem.product.id);
+    } catch (error: any) {
+      toast.error(error.message || "Error al actualizar el lote");
+    } finally {
+      setSavingLot(false);
     }
   };
 
@@ -804,13 +878,29 @@ function InventoryList() {
                           size="icon"
                           onClick={() => {
                             setSelectedItem(item);
+                            setTransferData({ toBranchId: "", quantity: "", reference: "", lotId: "" });
+                            fetchLots(item.product.id);
                             setIsTransferOpen(true);
                           }}
                           className="h-8 w-8 text-emerald-500 hover:bg-emerald-50 rounded-lg"
+                          title="Transferir"
                         >
                           <ArrowLeftRight size={18} />
                         </Button>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setSelectedItem(item);
+                          fetchLots(item.product.id);
+                          setIsLotsOpen(true);
+                        }}
+                        className="h-8 w-8 text-sky-500 hover:bg-sky-50 rounded-lg"
+                        title="Ver Lotes / Vencimientos"
+                      >
+                        <CalendarClock size={18} />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -1098,6 +1188,37 @@ function InventoryList() {
                       placeholder="Ej. Reabastecimiento urgente..."
                     />
                   </div>
+
+                  {lots.length > 0 && (
+                    <div className="space-y-2">
+                      <Label>Lote de origen</Label>
+                      <Select
+                        value={transferData.lotId || "fefo"}
+                        onValueChange={(v) =>
+                          setTransferData({ ...transferData, lotId: v === "fefo" ? "" : v })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Automático (FEFO)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="fefo">Automático (el que vence primero)</SelectItem>
+                          {lots.map((lot) => (
+                            <SelectItem key={lot.id} value={String(lot.id)}>
+                              {Number(lot.quantity)} {selectedItem.product.unit} —{" "}
+                              {lot.expirationDate
+                                ? `vence ${new Date(lot.expirationDate).toLocaleDateString()}`
+                                : "sin fecha"}
+                              {lot.lotCode ? ` (${lot.lotCode})` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[10px] opacity-60 ml-1">
+                        Elige un lote específico si sabes físicamente cuál estás moviendo; si no, se toma automáticamente el más próximo a vencer.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1123,6 +1244,131 @@ function InventoryList() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Modal Ver Lotes / Vencimientos */}
+      <Dialog open={isLotsOpen} onOpenChange={setIsLotsOpen}>
+        <DialogContent
+          className="sm:max-w-lg w-full"
+          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--text-main)" }}
+        >
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black">Lotes y Vencimientos</DialogTitle>
+            <DialogDescription>
+              {selectedItem?.product.name} — desglose del stock por lote de ingreso.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            {loadingLots ? (
+              <div className="flex items-center justify-center h-24 text-[var(--primary)] animate-pulse">
+                <CalendarClock size={28} />
+              </div>
+            ) : lots.length === 0 ? (
+              <p className="text-sm text-center py-8" style={{ color: "var(--text-sec)" }}>
+                Este producto no tiene lotes registrados en esta sucursal.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">Cantidad</TableHead>
+                    <TableHead className="text-xs">Vence</TableHead>
+                    <TableHead className="text-xs">Lote</TableHead>
+                    <TableHead className="text-xs text-center">Acción</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {lots.map((lot) =>
+                    editingLotId === lot.id ? (
+                      <TableRow key={lot.id}>
+                        <TableCell className="text-xs font-bold">
+                          {Number(lot.quantity)} {selectedItem?.product.unit}
+                        </TableCell>
+                        <TableCell className="p-1">
+                          <Input
+                            type="date"
+                            value={editExpirationDate}
+                            onChange={(e) => setEditExpirationDate(e.target.value)}
+                            className="h-8 text-xs bg-[var(--card)]"
+                          />
+                        </TableCell>
+                        <TableCell className="p-1">
+                          <Input
+                            type="text"
+                            placeholder="Opcional"
+                            value={editLotCode}
+                            onChange={(e) => setEditLotCode(e.target.value)}
+                            className="h-8 text-xs bg-[var(--card)]"
+                          />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={handleSaveLotEdit}
+                              disabled={savingLot}
+                              className="h-7 w-7 text-emerald-500 hover:bg-emerald-50"
+                              title="Guardar"
+                            >
+                              <Check size={14} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={cancelEditLot}
+                              disabled={savingLot}
+                              className="h-7 w-7 text-[var(--text-sec)]"
+                              title="Cancelar"
+                            >
+                              <X size={14} />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      <TableRow key={lot.id}>
+                        <TableCell className="text-xs font-bold">
+                          {Number(lot.quantity)} {selectedItem?.product.unit}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {lot.expirationDate ? (
+                            <Badge variant={isLotExpired(lot) ? "destructive" : "outline"}>
+                              {new Date(lot.expirationDate).toLocaleDateString()}
+                              {isLotExpired(lot) ? " (vencido)" : ""}
+                            </Badge>
+                          ) : (
+                            <span className="opacity-50">Sin fecha</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs">{lot.lotCode || "—"}</TableCell>
+                        <TableCell className="text-center">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => startEditLot(lot)}
+                            className="h-7 w-7 text-[var(--primary)]"
+                            title="Editar fecha/lote"
+                          >
+                            <Pencil size={14} />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  )}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsLotsOpen(false)}>
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Modal Fijar Stock Mínimo */}
       <Dialog open={isMinStockOpen} onOpenChange={setIsMinStockOpen}>
         <DialogContent className="sm:max-w-sm w-full" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--text-main)" }}>
@@ -1190,6 +1436,294 @@ function InventoryList() {
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+interface ExpiredLot {
+  lotId: number;
+  productId: number;
+  productName: string;
+  categoryName: string;
+  unit: string;
+  lotCode: string | null;
+  quantity: number;
+  expirationDate: string;
+  costPrice: number;
+  lostValue: number;
+}
+
+interface ExpiringSoonLot {
+  lotId: number;
+  productId: number;
+  productName: string;
+  categoryName: string;
+  unit: string;
+  lotCode: string | null;
+  quantity: number;
+  expirationDate: string;
+  daysRemaining: number;
+  costPrice: number;
+  valueAtRisk: number;
+}
+
+function ExpiredProductsList() {
+  const [view, setView] = useState<'vencidos' | 'por_vencer'>('vencidos');
+
+  const [lots, setLots] = useState<ExpiredLot[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [writingOffId, setWritingOffId] = useState<number | null>(null);
+  const [confirmLot, setConfirmLot] = useState<ExpiredLot | null>(null);
+  const [reason, setReason] = useState("");
+
+  const [expiringSoon, setExpiringSoon] = useState<ExpiringSoonLot[]>([]);
+  const [loadingExpiringSoon, setLoadingExpiringSoon] = useState(true);
+
+  const fetchExpired = async () => {
+    setLoading(true);
+    try {
+      const data = await apiRequest<ExpiredLot[]>("/inventory/expired");
+      setLots(data || []);
+    } catch (error) {
+      toast.error("Error al cargar productos vencidos");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchExpiringSoon = async () => {
+    setLoadingExpiringSoon(true);
+    try {
+      const data = await apiRequest<ExpiringSoonLot[]>("/inventory/expiring-soon?days=30");
+      setExpiringSoon(data || []);
+    } catch (error) {
+      toast.error("Error al cargar productos por vencer");
+    } finally {
+      setLoadingExpiringSoon(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchExpired();
+    fetchExpiringSoon();
+  }, []);
+
+  const totalLostValue = lots.reduce((sum, l) => sum + Number(l.lostValue), 0);
+  const totalValueAtRisk = expiringSoon.reduce((sum, l) => sum + Number(l.valueAtRisk), 0);
+
+  const handleWriteOff = async () => {
+    if (!confirmLot) return;
+    setWritingOffId(confirmLot.lotId);
+    try {
+      await apiRequest(`/inventory/lots/${confirmLot.lotId}/write-off`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason || undefined }),
+      });
+      toast.success("Lote dado de baja correctamente");
+      setConfirmLot(null);
+      setReason("");
+      fetchExpired();
+    } catch (error: any) {
+      toast.error(error.message || "Error al dar de baja el lote");
+    } finally {
+      setWritingOffId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2 p-1 rounded-xl bg-[var(--bg)] border border-[var(--border)] w-fit">
+        <button
+          onClick={() => setView('vencidos')}
+          className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+            view === 'vencidos' ? 'bg-rose-500 text-white' : 'text-[var(--text-sec)]'
+          }`}
+        >
+          Ya Vencidos ({lots.length})
+        </button>
+        <button
+          onClick={() => setView('por_vencer')}
+          className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+            view === 'por_vencer' ? 'bg-amber-500 text-white' : 'text-[var(--text-sec)]'
+          }`}
+        >
+          Por Vencer ({expiringSoon.length})
+        </button>
+      </div>
+
+      {view === 'vencidos' ? (
+      <>
+      <div className="p-4 rounded-xl border border-rose-200 bg-rose-50 dark:bg-rose-500/10 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-bold text-[var(--text-main)]">Valor perdido por vencimiento</p>
+          <p className="text-xs text-[var(--text-sec)]">
+            Suma de costo × cantidad de todos los lotes vencidos que siguen en el sistema
+          </p>
+        </div>
+        <span className="text-2xl font-black text-rose-500">${totalLostValue.toFixed(2)}</span>
+      </div>
+
+      <div className="rounded-xl border border-[var(--border)] overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Producto</TableHead>
+              <TableHead>Lote</TableHead>
+              <TableHead className="text-center">Cantidad Vencida</TableHead>
+              <TableHead>Venció el</TableHead>
+              <TableHead className="text-right">Valor Perdido</TableHead>
+              <TableHead className="text-center">Acción</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {lots.map((lot) => (
+              <TableRow key={lot.lotId}>
+                <TableCell>
+                  <div className="flex flex-col">
+                    <span className="font-bold">{lot.productName}</span>
+                    <span className="text-[10px] opacity-50">{lot.categoryName}</span>
+                  </div>
+                </TableCell>
+                <TableCell>{lot.lotCode || "—"}</TableCell>
+                <TableCell className="text-center font-bold">
+                  {Number(lot.quantity)} {lot.unit}
+                </TableCell>
+                <TableCell className="text-rose-500 font-bold">
+                  {new Date(lot.expirationDate).toLocaleDateString()}
+                </TableCell>
+                <TableCell className="text-right font-bold text-rose-500">
+                  ${Number(lot.lostValue).toFixed(2)}
+                </TableCell>
+                <TableCell className="text-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setConfirmLot(lot);
+                      setReason("");
+                    }}
+                    className="text-rose-500 border-rose-300 hover:bg-rose-50"
+                  >
+                    <Trash2 size={14} className="mr-1" /> Dar de Baja
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        {!loading && lots.length === 0 && (
+          <div className="p-12 text-center text-[var(--text-sec)]">
+            No hay productos vencidos en esta sucursal.
+          </div>
+        )}
+        {loading && (
+          <div className="flex items-center justify-center h-32 text-[var(--primary)] animate-pulse">
+            <AlertCircle size={32} />
+          </div>
+        )}
+      </div>
+      </>
+      ) : (
+      <>
+      <div className="p-4 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-500/10 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-bold text-[var(--text-main)]">Valor en riesgo (próximos 30 días)</p>
+          <p className="text-xs text-[var(--text-sec)]">
+            Reacciona a tiempo: promociónalos, priorízalos en el POS o transfiérelos a otra sucursal antes de que se pierdan
+          </p>
+        </div>
+        <span className="text-2xl font-black text-amber-500">${totalValueAtRisk.toFixed(2)}</span>
+      </div>
+
+      <div className="rounded-xl border border-[var(--border)] overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Producto</TableHead>
+              <TableHead>Lote</TableHead>
+              <TableHead className="text-center">Cantidad</TableHead>
+              <TableHead>Vence el</TableHead>
+              <TableHead className="text-center">Días Restantes</TableHead>
+              <TableHead className="text-right">Valor en Riesgo</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {expiringSoon.map((lot) => (
+              <TableRow key={lot.lotId}>
+                <TableCell>
+                  <div className="flex flex-col">
+                    <span className="font-bold">{lot.productName}</span>
+                    <span className="text-[10px] opacity-50">{lot.categoryName}</span>
+                  </div>
+                </TableCell>
+                <TableCell>{lot.lotCode || "—"}</TableCell>
+                <TableCell className="text-center font-bold">
+                  {Number(lot.quantity)} {lot.unit}
+                </TableCell>
+                <TableCell>{new Date(lot.expirationDate).toLocaleDateString()}</TableCell>
+                <TableCell className="text-center">
+                  <Badge variant={lot.daysRemaining <= 7 ? "destructive" : "secondary"}>
+                    {lot.daysRemaining} día{lot.daysRemaining === 1 ? "" : "s"}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right font-bold text-amber-500">
+                  ${Number(lot.valueAtRisk).toFixed(2)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        {!loadingExpiringSoon && expiringSoon.length === 0 && (
+          <div className="p-12 text-center text-[var(--text-sec)]">
+            No hay productos por vencer en los próximos 30 días.
+          </div>
+        )}
+        {loadingExpiringSoon && (
+          <div className="flex items-center justify-center h-32 text-[var(--primary)] animate-pulse">
+            <AlertCircle size={32} />
+          </div>
+        )}
+      </div>
+      </>
+      )}
+
+      <Dialog open={!!confirmLot} onOpenChange={(open) => !open && setConfirmLot(null)}>
+        <DialogContent
+          className="sm:max-w-md w-full"
+          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--text-main)" }}
+        >
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black flex items-center gap-2">
+              <Trash2 className="text-rose-500" size={20} />
+              Dar de Baja Lote Vencido
+            </DialogTitle>
+            <DialogDescription>
+              Esto pondrá en 0 las {confirmLot ? Number(confirmLot.quantity) : ""} {confirmLot?.unit} vencidas de
+              "{confirmLot?.productName}" y las descontará del inventario. No se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-2">
+            <Label>Motivo (opcional)</Label>
+            <Input
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Ej. Desechado por vencimiento en bodega"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmLot(null)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleWriteOff}
+              disabled={writingOffId === confirmLot?.lotId}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {writingOffId === confirmLot?.lotId ? "Procesando..." : "Confirmar Baja"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

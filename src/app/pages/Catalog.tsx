@@ -78,7 +78,7 @@ interface CatalogProduct {
   category?: { id: number; name: string };
   subcategory?: { id: number; name: string; categoryId: number };
   tags?: { id: number; name: string }[];
-  expirationDate?: string | null;
+  nearestExpirationDate?: string | null;
   prices: ProductPrice[];
   units?: {
     id: number;
@@ -390,7 +390,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         categoryId: product.category?.id ? String(product.category.id) : "",
         subcategoryId: product.subcategory?.id ? String(product.subcategory.id) : "",
         tagIds: product.tags?.map((t) => String(t.id)) || [],
-        expirationDate: product.expirationDate ? product.expirationDate.slice(0, 10) : "",
+        expirationDate: "",
         costPrice: product.costPrice?.toString() || "",
         trackStock: product.trackStock,
         prices: product.prices.map((p) => ({
@@ -444,7 +444,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       categoryId: product.category?.id ? String(product.category.id) : "",
       subcategoryId: product.subcategory?.id ? String(product.subcategory.id) : "",
       tagIds: product.tags?.map((t) => String(t.id)) || [],
-      expirationDate: product.expirationDate ? product.expirationDate.slice(0, 10) : "",
+      expirationDate: "",
       costPrice: product.costPrice?.toString() || "",
       trackStock: product.trackStock,
       prices: product.prices.map((p) => ({
@@ -496,7 +496,6 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       categoryId: data.categoryId ? Number(data.categoryId) : null,
       subcategoryId: data.subcategoryId ? Number(data.subcategoryId) : null,
       tagIds: data.tagIds.map(Number),
-      expirationDate: data.expirationDate || null,
       costPrice: data.costPrice ? Number(data.costPrice) : null,
       internalCode: data.internalCode?.trim() || undefined,
       barcode: data.barcode?.trim() || undefined,
@@ -512,6 +511,8 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
     };
 
     if (!editingProduct) {
+      body.expirationDate = data.expirationDate || null;
+
       body.prices = data.prices.map((p) => ({
         priceType: p.priceType,
         branchId: p.branchId === "global" ? null : Number(p.branchId),
@@ -837,6 +838,18 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                       <span className="text-[10px] font-mono font-bold opacity-40 uppercase tracking-tighter text-[var(--text-sec)]">
                         {product.internalCode || product.barcode || "SIN-CÓDIGO"}
                       </span>
+                      {product.nearestExpirationDate && (() => {
+                        const days = Math.ceil(
+                          (new Date(product.nearestExpirationDate).getTime() - Date.now()) / 86400000
+                        );
+                        return (
+                          <span
+                            className={`text-[9px] font-bold ${days < 0 ? "text-red-500" : days <= 30 ? "text-amber-500" : "opacity-40"}`}
+                          >
+                            {days < 0 ? "Vencido" : "Vence"}: {new Date(product.nearestExpirationDate).toLocaleDateString()}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                 </TableCell>
@@ -1102,17 +1115,21 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-sm font-bold">
-                        Fecha de Vencimiento
-                      </Label>
-                      <Input
-                        type="date"
-                        {...register("expirationDate")}
-                        className="h-11 rounded-xl bg-[var(--card)]"
-                      />
-                      <p className="text-[10px] opacity-60 ml-1">Opcional</p>
-                    </div>
+                    {!editingProduct && (
+                      <div className="space-y-2">
+                        <Label className="text-sm font-bold">
+                          Fecha de Vencimiento del Lote Inicial
+                        </Label>
+                        <Input
+                          type="date"
+                          {...register("expirationDate")}
+                          className="h-11 rounded-xl bg-[var(--card)]"
+                        />
+                        <p className="text-[10px] opacity-60 ml-1">
+                          Opcional. Aplica solo al stock inicial; las compras posteriores tienen su propia fecha por lote.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">

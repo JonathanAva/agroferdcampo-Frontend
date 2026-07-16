@@ -124,6 +124,13 @@ export interface ManagerDashboardResponse {
     asistenciaHoyTotal: number;
     permisosPendientes: number;
   };
+  expiracion: {
+    valorVencido: number;
+    cantidadLotesVencidos: number;
+    valorPorVencer: number;
+    cantidadLotesPorVencer: number;
+    valorEnRiesgo: number;
+  };
 }
 
 export const reportsService = {

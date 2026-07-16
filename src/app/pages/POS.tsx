@@ -255,6 +255,7 @@ export function POS() {
   const [categories, setCategories] = useState<POSCategory[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<number | null>(null);
+  const [showExpiringSoonOnly, setShowExpiringSoonOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -709,7 +710,8 @@ export function POS() {
       const mapped = items.map((p: any) => {
         // Handle inventory differences: findAll flattens it, search keeps it as array
         const inv = Array.isArray(p.inventory) ? p.inventory[0] : p.inventory;
-        const stockValue = inv?.quantity ?? p.stock ?? 0;
+        // sellableStock excluye lotes ya vencidos (lo que realmente se puede vender por POS)
+        const stockValue = p.sellableStock ?? inv?.quantity ?? p.stock ?? 0;
 
         const resolveByType = (priceType: string) => {
           let val = p.prices?.find(
@@ -745,7 +747,7 @@ export function POS() {
           stock: Number(stockValue),
           category: p.category || { name: "General" },
           subcategory: p.subcategory || null,
-          expirationDate: p.expirationDate || null,
+          expirationDate: p.nearestExpirationDate || null,
           imageUrl: p.imageUrl || null,
           unit: p.unit,
           units: p.units || [],
@@ -1542,6 +1544,19 @@ ${paymentConditionHtml}
                   >
                     Todas
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowExpiringSoonOnly((v) => !v)}
+                    className={cn(
+                      "px-2.5 py-1 rounded-full text-[10px] font-bold border transition-colors flex items-center gap-1",
+                      showExpiringSoonOnly
+                        ? "bg-amber-500 text-white border-amber-500"
+                        : "bg-transparent border-amber-300 text-amber-500 hover:border-amber-500"
+                    )}
+                  >
+                    <CalendarIcon size={10} />
+                    Por Vencer
+                  </button>
                   {categories.map((cat) => (
                     <button
                       type="button"
@@ -1592,7 +1607,10 @@ ${paymentConditionHtml}
           {/* Grid Compacto */}
           <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
-              {products.map((product) => (
+              {products
+                .filter((product) => product.stock > 0)
+                .filter((product) => !showExpiringSoonOnly || (product.expirationDate && isNearExpiration(product.expirationDate)))
+                .map((product) => (
                 <div
                   key={product.id}
                   onClick={() => product.stock > 0 && addToCart(product)}

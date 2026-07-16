@@ -317,6 +317,13 @@ export function Dashboard() {
             color: '#8b5cf6',
             subtitle: `${lowStockCount} prods. en stock crítico`,
           },
+          {
+            label: 'Valor en Riesgo por Vencer',
+            value: fmt(m?.expiracion.valorEnRiesgo ?? 0),
+            icon: AlertTriangle,
+            color: '#f59e0b',
+            subtitle: `${m?.expiracion.cantidadLotesVencidos ?? 0} vencidos, ${m?.expiracion.cantidadLotesPorVencer ?? 0} por vencer`,
+          },
         ]}
       />
 

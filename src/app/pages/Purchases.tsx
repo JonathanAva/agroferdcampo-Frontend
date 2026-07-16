@@ -63,7 +63,7 @@ export function Purchases() {
   const [receiveModalOpen, setReceiveModalOpen] = useState(false);
   const [receiveForm, setReceiveForm] = useState({ documentType: 'FACTURA' as any, documentNumber: '', notes: '' });
   const [receiving, setReceiving] = useState(false);
-  const [receivedItems, setReceivedItems] = useState<Array<{ productId: number; productName: string; quantity: number; received: number }>>([]);
+  const [receivedItems, setReceivedItems] = useState<Array<{ productId: number; productName: string; quantity: number; received: number; expirationDate: string; lotCode: string }>>([]);
   
   const [unlinkedPayments, setUnlinkedPayments] = useState<UnlinkedPayment[]>([]);
   const [loadingUnlinkedPayments, setLoadingUnlinkedPayments] = useState(false);
@@ -173,7 +173,9 @@ export function Purchases() {
           productId: item.productId,
           productName: item.product?.name || 'Producto',
           quantity: item.quantity,
-          received: item.quantity
+          received: item.quantity,
+          expirationDate: '',
+          lotCode: ''
         }))
       );
       setReceiveForm({ documentType: 'FACTURA', documentNumber: '', notes: '' });
@@ -219,7 +221,9 @@ export function Purchases() {
         notes: receiveForm.notes || `Doc: ${receiveForm.documentType} ${receiveForm.documentNumber}`,
         items: receivedItems.map((item) => ({
           productId: item.productId,
-          received: Number(item.received)
+          received: Number(item.received),
+          ...(item.expirationDate ? { expirationDate: item.expirationDate } : {}),
+          ...(item.lotCode ? { lotCode: item.lotCode } : {}),
         })),
         ...(selectedLinkedPaymentId ? { linkedCashEntryId: Number(selectedLinkedPaymentId) } : {}),
       };
@@ -1142,7 +1146,7 @@ export function Purchases() {
 
       {/* --- MODAL RECIBIR MERCADERÍA --- */}
       <Dialog open={receiveModalOpen} onOpenChange={setReceiveModalOpen}>
-        <DialogContent className="sm:max-w-3xl">
+        <DialogContent className="sm:max-w-5xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ArrowDownToLine className="text-emerald-500" />
@@ -1152,81 +1156,83 @@ export function Purchases() {
               OC-{selectedPurchase?.id.toString().padStart(6, '0')} - Esto ingresará los productos al inventario inmediatamente.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Tipo de Documento Recibido</Label>
-                <Select value={receiveForm.documentType} onValueChange={(v: any) => setReceiveForm({...receiveForm, documentType: v})}>
-                  <SelectTrigger className="bg-[var(--card)]"><SelectValue/></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="FACTURA">Factura Consumidor Final</SelectItem>
-                    <SelectItem value="CREDITO_FISCAL">Comprobante Crédito Fiscal</SelectItem>
-                    <SelectItem value="TICKET">Ticket</SelectItem>
-                    <SelectItem value="OTRO">Otro</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Número de Documento</Label>
-                <Input 
-                  required 
-                  placeholder="Ej. FAC-12345"
-                  value={receiveForm.documentNumber}
-                  onChange={e => setReceiveForm({...receiveForm, documentNumber: e.target.value})}
-                  className="bg-[var(--card)]"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Notas Adicionales (Opcional)</Label>
-                <Input 
-                  placeholder="Observaciones de la entrega..."
-                  value={receiveForm.notes}
-                  onChange={e => setReceiveForm({...receiveForm, notes: e.target.value})}
-                  className="bg-[var(--card)]"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="flex items-center gap-1">
-                  Vincular Pago Previo
-                  <span className="text-[var(--text-sec)] font-normal text-xs">(Opcional)</span>
-                </Label>
-                {loadingUnlinkedPayments ? (
-                  <p className="text-xs text-[var(--text-sec)] animate-pulse">Buscando pagos registrados...</p>
-                ) : unlinkedPayments.length === 0 ? (
-                  <p className="text-xs text-[var(--text-sec)] italic">No hay pagos previos sin vincular</p>
-                ) : (
-                  <Select
-                    value={selectedLinkedPaymentId || 'none'}
-                    onValueChange={v => setSelectedLinkedPaymentId(v === 'none' ? '' : v)}
-                  >
-                    <SelectTrigger className="bg-[var(--card)]">
-                      <SelectValue placeholder="No vincular" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No vincular</SelectItem>
-                      {unlinkedPayments.map(p => (
-                        <SelectItem key={p.id} value={p.id.toString()}>
-                          ${Number(p.amount).toFixed(4)} — {p.description} ({new Date(p.date).toLocaleDateString()})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-                <p className="text-xs text-[var(--text-sec)]">
-                  Si ya registraste el pago a este proveedor en caja, puedes vincularlo aquí.
-                </p>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Tipo de Documento Recibido</Label>
+              <Select value={receiveForm.documentType} onValueChange={(v: any) => setReceiveForm({...receiveForm, documentType: v})}>
+                <SelectTrigger className="bg-[var(--card)]"><SelectValue/></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="FACTURA">Factura Consumidor Final</SelectItem>
+                  <SelectItem value="CREDITO_FISCAL">Comprobante Crédito Fiscal</SelectItem>
+                  <SelectItem value="TICKET">Ticket</SelectItem>
+                  <SelectItem value="OTRO">Otro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Número de Documento</Label>
+              <Input
+                required
+                placeholder="Ej. FAC-12345"
+                value={receiveForm.documentNumber}
+                onChange={e => setReceiveForm({...receiveForm, documentNumber: e.target.value})}
+                className="bg-[var(--card)]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Notas Adicionales (Opcional)</Label>
+              <Input
+                placeholder="Observaciones de la entrega..."
+                value={receiveForm.notes}
+                onChange={e => setReceiveForm({...receiveForm, notes: e.target.value})}
+                className="bg-[var(--card)]"
+              />
             </div>
 
-            <div className="border rounded-xl p-4 bg-[var(--bg)]/50 max-h-[300px] overflow-y-auto space-y-2">
-              <Label className="font-bold text-xs uppercase text-[var(--text-sec)]">Cantidades Físicas Recibidas</Label>
-              <Table>
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1">
+                Vincular Pago Previo
+                <span className="text-[var(--text-sec)] font-normal text-xs">(Opcional)</span>
+              </Label>
+              {loadingUnlinkedPayments ? (
+                <p className="text-xs text-[var(--text-sec)] animate-pulse">Buscando pagos registrados...</p>
+              ) : unlinkedPayments.length === 0 ? (
+                <p className="text-xs text-[var(--text-sec)] italic">No hay pagos previos sin vincular</p>
+              ) : (
+                <Select
+                  value={selectedLinkedPaymentId || 'none'}
+                  onValueChange={v => setSelectedLinkedPaymentId(v === 'none' ? '' : v)}
+                >
+                  <SelectTrigger className="bg-[var(--card)]">
+                    <SelectValue placeholder="No vincular" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No vincular</SelectItem>
+                    {unlinkedPayments.map(p => (
+                      <SelectItem key={p.id} value={p.id.toString()}>
+                        ${Number(p.amount).toFixed(4)} — {p.description} ({new Date(p.date).toLocaleDateString()})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <p className="text-xs text-[var(--text-sec)]">
+                Si ya registraste el pago a este proveedor en caja, puedes vincularlo aquí.
+              </p>
+            </div>
+          </div>
+
+          <div className="border rounded-xl p-4 bg-[var(--bg)]/50 max-h-[320px] overflow-y-auto space-y-3">
+            <Label className="font-bold text-xs uppercase text-[var(--text-sec)]">Cantidades Físicas Recibidas</Label>
+            <div className="overflow-x-auto">
+              <Table className="min-w-[640px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-xs p-2">Producto</TableHead>
                     <TableHead className="text-xs text-center p-2 w-16">Ord.</TableHead>
-                    <TableHead className="text-xs text-center p-2 w-24">Recibido</TableHead>
+                    <TableHead className="text-xs text-center p-2 w-28">Recibido</TableHead>
+                    <TableHead className="text-xs text-center p-2 w-44">Vence</TableHead>
+                    <TableHead className="text-xs text-center p-2 w-40">Lote</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1234,7 +1240,7 @@ export function Purchases() {
                     <TableRow key={item.productId}>
                       <TableCell className="text-xs p-2 font-medium">{item.productName}</TableCell>
                       <TableCell className="text-xs text-center p-2">{item.quantity}</TableCell>
-                      <TableCell className="p-1">
+                      <TableCell className="p-2">
                         <NumberInput
                           value={item.received}
                           min={0}
@@ -1244,7 +1250,32 @@ export function Purchases() {
                             newItems[idx].received = val || 0;
                             setReceivedItems(newItems);
                           }}
-                          className="h-8 text-xs bg-[var(--card)] text-center"
+                          className="h-9 text-xs bg-[var(--card)] text-center"
+                        />
+                      </TableCell>
+                      <TableCell className="p-2">
+                        <Input
+                          type="date"
+                          value={item.expirationDate}
+                          onChange={(e) => {
+                            const newItems = [...receivedItems];
+                            newItems[idx].expirationDate = e.target.value;
+                            setReceivedItems(newItems);
+                          }}
+                          className="h-9 text-xs bg-[var(--card)]"
+                        />
+                      </TableCell>
+                      <TableCell className="p-2">
+                        <Input
+                          type="text"
+                          placeholder="Opcional"
+                          value={item.lotCode}
+                          onChange={(e) => {
+                            const newItems = [...receivedItems];
+                            newItems[idx].lotCode = e.target.value;
+                            setReceivedItems(newItems);
+                          }}
+                          className="h-9 text-xs bg-[var(--card)]"
                         />
                       </TableCell>
                     </TableRow>

@@ -3,7 +3,7 @@ import {
   FileText, Download, Calendar, TrendingUp, DollarSign,
   Package, AlertTriangle, ShieldAlert, Users, Percent, CreditCard,
   RefreshCw, ShoppingCart, Wallet, ArrowLeftRight, UserCheck,
-  RotateCcw, BarChart3, FileDown, Info, Receipt, LucideIcon
+  RotateCcw, BarChart3, FileDown, Info, Receipt, Trash2, LucideIcon
 } from 'lucide-react';
 import { reportsService } from '../services/reports.service';
 import { apiRequest } from '../config/api';
@@ -251,6 +251,15 @@ const REPORTS: ReportType[] = [
         }
       ]
     },
+    category: 'inventario',
+  },
+  {
+    id: 'inventory_mermas',
+    title: 'Mermas por Vencimiento',
+    description: 'Historial de productos dados de baja por vencimiento: cuánto, de qué lote y cuánto se perdió en $.',
+    icon: Trash2,
+    endpointPrefix: 'inventory/mermas',
+    filter: { type: 'range' },
     category: 'inventario',
   },
   {
