@@ -747,10 +747,10 @@ function InventoryList() {
                               : "var(--primary)",
                         }}
                       >
-                        {Number(item.quantity)} {item.product.unit}
+                        {Number(item.quantity)} {item.product.unit?.replace('_', ' ')}
                       </span>
                       <span className="text-[9px] uppercase font-black opacity-30 text-[var(--text-sec)]">
-                        MÍN: {Number(item.minStock)} {item.product.unit}
+                        MÍN: {Number(item.minStock)} {item.product.unit?.replace('_', ' ')}
                       </span>
                     </div>
                   </TableCell>
@@ -763,7 +763,7 @@ function InventoryList() {
                           ${getPublicPrice(item.product).toFixed(4)}
                         </span>
                         <span className="text-[9px] font-bold opacity-40 text-[var(--text-sec)]">
-                          / {item.product.unit}
+                          / {item.product.unit?.replace('_', ' ')}
                         </span>
                       </div>
                     </TableCell>
@@ -871,7 +871,7 @@ function InventoryList() {
                       style={{ color: "var(--text-sec)" }}
                     >
                       Stock actual: {Number(selectedItem.quantity)}{" "}
-                      {selectedItem.product.unit}
+                      {selectedItem.product.unit?.replace('_', ' ')}
                     </p>
                   </div>
                 </div>
@@ -1079,7 +1079,7 @@ function InventoryList() {
                           color: "var(--text-sec)",
                         }}
                       >
-                        {selectedItem.product.unit}
+                        {selectedItem.product.unit?.replace('_', ' ')}
                       </div>
                     </div>
                   </div>
