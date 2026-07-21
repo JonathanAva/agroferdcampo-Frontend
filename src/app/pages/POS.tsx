@@ -69,6 +69,7 @@ interface Product {
   expirationDate?: string | null;
   imageUrl?: string | null;
   unit: string;
+  isUniversal?: boolean;
   units?: {
     id: number;
     unit: string;
@@ -77,6 +78,12 @@ interface Product {
     priceMayorista?: number;
   }[];
 }
+
+const UNIVERSAL_PRODUCT_UNITS = [
+  "UNIDAD", "KG", "LB", "QUINTAL", "CAJA", "LITRO", "ARROBA", "KINTALE",
+  "METRO", "YARDA", "PIE", "GALON", "CUBETA", "CUARTO_GALON", "GRAMO",
+  "CENTIMETRO", "PULGADA", "ONZA", "SACO", "MEDIA_ARROBA", "PAQUETE", "TONELADA",
+];
 
 interface POSSubcategory {
   id: number;
@@ -97,6 +104,7 @@ interface CartUnitSelection {
   price: number;
   originalPrice: number;
   priceType: string;
+  customName?: string;
 }
 
 const PRICE_TYPE_LABELS: Record<string, string> = {
@@ -252,6 +260,9 @@ export function POS() {
   const quoteBtnRef = useRef<HTMLButtonElement>(null);
   const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
+  const [universalProduct, setUniversalProduct] = useState<Product | null>(null);
+  const [showUniversalModal, setShowUniversalModal] = useState(false);
+  const [universalForm, setUniversalForm] = useState({ nombre: "", medida: "UNIDAD", cantidad: "1", precio: "" });
   const [categories, setCategories] = useState<POSCategory[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<number | null>(null);
@@ -352,6 +363,7 @@ export function POS() {
       loadCategories();
       loadSysConfig();
       loadBranchPaymentConfig();
+      loadUniversalProduct();
     }
   }, [user]);
 
@@ -361,6 +373,19 @@ export function POS() {
       setCategories(Array.isArray(data) ? data : []);
     } catch {
       // Silencioso: los filtros de categoría son un extra, no bloquean el POS
+    }
+  };
+
+  const loadUniversalProduct = async () => {
+    try {
+      const data = await apiRequest<any>("/catalog/products/universal");
+      setUniversalProduct(
+        data
+          ? { id: data.id, internalCode: data.internalCode || "S/C", name: data.name, price: 0, priceOptions: [], stock: Infinity, category: { name: "General" }, unit: data.unit, isUniversal: true }
+          : null
+      );
+    } catch {
+      setUniversalProduct(null);
     }
   };
 
@@ -852,6 +877,37 @@ export function POS() {
     }
   };
 
+  /**
+   * Agrega una línea configurada a mano del producto universal. A diferencia de addToCart,
+   * nunca fusiona con una selección existente — cada clic es una línea nueva e independiente
+   * (mismo producto, distinto nombre/medida/precio), reusando updateQuantity/updatePrice/
+   * removeSelection tal cual porque ya operan por selection.id, no por producto.
+   */
+  const addUniversalToCart = (nombre: string, medida: string, cantidad: number, precio: number) => {
+    if (!universalProduct) return;
+
+    const newSelection: CartUnitSelection = {
+      id: Math.random().toString(36).substring(2, 9),
+      unitType: medida,
+      unitFactor: 1,
+      quantity: cantidad,
+      price: precio,
+      originalPrice: precio,
+      priceType: "PUBLICO",
+      customName: nombre,
+    };
+
+    setCart((prev) => {
+      const existing = prev.find((i) => i.id === universalProduct.id);
+      if (existing) {
+        return prev.map((i) =>
+          i.id === universalProduct.id ? { ...i, selections: [...i.selections, newSelection] } : i
+        );
+      }
+      return [...prev, { ...universalProduct, selections: [newSelection] }];
+    });
+  };
+
   const updateQuantity = (productId: number, selectionId: string, newQty: number) => {
     const item = cart.find((i) => i.id === productId);
     if (!item) return;
@@ -1134,6 +1190,7 @@ export function POS() {
             unitPrice: Number(s.price),
             unitType: s.unitType,
             unitFactor: Number(s.unitFactor),
+            ...(s.customName ? { customName: s.customName } : {}),
           }))
         ),
         ...(transportData && transportData.requiresTransport ? {
@@ -1342,8 +1399,9 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
   ) => {
     const fmt = (n: number) => `$${n.toFixed(2)}`;
     const totalNum = Number(sale.totalAmount);
-    const taxNum = Number(sale.taxAmount);
-    const subtotal = totalNum - taxNum;
+    // El ticket impreso muestra el precio del producto tal cual, sin descomponer el IVA
+    // (el cálculo fiscal real para el DTE sigue intacto en el backend, esto es solo visual).
+    const subtotal = totalNum;
     const createdAt = sale.createdAt ? new Date(sale.createdAt) : new Date();
 
     const companyName     = sysConfig?.companyName     || "AGROFERRETERÍA D'CAMPO";
@@ -1425,7 +1483,7 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
     ${(sale.items || []).map((i: any) => `<tr>
       <td><span style="display:inline-block;width:11px;height:11px;border:1.5px solid #000;vertical-align:middle"></span></td>
       <td>${Number(i.quantity)}</td>
-      <td>${i.product?.name || ""}</td>
+      <td>${i.customName || i.product?.name || ""}</td>
       <td class="tr">${fmt(Number(i.unitPrice))}</td>
       <td class="tr">${fmt(Number(i.totalPrice))}</td>
     </tr>`).join("")}
@@ -1607,6 +1665,27 @@ ${paymentConditionHtml}
           {/* Grid Compacto */}
           <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+              {universalProduct && (
+                <div
+                  onClick={() => {
+                    setUniversalForm({ nombre: "", medida: "UNIDAD", cantidad: "1", precio: "" });
+                    setShowUniversalModal(true);
+                  }}
+                  className="group relative rounded-xl border-2 border-dashed border-[var(--primary)] overflow-hidden transition-all flex flex-col cursor-pointer bg-[var(--primary)]/5 hover:bg-[var(--primary)]/10 hover:shadow-md"
+                >
+                  <div className="p-2.5 flex flex-col flex-1 items-center justify-center min-h-[180px] text-center gap-2">
+                    <div className="size-12 rounded-full bg-[var(--primary)]/15 text-[var(--primary)] flex items-center justify-center">
+                      <Plus size={22} />
+                    </div>
+                    <h3 className="w-full font-black text-sm leading-tight text-[var(--primary)]">
+                      {universalProduct.name}
+                    </h3>
+                    <p className="text-[9px] font-bold uppercase text-[var(--text-sec)]">
+                      Venta rápida — nombre, medida y precio libres
+                    </p>
+                  </div>
+                </div>
+              )}
               {products
                 .filter((product) => product.stock > 0)
                 .filter((product) => !showExpiringSoonOnly || (product.expirationDate && isNearExpiration(product.expirationDate)))
@@ -1797,7 +1876,9 @@ ${paymentConditionHtml}
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="font-bold text-xs leading-tight text-[var(--text-main)]">{item.name}</p>
-                        <p className="text-[9px] font-bold text-[var(--text-sec)]">Stock: {item.stock} {item.unit}</p>
+                        {!item.isUniversal && (
+                          <p className="text-[9px] font-bold text-[var(--text-sec)]">Stock: {item.stock} {item.unit}</p>
+                        )}
                         {item.expirationDate && (
                           <p className={cn(
                             "text-[9px] font-bold",
@@ -1819,7 +1900,11 @@ ${paymentConditionHtml}
 
                     <div className="space-y-2.5">
                       {item.selections.map((sel) => (
-                        <div key={sel.id} className="flex items-start justify-between gap-2 border-t border-[var(--border)]/50 pt-2 first:border-t-0 first:pt-0">
+                        <div key={sel.id} className="border-t border-[var(--border)]/50 pt-2 first:border-t-0 first:pt-0">
+                        {sel.customName && (
+                          <p className="text-[10px] font-black text-[var(--primary)] mb-1">{sel.customName}</p>
+                        )}
+                        <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 max-w-[100px] h-7 flex items-center">
                             {item.units && item.units.length > 0 ? (
                               <select
@@ -1893,6 +1978,7 @@ ${paymentConditionHtml}
                           >
                             <Trash2 size={12} />
                           </Button>
+                        </div>
                         </div>
                       ))}
                     </div>
@@ -2033,6 +2119,94 @@ ${paymentConditionHtml}
           setCustomerSearch("");
         }}
       />
+
+      {/* Modal Producto Universal — venta rápida configurada a mano */}
+      <Dialog open={showUniversalModal} onOpenChange={setShowUniversalModal}>
+        <DialogContent className="sm:max-w-md w-full" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--text-main)" }}>
+          <DialogHeader>
+            <DialogTitle>Producto Universal</DialogTitle>
+            <DialogDescription>
+              Vende algo que no está en el catálogo. Se agrega como una línea nueva al carrito.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Nombre</Label>
+              <Input
+                autoFocus
+                value={universalForm.nombre}
+                onChange={(e) => setUniversalForm({ ...universalForm, nombre: e.target.value })}
+                placeholder="Ej. Tornillo 3 pulgadas"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Medida</Label>
+                <select
+                  value={universalForm.medida}
+                  onChange={(e) => setUniversalForm({ ...universalForm, medida: e.target.value })}
+                  className="w-full h-10 px-3 rounded-md border bg-[var(--bg)] border-[var(--border)] text-sm"
+                >
+                  {UNIVERSAL_PRODUCT_UNITS.map((u) => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Cantidad</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={universalForm.cantidad}
+                  onChange={(e) => setUniversalForm({ ...universalForm, cantidad: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Precio</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={universalForm.precio}
+                  onChange={(e) => setUniversalForm({ ...universalForm, precio: e.target.value })}
+                  placeholder="0.00"
+                  className="pl-7"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowUniversalModal(false)}>Cancelar</Button>
+            <Button
+              className="bg-[var(--primary)]"
+              onClick={() => {
+                const cantidad = Number(universalForm.cantidad);
+                const precio = Number(universalForm.precio);
+                if (!universalForm.nombre.trim()) {
+                  toast.error("Ingresa un nombre");
+                  return;
+                }
+                if (!cantidad || cantidad <= 0) {
+                  toast.error("Ingresa una cantidad válida");
+                  return;
+                }
+                if (!precio || precio <= 0) {
+                  toast.error("Ingresa un precio válido");
+                  return;
+                }
+                addUniversalToCart(universalForm.nombre.trim(), universalForm.medida, cantidad, precio);
+                setShowUniversalModal(false);
+              }}
+            >
+              Agregar al carrito
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 1. Overlay Bloqueante (Procesando) */}
       {processingOverlay && (

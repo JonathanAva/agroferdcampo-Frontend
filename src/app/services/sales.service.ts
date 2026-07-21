@@ -11,6 +11,7 @@ export interface SaleItemDto {
   unitPrice: number;
   unitType?: string;
   unitFactor?: number;
+  customName?: string;
 }
 
 export interface SalePaymentDto {
@@ -76,6 +77,7 @@ export interface SaleResponse {
     quantity: number;
     unitPrice: string | number;
     totalPrice: string | number;
+    customName?: string | null;
     product?: { id: number; name: string; internalCode?: string };
   }>;
   dteResponse?: DteResponse | null;

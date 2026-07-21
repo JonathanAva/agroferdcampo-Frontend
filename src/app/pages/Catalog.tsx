@@ -73,6 +73,7 @@ interface CatalogProduct {
   costPrice?: number | string;
   unit: string;
   trackStock: boolean;
+  isUniversal?: boolean;
   isActive: boolean;
   imageUrl?: string;
   category?: { id: number; name: string };
@@ -146,6 +147,7 @@ const productSchema = z.object({
   expirationDate: z.string(),
   costPrice: z.string(),
   trackStock: z.boolean(),
+  isUniversal: z.boolean(),
   prices: z
     .array(
       z.object({
@@ -247,6 +249,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         expirationDate: "",
         costPrice: "",
         trackStock: true,
+        isUniversal: false,
         prices: [{ priceType: "PUBLICO", branchId: "global", price: "" }],
         stockRows: [],
       },
@@ -280,6 +283,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   });
 
   const watchTrackStock = watch("trackStock");
+  const watchIsUniversal = watch("isUniversal");
   const watchCategoryId = watch("categoryId");
   const watchTagIds = watch("tagIds") || [];
 
@@ -393,6 +397,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         expirationDate: "",
         costPrice: product.costPrice?.toString() || "",
         trackStock: product.trackStock,
+        isUniversal: product.isUniversal || false,
         prices: product.prices.map((p) => ({
           id: p.id,
           priceType: p.priceType,
@@ -424,6 +429,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         expirationDate: "",
         costPrice: "",
         trackStock: true,
+        isUniversal: false,
         prices: [{ priceType: "PUBLICO", branchId: "global", price: "" }],
         units: [],
         stockRows: [],
@@ -447,6 +453,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       expirationDate: "",
       costPrice: product.costPrice?.toString() || "",
       trackStock: product.trackStock,
+      isUniversal: false,
       prices: product.prices.map((p) => ({
         priceType: p.priceType,
         branchId: p.branchId === null ? "global" : String(p.branchId),
@@ -493,6 +500,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       name: data.name.trim(),
       unit: data.unit,
       trackStock: data.trackStock,
+      isUniversal: data.isUniversal,
       categoryId: data.categoryId ? Number(data.categoryId) : null,
       subcategoryId: data.subcategoryId ? Number(data.subcategoryId) : null,
       tagIds: data.tagIds.map(Number),
@@ -513,11 +521,13 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
     if (!editingProduct) {
       body.expirationDate = data.expirationDate || null;
 
-      body.prices = data.prices.map((p) => ({
-        priceType: p.priceType,
-        branchId: p.branchId === "global" ? null : Number(p.branchId),
-        price: Number(p.price),
-      }));
+      if (!data.isUniversal) {
+        body.prices = data.prices.map((p) => ({
+          priceType: p.priceType,
+          branchId: p.branchId === "global" ? null : Number(p.branchId),
+          price: Number(p.price),
+        }));
+      }
 
       const validStock =
         data.stockRows?.filter((s) => s.branchId && Number(s.quantity) > 0) ||
@@ -539,15 +549,17 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
           body: JSON.stringify(body),
         });
 
-        for (const p of data.prices) {
-          await apiRequest(`/catalog/products/${editingProduct.id}/prices`, {
-            method: "POST",
-            body: JSON.stringify({
-              priceType: p.priceType,
-              branchId: p.branchId === "global" ? null : Number(p.branchId),
-              price: Number(p.price),
-            }),
-          });
+        if (!data.isUniversal) {
+          for (const p of data.prices) {
+            await apiRequest(`/catalog/products/${editingProduct.id}/prices`, {
+              method: "POST",
+              body: JSON.stringify({
+                priceType: p.priceType,
+                branchId: p.branchId === "global" ? null : Number(p.branchId),
+                price: Number(p.price),
+              }),
+            });
+          }
         }
         toast.success("Producto actualizado exitosamente");
       } else {
@@ -944,7 +956,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent
-          className="sm:max-w-6xl w-full max-h-[95vh] overflow-y-auto custom-scrollbar"
+          className="sm:max-w-7xl w-full max-h-[95vh] overflow-y-auto custom-scrollbar"
           style={{
             backgroundColor: "var(--card)",
             borderColor: "var(--border)",
@@ -972,62 +984,65 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                     Información General
                   </p>
 
-                  {/* Photo upload */}
-                  <div className="space-y-2">
-                    <Label className="text-sm font-bold">Foto del Producto</Label>
-                    <label className="block cursor-pointer">
-                      <input
-                        type="file"
-                        accept="image/jpg,image/jpeg,image/png,image/webp"
-                        className="hidden"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) handleProductImageUpload(f);
-                          e.target.value = "";
-                        }}
-                      />
-                      <div className="relative w-full h-36 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--card)] flex items-center justify-center overflow-hidden hover:border-[var(--primary)] transition-colors group">
-                        {productImageUrl ? (
-                          <>
-                            <img
-                              src={productImageUrl}
-                              alt="Vista previa"
-                              className="w-full h-full object-contain"
-                            />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
-                              <Upload size={20} className="text-white" />
-                              <span className="text-white text-xs font-bold">Cambiar foto</span>
+                  <div className="flex gap-4 items-start">
+                    {/* Photo upload */}
+                    <div className="space-y-2 shrink-0">
+                      <Label className="text-sm font-bold">Foto</Label>
+                      <label className="block cursor-pointer">
+                        <input
+                          type="file"
+                          accept="image/jpg,image/jpeg,image/png,image/webp"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) handleProductImageUpload(f);
+                            e.target.value = "";
+                          }}
+                        />
+                        <div className="relative w-28 h-28 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--card)] flex items-center justify-center overflow-hidden hover:border-[var(--primary)] transition-colors group">
+                          {productImageUrl ? (
+                            <>
+                              <img
+                                src={productImageUrl}
+                                alt="Vista previa"
+                                className="w-full h-full object-contain"
+                              />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
+                                <Upload size={16} className="text-white" />
+                                <span className="text-white text-[10px] font-bold">Cambiar</span>
+                              </div>
+                            </>
+                          ) : uploadingImage ? (
+                            <div className="flex flex-col items-center gap-2 opacity-60">
+                              <div className="w-5 h-5 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
                             </div>
-                          </>
-                        ) : uploadingImage ? (
-                          <div className="flex flex-col items-center gap-2 opacity-60">
-                            <div className="w-6 h-6 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
-                            <span className="text-xs font-bold">Subiendo...</span>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-center gap-2 opacity-40 group-hover:opacity-70 transition-opacity">
-                            <Upload size={24} />
-                            <span className="text-xs font-bold">Haz clic para subir foto</span>
-                            <span className="text-[10px] opacity-70">JPG, PNG o WEBP · máx 5 MB</span>
-                          </div>
-                        )}
-                      </div>
-                    </label>
+                          ) : (
+                            <div className="flex flex-col items-center gap-1 opacity-40 group-hover:opacity-70 transition-opacity px-2 text-center">
+                              <Upload size={18} />
+                              <span className="text-[9px] font-bold">Subir foto</span>
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                    </div>
+
+                    <div className="space-y-2 flex-1">
+                      <Label className="text-sm font-bold">
+                        Nombre del Producto{" "}
+                        <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        {...register("name")}
+                        placeholder="Ej. Fertilizante 18-46-0"
+                        className="h-11 rounded-xl bg-[var(--card)]"
+                      />
+                      <p className="text-[10px] opacity-60 ml-1">
+                        JPG, PNG o WEBP · máx 5 MB (opcional)
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label className="text-sm font-bold">
-                      Nombre del Producto{" "}
-                      <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      {...register("name")}
-                      placeholder="Ej. Fertilizante 18-46-0"
-                      className="h-11 rounded-xl bg-[var(--card)]"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 [&>div]:min-w-0">
                     <div className="space-y-2">
                       <Label className="text-sm font-bold">
                         Código Interno
@@ -1048,9 +1063,6 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                         className="h-11 rounded-xl bg-[var(--card)]"
                       />
                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="text-sm font-bold">
                         Unidad <span className="text-red-500">*</span>
@@ -1071,6 +1083,9 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 [&>div]:min-w-0">
                     <div className="space-y-2">
                       <Label className="text-sm font-bold">Categoría</Label>
                       <Select
@@ -1089,9 +1104,6 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="text-sm font-bold">Subcategoría</Label>
                       <Select
@@ -1101,9 +1113,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                       >
                         <SelectTrigger className="h-11 rounded-xl bg-[var(--card)]">
                           <SelectValue
-                            placeholder={
-                              watchCategoryId ? "Sin subcategoría" : "Elige una categoría primero"
-                            }
+                            placeholder={watchCategoryId ? "Sin subcategoría" : "Elige categoría"}
                           />
                         </SelectTrigger>
                         <SelectContent>
@@ -1117,8 +1127,8 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                     </div>
                     {!editingProduct && (
                       <div className="space-y-2">
-                        <Label className="text-sm font-bold">
-                          Fecha de Vencimiento del Lote Inicial
+                        <Label className="text-sm font-bold whitespace-nowrap">
+                          Fecha de Vencimiento
                         </Label>
                         <Input
                           type="date"
@@ -1126,7 +1136,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                           className="h-11 rounded-xl bg-[var(--card)]"
                         />
                         <p className="text-[10px] opacity-60 ml-1">
-                          Opcional. Aplica solo al stock inicial; las compras posteriores tienen su propia fecha por lote.
+                          Opcional. Aplica solo al lote inicial.
                         </p>
                       </div>
                     )}
@@ -1224,12 +1234,33 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                       <div className="text-left">
                         <p className="text-sm font-bold">Rastrear Inventario</p>
                         <p className="text-[10px] opacity-60">
-                          Controlar entradas y salidas automáticamente
+                          {watchIsUniversal
+                            ? "Desactivado automáticamente por ser Producto Universal"
+                            : "Controlar entradas y salidas automáticamente"}
                         </p>
                       </div>
                       <Switch
-                        checked={watchTrackStock}
+                        checked={watchIsUniversal ? false : watchTrackStock}
+                        disabled={watchIsUniversal}
                         onCheckedChange={(v) => setValue("trackStock", v)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-[var(--border)]">
+                    <div className="flex items-center justify-between">
+                      <div className="text-left">
+                        <p className="text-sm font-bold">Marcar como Producto Universal</p>
+                        <p className="text-[10px] opacity-60">
+                          Comodín de venta rápida anclado primero en el POS (nombre, medida y precio se llenan al vender). Solo puede haber uno activo.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={watchIsUniversal}
+                        onCheckedChange={(v) => {
+                          setValue("isUniversal", v);
+                          if (v) setValue("trackStock", false);
+                        }}
                       />
                     </div>
                   </div>
@@ -1238,7 +1269,14 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
 
               {/* Columna Derecha: Precios y Stock */}
               <div className="space-y-6">
-                {/* Sección Precios */}
+                {/* Sección Precios (no aplica a Producto Universal: el precio se define al vender) */}
+                {watchIsUniversal ? (
+                  <div className="p-6 rounded-xl border border-dashed border-[var(--border)] bg-transparent">
+                    <p className="text-xs font-bold text-[var(--text-sec)]">
+                      Este producto no lleva precio fijo — se ingresa cada vez que se vende desde el POS.
+                    </p>
+                  </div>
+                ) : (
                 <div className="p-6 rounded-xl border border-[var(--border)] space-y-6 bg-transparent">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-black uppercase tracking-widest opacity-60 text-[var(--text-sec)]">
@@ -1357,6 +1395,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                     ))}
                   </div>
                 </div>
+                )}
 
                 {/* Sección Unidades Secundarias */}
                 <div className="p-6 rounded-xl border border-[var(--border)] space-y-6 bg-[var(--surface)]">
