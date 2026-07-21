@@ -1247,23 +1247,6 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                     </div>
                   </div>
 
-                  <div className="pt-4 border-t border-[var(--border)]">
-                    <div className="flex items-center justify-between">
-                      <div className="text-left">
-                        <p className="text-sm font-bold">Marcar como Producto Universal</p>
-                        <p className="text-[10px] opacity-60">
-                          Comodín de venta rápida anclado primero en el POS (nombre, medida y precio se llenan al vender). Solo puede haber uno activo.
-                        </p>
-                      </div>
-                      <Switch
-                        checked={watchIsUniversal}
-                        onCheckedChange={(v) => {
-                          setValue("isUniversal", v);
-                          if (v) setValue("trackStock", false);
-                        }}
-                      />
-                    </div>
-                  </div>
                 </div>
               </div>
 
