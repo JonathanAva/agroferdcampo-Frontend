@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Tag, Plus, Trash2, Edit, Save, X, Search, ListTree } from "lucide-react";
+import { Tag, Plus, Trash2, Edit, Save, X, Search, ListTree, Link } from "lucide-react";
 import { apiRequest } from "../config/api";
 import { toast } from "sonner";
 import { Button } from "../components/ui/button";
@@ -20,6 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
+
+import { BulkAssignModal } from "../components/ui/BulkAssignModal";
 
 interface Category {
   id: number;
@@ -53,6 +55,9 @@ export function SubcategoriesManager() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingCategoryId, setEditingCategoryId] = useState<string>("");
+
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [assignTarget, setAssignTarget] = useState<{type: 'subcategory', id: number, name: string} | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -349,6 +354,18 @@ export function SubcategoriesManager() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            onClick={() => {
+                              setAssignTarget({ type: 'subcategory', id: sub.id, name: sub.name });
+                              setAssignModalOpen(true);
+                            }}
+                            className="h-8 w-8 text-blue-500 hover:bg-blue-50 rounded-lg"
+                            title="Asignar Productos"
+                          >
+                            <Link size={16} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={() => startEditing(sub)}
                             className="h-8 w-8 text-[var(--primary)] hover:bg-[var(--primary)]/10 rounded-lg"
                             title="Editar"
@@ -374,6 +391,15 @@ export function SubcategoriesManager() {
           </Table>
         </div>
       </div>
+      
+      <BulkAssignModal
+        isOpen={assignModalOpen}
+        onClose={() => setAssignModalOpen(false)}
+        assignTarget={assignTarget}
+        onSuccess={() => {
+          fetchData();
+        }}
+      />
     </div>
   );
 }

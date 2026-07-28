@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Tag, Plus, Trash2, Edit, Save, X, Search } from "lucide-react";
+import { Tag, Plus, Trash2, Edit, Save, X, Search, Link } from "lucide-react";
 import { apiRequest } from "../config/api";
 import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
+import { BulkAssignModal } from "../components/ui/BulkAssignModal";
 import {
   Table,
   TableBody,
@@ -33,6 +34,9 @@ export function CategoriesManager() {
   
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
+
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [assignTarget, setAssignTarget] = useState<{type: 'category', id: number, name: string} | null>(null);
 
   useEffect(() => {
     fetchCategories();
@@ -264,6 +268,18 @@ export function CategoriesManager() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          onClick={() => {
+                            setAssignTarget({ type: 'category', id: cat.id, name: cat.name });
+                            setAssignModalOpen(true);
+                          }}
+                          className="h-8 w-8 text-blue-500 hover:bg-blue-50 rounded-lg"
+                          title="Asignar Productos"
+                        >
+                          <Link size={16} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => startEditing(cat)}
                           className="h-8 w-8 text-[var(--primary)] hover:bg-[var(--primary)]/10 rounded-lg"
                           title="Editar nombre"
@@ -288,6 +304,15 @@ export function CategoriesManager() {
           </TableBody>
         </Table>
       </div>
+
+      <BulkAssignModal
+        isOpen={assignModalOpen}
+        onClose={() => setAssignModalOpen(false)}
+        assignTarget={assignTarget}
+        onSuccess={() => {
+          fetchCategories();
+        }}
+      />
     </div>
   );
 }
