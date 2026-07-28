@@ -203,7 +203,10 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
 
   const searchTerm = searchParams.get('search') || '';
   const showInactive = searchParams.get('showInactive') === 'true';
-  const categoryFilter = searchParams.get('category') || 'all';
+  const categoriesFilter = searchParams.get('categories') || '';
+  const subcategoriesFilter = searchParams.get('subcategories') || '';
+  const tagsFilter = searchParams.get('tags') || '';
+  const priceRangeFilter = searchParams.get('priceRange') || '';
   const page = parseInt(searchParams.get('page') || '1', 10);
   const limit = 50;
 
@@ -211,9 +214,12 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
 
   const catalogFilters: FilterConfig[] = useMemo(() => [
     { id: 'search', label: 'Buscar producto...', type: 'text', placeholder: 'Buscar por nombre, código o categoría...' },
-    { id: 'category', label: 'Categoría', type: 'category', options: categories.map(c => ({ label: c.name, value: c.id.toString() })) },
+    { id: 'categories', label: 'Categorías', type: 'multi_category', options: categories.map(c => ({ label: c.name, value: c.id.toString() })) },
+    { id: 'subcategories', label: 'Subcategorías', type: 'multi_category', options: subcategories.map(c => ({ label: c.name, value: c.id.toString() })) },
+    { id: 'tags', label: 'Etiquetas', type: 'multi_category', options: tags.map(t => ({ label: t.name, value: t.id.toString() })) },
+    { id: 'priceRange', label: 'Precio', type: 'number_range' },
     { id: 'showInactive', label: 'Ver inactivos', type: 'boolean' }
-  ], [categories]);
+  ], [categories, subcategories, tags]);
 
   // Form state
   const [editingProduct, setEditingProduct] = useState<CatalogProduct | null>(
@@ -298,11 +304,11 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       setSearchParams(prev => { prev.set('page', '1'); return prev; });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, categoryFilter, showInactive]);
+  }, [searchTerm, categoriesFilter, subcategoriesFilter, tagsFilter, priceRangeFilter, showInactive]);
 
   useEffect(() => {
     fetchData();
-  }, [searchTerm, categoryFilter, showInactive, page]);
+  }, [searchTerm, categoriesFilter, subcategoriesFilter, tagsFilter, priceRangeFilter, showInactive, page]);
 
   // Si la categoría cambia y la subcategoría seleccionada ya no le pertenece, la limpiamos
   useEffect(() => {
@@ -343,7 +349,20 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       queryParams.append("limit", limit.toString());
       queryParams.append("page", page.toString());
       if (searchTerm) queryParams.append("search", searchTerm);
-      if (categoryFilter !== 'all') queryParams.append("categoryId", categoryFilter);
+      if (categoriesFilter) {
+        categoriesFilter.split(',').forEach(id => queryParams.append("categoryIds", id));
+      }
+      if (subcategoriesFilter) {
+        subcategoriesFilter.split(',').forEach(id => queryParams.append("subcategoryIds", id));
+      }
+      if (tagsFilter) {
+        tagsFilter.split(',').forEach(id => queryParams.append("tagIds", id));
+      }
+      if (priceRangeFilter) {
+        const [min, max] = priceRangeFilter.split('-');
+        if (min) queryParams.append("minPrice", min);
+        if (max) queryParams.append("maxPrice", max);
+      }
       queryParams.append("isActive", showInactive ? "false" : "true");
 
       const [prodData, catData, subcatData, tagData, brData] = await Promise.all([

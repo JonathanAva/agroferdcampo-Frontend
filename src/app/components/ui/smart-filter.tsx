@@ -15,7 +15,7 @@ import { cn } from './utils';
 
 // --- Types ---
 
-export type FilterType = 'text' | 'number_range' | 'date_range' | 'category' | 'boolean';
+export type FilterType = 'text' | 'number_range' | 'date_range' | 'category' | 'boolean' | 'multi_category';
 
 export interface FilterOption {
   label: string;
@@ -267,6 +267,122 @@ export function SmartFilter({ config, className }: SmartFilterProps) {
                       onCheckedChange={(checked) => setFilter(c.id, checked ? 'true' : null)}
                     />
                   </div>
+                );
+              }
+
+              if (c.type === 'multi_category') {
+                const currentVals = currentVal ? currentVal.split(',') : [];
+                const handleToggle = (val: string) => {
+                  const newVals = currentVals.includes(val)
+                    ? currentVals.filter(v => v !== val)
+                    : [...currentVals, val];
+                  setFilter(c.id, newVals.length > 0 ? newVals.join(',') : null);
+                };
+
+                return (
+                  <Popover key={c.id}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="border-dashed h-10">
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        {c.label}
+                        {currentVals.length > 0 && (
+                          <>
+                            <div className="mx-2 h-4 w-[1px] bg-border" />
+                            <Badge variant="secondary" className="rounded-sm px-1 font-normal">
+                              {currentVals.length} sel.
+                            </Badge>
+                          </>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0" style={{ width: 'max-content', minWidth: '150px', maxWidth: '350px' }} align="start">
+                      <div className="p-2 space-y-1">
+                        {c.options?.map(opt => (
+                          <Button
+                            key={opt.value}
+                            variant="ghost"
+                            className="w-full justify-start font-normal h-8 px-2 gap-3"
+                            onClick={() => handleToggle(opt.value)}
+                            title={opt.label}
+                          >
+                            <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0", currentVals.includes(opt.value) ? "bg-primary border-primary text-primary-foreground" : "border-input")}>
+                              {currentVals.includes(opt.value) && <Check className="h-3 w-3" />}
+                            </div>
+                            <span className="truncate text-left">{opt.label}</span>
+                          </Button>
+                        ))}
+                        {currentVals.length > 0 && (
+                          <div className="pt-2 mt-2 border-t">
+                            <Button variant="ghost" size="sm" className="w-full h-8 text-xs text-muted-foreground" onClick={() => setFilter(c.id, null)}>
+                              Limpiar
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                );
+              }
+
+              if (c.type === 'number_range') {
+                const parts = currentVal ? currentVal.split('-') : [];
+                const min = parts[0] || '';
+                const max = parts[1] || '';
+
+                const updateRange = (newMin: string, newMax: string) => {
+                  if (!newMin && !newMax) {
+                    setFilter(c.id, null);
+                  } else {
+                    setFilter(c.id, `${newMin}-${newMax}`);
+                  }
+                };
+
+                return (
+                  <Popover key={c.id}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="border-dashed h-10">
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        {c.label}
+                        {(min || max) && (
+                          <>
+                            <div className="mx-2 h-4 w-[1px] bg-border" />
+                            <Badge variant="secondary" className="rounded-sm px-1 font-normal">
+                              {min && max ? `${min} - ${max}` : min ? `>= ${min}` : `<= ${max}`}
+                            </Badge>
+                          </>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-3" align="start">
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>Rango de Precio</Label>
+                          <div className="flex items-center gap-2">
+                            <Input 
+                              type="number" 
+                              placeholder="Mín" 
+                              value={min} 
+                              onChange={(e) => updateRange(e.target.value, max)} 
+                              className="h-8"
+                            />
+                            <span>-</span>
+                            <Input 
+                              type="number" 
+                              placeholder="Máx" 
+                              value={max} 
+                              onChange={(e) => updateRange(min, e.target.value)} 
+                              className="h-8"
+                            />
+                          </div>
+                        </div>
+                        {(min || max) && (
+                          <Button variant="ghost" size="sm" className="w-full h-8 text-xs text-muted-foreground" onClick={() => setFilter(c.id, null)}>
+                            Limpiar
+                          </Button>
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 );
               }
 

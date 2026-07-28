@@ -1702,9 +1702,13 @@ ${paymentConditionHtml}
                 >
                   <div className="p-2.5 flex flex-col flex-1 items-center">
                     <div className="w-full flex items-start justify-between mb-2">
-                      <span className="text-[9px] font-bold uppercase text-[var(--text-sec)] bg-[var(--bg)] px-1.5 py-0.5 rounded border border-[var(--border)]">
-                        {product.category.name}
-                      </span>
+                      {product.category?.name !== 'Sin categoría' ? (
+                        <span className="text-[9px] font-bold uppercase text-[var(--text-sec)] bg-[var(--bg)] px-1.5 py-0.5 rounded border border-[var(--border)]">
+                          {product.category.name}
+                        </span>
+                      ) : (
+                        <span />
+                      )}
                       <Badge
                         variant={product.stock < 10 ? "destructive" : "secondary"}
                         className="text-[9px] px-1.5 py-0"
