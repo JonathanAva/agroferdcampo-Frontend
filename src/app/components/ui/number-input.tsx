@@ -63,6 +63,11 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
       }
     }
 
+    const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+      e.target.select()
+      props.onFocus?.(e)
+    }
+
     return (
       <div className="relative group">
         <input
@@ -75,6 +80,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
           ref={resolvedRef}
           value={inputValue}
           onChange={handleChange}
+          onFocus={handleFocus}
           {...restProps}
         />
         {!hideControls && (
