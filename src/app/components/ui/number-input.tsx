@@ -14,16 +14,28 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
     const inputRef = React.useRef<HTMLInputElement>(null)
     const resolvedRef = (ref as React.RefObject<HTMLInputElement>) ?? inputRef
 
+    const { value: rawValue, ...restProps } = props
+    const [inputValue, setInputValue] = React.useState(
+      rawValue !== undefined && rawValue !== null ? String(rawValue) : ''
+    )
+
+    React.useEffect(() => {
+      const parsed = parseFloat(inputValue)
+      const isEquivalent = parsed === rawValue || (isNaN(parsed) && (rawValue === undefined || rawValue === null))
+      if (!isEquivalent) {
+        setInputValue(rawValue !== undefined && rawValue !== null ? String(rawValue) : '')
+      }
+    }, [rawValue])
+
     const getCurrentValue = () => {
-      const raw = resolvedRef.current?.value ?? ''
-      return parseFloat(raw)
+      return parseFloat(inputValue)
     }
 
     const handleIncrement = () => {
       const cur = getCurrentValue()
       const next = (isNaN(cur) ? 0 : cur) + Number(step)
       const clamped = max !== undefined ? Math.min(Number(max), next) : next
-      if (resolvedRef.current) resolvedRef.current.value = String(clamped)
+      setInputValue(String(clamped))
       onValueChange?.(clamped)
     }
 
@@ -31,24 +43,25 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
       const cur = getCurrentValue()
       const next = (isNaN(cur) ? 0 : cur) - Number(step)
       const clamped = min !== undefined ? Math.max(Number(min), next) : next
-      if (resolvedRef.current) resolvedRef.current.value = String(clamped)
+      setInputValue(String(clamped))
       onValueChange?.(clamped)
     }
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      // Normalize comma to dot so users in Spanish/European locale can use either separator
-      const normalized = e.target.value.replace(',', '.')
-      if (normalized !== e.target.value) {
-        e.target.value = normalized
+      let val = e.target.value.replace(',', '.')
+      // Permitir solo números y un solo punto decimal, o vacío, o el signo menos al principio
+      if (val === '' || val === '-' || /^-?\d*\.?\d*$/.test(val)) {
+        setInputValue(val)
+        if (val === '-' || val === '.' || val === '-.') {
+          // If it's just a minus sign or dot, we don't propagate a valid number yet
+          onValueChange?.(undefined)
+        } else {
+          const num = parseFloat(val)
+          onValueChange?.(isNaN(num) ? undefined : num)
+        }
+        onChange?.(e)
       }
-      const val = parseFloat(normalized)
-      onValueChange?.(isNaN(val) ? undefined : val)
-      onChange?.(e)
     }
-
-    // Convert numeric value to string so type="text" displays it correctly
-    const { value: rawValue, ...restProps } = props
-    const displayValue = rawValue !== undefined && rawValue !== null ? String(rawValue) : undefined
 
     return (
       <div className="relative group">
@@ -60,7 +73,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
             className
           )}
           ref={resolvedRef}
-          value={displayValue}
+          value={inputValue}
           onChange={handleChange}
           {...restProps}
         />
