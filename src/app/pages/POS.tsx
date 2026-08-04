@@ -70,6 +70,9 @@ interface Product {
   imageUrl?: string | null;
   unit: string;
   isUniversal?: boolean;
+  isService?: boolean;
+  serviceType?: string;
+  fixedCommission?: number | string;
   units?: {
     id: number;
     unit: string;
@@ -105,6 +108,7 @@ interface CartUnitSelection {
   originalPrice: number;
   priceType: string;
   customName?: string;
+  unitCost?: number;
 }
 
 const PRICE_TYPE_LABELS: Record<string, string> = {
@@ -262,7 +266,68 @@ export function POS() {
   const [products, setProducts] = useState<Product[]>([]);
   const [universalProduct, setUniversalProduct] = useState<Product | null>(null);
   const [showUniversalModal, setShowUniversalModal] = useState(false);
-  const [universalForm, setUniversalForm] = useState({ nombre: "", medida: "UNIDAD", cantidad: "1", precio: "" });
+  const [universalForm, setUniversalForm] = useState({ nombre: "", medida: "UNIDAD", cantidad: "1", precio: "", costo: "" });
+
+  // Servicios
+  const [showServiceModal, setShowServiceModal] = useState(false);
+  const [serviceProduct, setServiceProduct] = useState<Product | null>(null);
+  const [serviceForm, setServiceForm] = useState({ monto: "", comision: "", referencia: "" });
+
+  const isServiceProduct = (p: Product) => p.isService || p.category?.name?.trim().toLowerCase() === "servicios";
+
+  const handleServiceClick = (p: Product) => {
+    setServiceProduct(p);
+    setServiceForm({ monto: "", comision: p.fixedCommission ? String(p.fixedCommission) : "", referencia: "" });
+    setShowServiceModal(true);
+  };
+
+  const addServiceToCart = () => {
+    if (!serviceProduct) return;
+    const monto = parseFloat(serviceForm.monto) || 0;
+    const comision = parseFloat(serviceForm.comision) || 0;
+    if (monto <= 0) {
+      toast.error("El monto debe ser mayor a 0");
+      return;
+    }
+
+    let total = 0;
+    let customName = "";
+
+    if (serviceProduct.serviceType === "SALIDA") {
+      total = -monto; // Resta dinero de caja
+      customName = `(SALIDA) ${serviceProduct.name} ${serviceForm.referencia ? `(${serviceForm.referencia})` : ""} - Monto: $${monto.toFixed(2)} / Com.: $${comision.toFixed(2)}`;
+    } else {
+      total = monto + comision; // Suma dinero a caja
+      customName = `(INGRESO) ${serviceProduct.name} ${serviceForm.referencia ? `(${serviceForm.referencia})` : ""} - Monto: $${monto.toFixed(2)} / Com.: $${comision.toFixed(2)}`;
+    }
+
+    const newSelection: CartUnitSelection = {
+      id: Math.random().toString(36).substring(2, 9),
+      unitType: serviceProduct.unit,
+      unitFactor: 1,
+      quantity: 1,
+      price: total,
+      originalPrice: total,
+      priceType: "PUBLICO",
+      customName,
+    };
+
+    setCart((prev) => {
+      const existing = prev.find((i) => i.id === serviceProduct.id);
+      if (existing) {
+        return prev.map((i) =>
+          i.id === serviceProduct.id
+            ? { ...i, selections: [...i.selections, newSelection] }
+            : i
+        );
+      } else {
+        return [...prev, { ...serviceProduct, selections: [newSelection] }];
+      }
+    });
+
+    setShowServiceModal(false);
+    toast.success("Servicio agregado al carrito");
+  };
   const [categories, setCategories] = useState<POSCategory[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<number | null>(null);
@@ -883,7 +948,7 @@ export function POS() {
    * (mismo producto, distinto nombre/medida/precio), reusando updateQuantity/updatePrice/
    * removeSelection tal cual porque ya operan por selection.id, no por producto.
    */
-  const addUniversalToCart = (nombre: string, medida: string, cantidad: number, precio: number) => {
+  const addUniversalToCart = (nombre: string, medida: string, cantidad: number, precio: number, costo: number) => {
     if (!universalProduct) return;
 
     const newSelection: CartUnitSelection = {
@@ -895,9 +960,10 @@ export function POS() {
       originalPrice: precio,
       priceType: "PUBLICO",
       customName: nombre,
-    };
+        unitCost: costo,
+      };
 
-    setCart((prev) => {
+      setCart((prev) => {
       const existing = prev.find((i) => i.id === universalProduct.id);
       if (existing) {
         return prev.map((i) =>
@@ -1190,7 +1256,8 @@ export function POS() {
             unitPrice: Number(s.price),
             unitType: s.unitType,
             unitFactor: Number(s.unitFactor),
-            ...(s.customName ? { customName: s.customName } : {}),
+              ...(s.customName ? { customName: s.customName } : {}),
+              ...(s.unitCost !== undefined ? { unitCost: Number(s.unitCost) } : {}),
           }))
         ),
         ...(transportData && transportData.requiresTransport ? {
@@ -1668,7 +1735,7 @@ ${paymentConditionHtml}
               {universalProduct && (
                 <div
                   onClick={() => {
-                    setUniversalForm({ nombre: "", medida: "UNIDAD", cantidad: "1", precio: "" });
+                    setUniversalForm({ nombre: "", medida: "UNIDAD", cantidad: "1", precio: "", costo: "" });
                     setShowUniversalModal(true);
                   }}
                   className="group relative rounded-xl border-2 border-dashed border-[var(--primary)] overflow-hidden transition-all flex flex-col cursor-pointer bg-[var(--primary)]/5 hover:bg-[var(--primary)]/10 hover:shadow-md"
@@ -1687,15 +1754,15 @@ ${paymentConditionHtml}
                 </div>
               )}
               {products
-                .filter((product) => product.stock > 0)
+                .filter((product) => product.stock > 0 || isServiceProduct(product))
                 .filter((product) => !showExpiringSoonOnly || (product.expirationDate && isNearExpiration(product.expirationDate)))
                 .map((product) => (
                 <div
                   key={product.id}
-                  onClick={() => product.stock > 0 && addToCart(product)}
+                  onClick={() => isServiceProduct(product) ? handleServiceClick(product) : (product.stock > 0 && addToCart(product))}
                   className={cn(
                     "group relative rounded-xl border overflow-hidden transition-all flex flex-col cursor-pointer",
-                    product.stock > 0
+                    (product.stock > 0 || isServiceProduct(product))
                       ? "bg-[var(--card)] border-[var(--border)] hover:border-[var(--primary)] hover:shadow-md"
                       : "bg-[var(--bg)] border-[var(--border)] opacity-60 cursor-not-allowed"
                   )}
@@ -2124,6 +2191,55 @@ ${paymentConditionHtml}
         }}
       />
 
+      {/* Modal Servicio */}
+      <Dialog open={showServiceModal} onOpenChange={setShowServiceModal}>
+        <DialogContent className="sm:max-w-md w-full" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--text-main)" }}>
+          <DialogHeader>
+            <DialogTitle>{serviceProduct?.name || "Servicio"}</DialogTitle>
+            <DialogDescription>
+              Ingresa el monto del recibo/transacción y tu comisión.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Referencia / N de Recibo (Opcional)</Label>
+              <Input
+                autoFocus
+                value={serviceForm.referencia}
+                onChange={(e) => setServiceForm({ ...serviceForm, referencia: e.target.value })}
+                placeholder="Ej. Recibo 12345"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Monto a Pagar ($)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={serviceForm.monto}
+                  onChange={(e) => setServiceForm({ ...serviceForm, monto: e.target.value })}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Comisión ($)</Label>
+                <Input type="number" step="0.01" min="0" value={serviceForm.comision} onChange={(e) => setServiceForm({ ...serviceForm, comision: e.target.value })} placeholder="0.00" />
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setShowServiceModal(false)}>Cancelar</Button>
+            <Button
+              className="bg-[var(--primary)] text-white hover:brightness-110"
+              onClick={addServiceToCart}
+            >
+              Agregar a la Caja
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Modal Producto Universal — venta rápida configurada a mano */}
       <Dialog open={showUniversalModal} onOpenChange={setShowUniversalModal}>
         <DialogContent className="sm:max-w-md w-full" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--text-main)" }}>
@@ -2167,19 +2283,36 @@ ${paymentConditionHtml}
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Precio</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={universalForm.precio}
-                  onChange={(e) => setUniversalForm({ ...universalForm, precio: e.target.value })}
-                  placeholder="0.00"
-                  className="pl-7"
-                />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Costo</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={universalForm.costo}
+                    onChange={(e) => setUniversalForm({ ...universalForm, costo: e.target.value })}
+                    placeholder="0.00"
+                    className="pl-7"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Precio Venta</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={universalForm.precio}
+                    onChange={(e) => setUniversalForm({ ...universalForm, precio: e.target.value })}
+                    placeholder="0.00"
+                    className="pl-7"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -2202,7 +2335,7 @@ ${paymentConditionHtml}
                   toast.error("Ingresa un precio válido");
                   return;
                 }
-                addUniversalToCart(universalForm.nombre.trim(), universalForm.medida, cantidad, precio);
+                addUniversalToCart(universalForm.nombre.trim(), universalForm.medida, cantidad, precio, Number(universalForm.costo));
                 setShowUniversalModal(false);
               }}
             >
@@ -3021,3 +3154,11 @@ ${paymentConditionHtml}
     </div>
   );
 }
+
+
+
+
+
+
+
+

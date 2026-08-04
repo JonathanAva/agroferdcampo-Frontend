@@ -74,6 +74,9 @@ interface CatalogProduct {
   unit: string;
   trackStock: boolean;
   isUniversal?: boolean;
+  isService?: boolean;
+  serviceType?: string;
+  fixedCommission?: number | string;
   isActive: boolean;
   imageUrl?: string;
   category?: { id: number; name: string };
@@ -148,6 +151,9 @@ const productSchema = z.object({
   costPrice: z.string(),
   trackStock: z.boolean(),
   isUniversal: z.boolean(),
+  isService: z.boolean().optional(),
+  serviceType: z.string().optional(),
+  fixedCommission: z.string().optional(),
   prices: z
     .array(
       z.object({
@@ -256,6 +262,9 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         costPrice: "",
         trackStock: true,
         isUniversal: false,
+        isService: false,
+        serviceType: "",
+        fixedCommission: "",
         prices: [{ priceType: "PUBLICO", branchId: "global", price: "" }],
         stockRows: [],
       },
@@ -290,6 +299,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
 
   const watchTrackStock = watch("trackStock");
   const watchIsUniversal = watch("isUniversal");
+  const watchIsService = watch("isService");
   const watchCategoryId = watch("categoryId");
   const watchTagIds = watch("tagIds") || [];
 
@@ -417,6 +427,10 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         costPrice: product.costPrice?.toString() || "",
         trackStock: product.trackStock,
         isUniversal: product.isUniversal || false,
+          isService: product.isService || false,
+          serviceType: product.serviceType || "",
+          fixedCommission: product.fixedCommission ? String(product.fixedCommission) : "",
+
         prices: product.prices.map((p) => ({
           id: p.id,
           priceType: p.priceType,
@@ -520,6 +534,9 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       unit: data.unit,
       trackStock: data.trackStock,
       isUniversal: data.isUniversal,
+        isService: data.isService,
+        serviceType: data.isService ? data.serviceType : null,
+        fixedCommission: data.isService && data.fixedCommission ? Number(data.fixedCommission) : null,
       categoryId: data.categoryId ? Number(data.categoryId) : null,
       subcategoryId: data.subcategoryId ? Number(data.subcategoryId) : null,
       tagIds: data.tagIds.map(Number),
@@ -1266,13 +1283,64 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                     </div>
                   </div>
 
+                    <div className="pt-4 border-t border-[var(--border)]">
+                      <div className="flex items-center justify-between">
+                        <div className="text-left">
+                          <p className="text-sm font-bold">Es un Servicio</p>
+                          <p className="text-[10px] opacity-60">
+                            (No físico: luz, remesas, etc)
+                          </p>
+                        </div>
+                        <Switch
+                          checked={watchIsService}
+                          onCheckedChange={(v) => {
+                            setValue("isService", v);
+                            if (v) {
+                              setValue("trackStock", false);
+                              setValue("prices", [{ priceType: "PUBLICO", branchId: "global", price: "0" }]);
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {watchIsService && (
+                      <div className="pt-4 border-t border-[var(--border)] space-y-4">
+                        <div className="space-y-2">
+                          <Label className="text-sm font-bold">Tipo de Servicio</Label>
+                          <Select
+                            onValueChange={(val) => setValue("serviceType", val)}
+                            value={watch("serviceType") || ""}
+                          >
+                            <SelectTrigger className="h-11 rounded-xl bg-[var(--card)]">
+                              <SelectValue placeholder="Selecciona tipo de servicio" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="INGRESO">Ingreso a Caja (Ej. Cobro de Luz)</SelectItem>
+                              <SelectItem value="SALIDA">Salida de Caja (Ej. Pago de Remesa)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-bold">Comisión Fija ($)</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            {...register("fixedCommission")}
+                            placeholder="0.00"
+                            className="h-11 rounded-xl bg-[var(--card)]"
+                          />
+                        </div>
+                      </div>
+                    )}
+
                 </div>
               </div>
 
               {/* Columna Derecha: Precios y Stock */}
               <div className="space-y-6">
                 {/* SecciÃ³n Precios (no aplica a Producto Universal: el precio se define al vender) */}
-                {watchIsUniversal ? (
+                {watchIsUniversal || watchIsService ? (
                   <div className="p-6 rounded-xl border border-dashed border-[var(--border)] bg-transparent">
                     <p className="text-xs font-bold text-[var(--text-sec)]">
                       Este producto no lleva precio fijo â€” se ingresa cada vez que se vende desde el POS.
@@ -1532,7 +1600,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                 </div>
 
                 {/* SecciÃ³n Stock Inicial */}
-                {!editingProduct && watchTrackStock && (
+                {!editingProduct && watchTrackStock && !watchIsService && (
                   <div className="p-6 rounded-xl border border-[var(--border)] space-y-6 bg-transparent">
                     <div className="flex items-center justify-between">
                       <p className="text-xs font-black uppercase tracking-widest opacity-60 text-[var(--text-sec)]">
@@ -1931,3 +1999,9 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
     </div>
   );
 }
+
+
+
+
+
+
