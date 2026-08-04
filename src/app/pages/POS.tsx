@@ -24,6 +24,7 @@ import {
   Calendar as CalendarIcon,
   Upload,
   ImageIcon,
+  Layers,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -36,6 +37,7 @@ import { createPreSale, PreSaleTicket } from "../services/pre-sales.service";
 import { uploadsService } from "../services/uploads.service";
 import { cashShiftsService, CashShift, BillsBreakdown, CoinsBreakdown, OpenShiftPayload, CloseShiftPayload } from "../services/cash-shifts.service";
 import { quotesService } from "../services/quotes.service";
+import { getLotCostSummary, LotCostSummary } from "../services/purchases.service";
 import { toast } from "sonner";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -264,6 +266,9 @@ export function POS() {
   const quoteBtnRef = useRef<HTMLButtonElement>(null);
   const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
+  // Desglose de costo por lote, consultado bajo demanda (no viene con la búsqueda) y cacheado por producto.
+  const [costSummaryByProduct, setCostSummaryByProduct] = useState<Record<number, LotCostSummary[]>>({});
+  const [loadingCostSummaryId, setLoadingCostSummaryId] = useState<number | null>(null);
   const [universalProduct, setUniversalProduct] = useState<Product | null>(null);
   const [showUniversalModal, setShowUniversalModal] = useState(false);
   const [universalForm, setUniversalForm] = useState({ nombre: "", medida: "UNIDAD", cantidad: "1", precio: "", costo: "" });
@@ -849,6 +854,19 @@ export function POS() {
       toast.error("Error al obtener productos");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenCostSummary = async (productId: number) => {
+    if (costSummaryByProduct[productId]) return; // ya cacheado, no repetir la llamada
+    setLoadingCostSummaryId(productId);
+    try {
+      const data = await getLotCostSummary(productId);
+      setCostSummaryByProduct((prev) => ({ ...prev, [productId]: data }));
+    } catch (error) {
+      toast.error("Error al cargar el desglose de costos del producto");
+    } finally {
+      setLoadingCostSummaryId(null);
     }
   };
 
@@ -1777,12 +1795,50 @@ ${paymentConditionHtml}
                       ) : (
                         <span />
                       )}
-                      <Badge
-                        variant={product.stock < 10 ? "destructive" : "secondary"}
-                        className="text-[9px] px-1.5 py-0"
-                      >
-                        {product.stock}
-                      </Badge>
+                      <div className="flex items-center gap-1">
+                        <Popover onOpenChange={(open) => open && handleOpenCostSummary(product.id)}>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={(e) => e.stopPropagation()}
+                              className="size-5 rounded flex items-center justify-center text-[var(--text-sec)] hover:text-[var(--primary)] hover:bg-[var(--bg)] border border-[var(--border)]"
+                              title="Ver costo por lote"
+                            >
+                              <Layers size={11} />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            className="w-56 p-2"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <p className="text-[10px] font-bold uppercase text-[var(--text-sec)] mb-1.5">
+                              Costo por lote
+                            </p>
+                            {loadingCostSummaryId === product.id ? (
+                              <p className="text-xs opacity-60">Cargando...</p>
+                            ) : costSummaryByProduct[product.id]?.length ? (
+                              <ul className="space-y-1">
+                                {costSummaryByProduct[product.id].map((group, idx) => (
+                                  <li key={idx} className="flex items-center justify-between text-xs">
+                                    <span>{Number(group.quantity)} {product.unit}</span>
+                                    <span className="font-bold">
+                                      {group.unitCost != null ? `$${Number(group.unitCost).toFixed(2)}` : "—"}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="text-xs opacity-60">Sin lotes activos.</p>
+                            )}
+                          </PopoverContent>
+                        </Popover>
+                        <Badge
+                          variant={product.stock < 10 ? "destructive" : "secondary"}
+                          className="text-[9px] px-1.5 py-0"
+                        >
+                          {product.stock}
+                        </Badge>
+                      </div>
                     </div>
 
                     <div className="w-24 h-24 rounded-lg overflow-hidden bg-[var(--bg)] border border-[var(--border)] mb-2 flex-shrink-0">

@@ -42,6 +42,18 @@ export interface Lot {
   createdAt: string;
 }
 
+// Desglose de unidades por costo (lotes activos agrupados por unitCost), del más viejo al más nuevo.
+export interface LotCostSummary {
+  unitCost: number | null;
+  quantity: number;
+  oldestExpirationDate: string | null;
+  firstReceivedAt: string;
+}
+
+export async function getLotCostSummary(productId: number): Promise<LotCostSummary[]> {
+  return apiRequest<LotCostSummary[]>(`/inventory/lots/${productId}/cost-summary`);
+}
+
 export interface PayPurchaseDto {
   paymentMethod: 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA';
   cashSource: 'CAJA_GENERAL' | 'CAJA_CHICA';

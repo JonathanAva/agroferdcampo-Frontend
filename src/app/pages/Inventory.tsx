@@ -1272,6 +1272,7 @@ function InventoryList() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-xs">Cantidad</TableHead>
+                    <TableHead className="text-xs">Costo</TableHead>
                     <TableHead className="text-xs">Vence</TableHead>
                     <TableHead className="text-xs">Lote</TableHead>
                     <TableHead className="text-xs text-center">Acción</TableHead>
@@ -1283,6 +1284,9 @@ function InventoryList() {
                       <TableRow key={lot.id}>
                         <TableCell className="text-xs font-bold">
                           {Number(lot.quantity)} {selectedItem?.product.unit}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {lot.unitCost != null ? `$${Number(lot.unitCost).toFixed(2)}` : "—"}
                         </TableCell>
                         <TableCell className="p-1">
                           <Input
@@ -1330,6 +1334,9 @@ function InventoryList() {
                       <TableRow key={lot.id}>
                         <TableCell className="text-xs font-bold">
                           {Number(lot.quantity)} {selectedItem?.product.unit}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {lot.unitCost != null ? `$${Number(lot.unitCost).toFixed(2)}` : "—"}
                         </TableCell>
                         <TableCell className="text-xs">
                           {lot.expirationDate ? (
