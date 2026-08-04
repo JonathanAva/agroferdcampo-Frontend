@@ -774,6 +774,7 @@ export function POS() {
       const params = new URLSearchParams();
       if (isSearch) {
         params.set("q", query);
+        params.set("limit", "100");
       } else {
         params.set("isActive", "true");
         params.set("limit", "30");
