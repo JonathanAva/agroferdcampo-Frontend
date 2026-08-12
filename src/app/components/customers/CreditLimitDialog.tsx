@@ -12,6 +12,8 @@ import { creditService, CreditDocument, CreditDocumentStatus, CreateCreditDocume
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
+import { UnsavedChangesDialog } from '../ui/unsaved-changes-dialog';
 
 interface CreditLimitDialogProps {
   open: boolean;
@@ -23,6 +25,7 @@ interface CreditLimitDialogProps {
 export function CreditLimitDialog({ open, onOpenChange, customer, onSuccess }: CreditLimitDialogProps) {
   const [loading, setLoading] = useState(false);
   const [creditLimit, setCreditLimit] = useState<number | string>('');
+  const [initialCreditLimit, setInitialCreditLimit] = useState<number | string>('');
 
   // Documents State
   const [docs, setDocs] = useState<CreditDocument[]>([]);
@@ -38,10 +41,18 @@ export function CreditLimitDialog({ open, onOpenChange, customer, onSuccess }: C
 
   useEffect(() => {
     if (customer) {
-      setCreditLimit(Number(customer.creditLimit) || 0);
+      const limit = Number(customer.creditLimit) || 0;
+      setCreditLimit(limit);
+      setInitialCreditLimit(limit);
       if (open) fetchDocs(customer.id);
     }
   }, [customer, open]);
+
+  const isDirty =
+    String(creditLimit) !== String(initialCreditLimit) ||
+    (showAddForm && newDoc.documentName.trim() !== '');
+  const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } =
+    useUnsavedChangesGuard(isDirty);
 
   const fetchDocs = async (customerId: number) => {
     setLoadingDocs(true);
@@ -122,8 +133,9 @@ export function CreditLimitDialog({ open, onOpenChange, customer, onSuccess }: C
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent 
+    <>
+    <Dialog open={open} onOpenChange={(o) => o ? onOpenChange(true) : confirmExit(() => onOpenChange(false))}>
+      <DialogContent
         className="max-w-4xl sm:max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto"
         style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--text-main)" }}
       >
@@ -168,10 +180,10 @@ export function CreditLimitDialog({ open, onOpenChange, customer, onSuccess }: C
               </div>
 
               <div className="pt-4 flex gap-3">
-                <Button 
-                  type="button" 
-                  variant="ghost" 
-                  onClick={() => onOpenChange(false)}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => confirmExit(() => onOpenChange(false))}
                   className="rounded-xl flex-1"
                 >
                   Cerrar
@@ -238,7 +250,7 @@ export function CreditLimitDialog({ open, onOpenChange, customer, onSuccess }: C
                   </Select>
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
-                  <Button size="sm" variant="ghost" onClick={() => setShowAddForm(false)}>Cancelar</Button>
+                  <Button size="sm" variant="ghost" onClick={() => confirmExit(() => setShowAddForm(false))}>Cancelar</Button>
                   <Button size="sm" onClick={handleSaveDoc} disabled={savingDoc}>
                     {savingDoc ? 'Guardando...' : 'Guardar Documento'}
                   </Button>
@@ -305,5 +317,7 @@ export function CreditLimitDialog({ open, onOpenChange, customer, onSuccess }: C
         </div>
       </DialogContent>
     </Dialog>
+    <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
+    </>
   );
 }

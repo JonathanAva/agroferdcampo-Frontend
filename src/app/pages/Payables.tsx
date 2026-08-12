@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { Label } from '../components/ui/label';
 import { NumberInput } from '../components/ui/number-input';
+import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
+import { UnsavedChangesDialog } from '../components/ui/unsaved-changes-dialog';
 
 export function Payables() {
   const [purchases, setPurchases] = useState<PurchaseResponse[]>([]);
@@ -35,6 +37,9 @@ export function Payables() {
   const [transferReceiptFile, setTransferReceiptFile] = useState<File | null>(null);
   const [transferReceiptPreview, setTransferReceiptPreview] = useState<string>('');
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
+
+  const isDirty = paymentModalOpen && (!!paymentForm.paymentRef || !!transferReceiptFile);
+  const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
 
   useEffect(() => {
     fetchPurchases();
@@ -258,7 +263,7 @@ export function Payables() {
       </div>
 
       {/* REGISTRAR PAGO */}
-      <Dialog open={paymentModalOpen} onOpenChange={setPaymentModalOpen}>
+      <Dialog open={paymentModalOpen} onOpenChange={(o) => o ? setPaymentModalOpen(true) : confirmExit(() => setPaymentModalOpen(false))}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Registrar Pago a Proveedor</DialogTitle>
@@ -365,7 +370,7 @@ export function Payables() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPaymentModalOpen(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => confirmExit(() => setPaymentModalOpen(false))}>Cancelar</Button>
             <Button
               onClick={handlePaymentSubmit}
               disabled={savingPayment || uploadingReceipt}
@@ -376,6 +381,8 @@ export function Payables() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
     </div>
   );
 }

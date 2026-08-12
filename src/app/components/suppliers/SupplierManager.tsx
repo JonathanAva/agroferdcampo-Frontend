@@ -9,6 +9,8 @@ import { Badge } from '../ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { NumberInput } from '../ui/number-input';
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
+import { UnsavedChangesDialog } from '../ui/unsaved-changes-dialog';
 
 export function SupplierManager() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -22,6 +24,11 @@ export function SupplierManager() {
     name: '', taxId: '', nrc: '', email: '', phone: '', address: '', contactName: '', creditDays: 0, creditLimit: 0 
   });
   const [saving, setSaving] = useState(false);
+
+  const isDirty =
+    form.name?.trim() !== '' || form.email?.trim() !== '' || form.phone?.trim() !== '';
+  const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } =
+    useUnsavedChangesGuard(modalOpen && isDirty);
 
   useEffect(() => {
     fetchSuppliers();
@@ -198,7 +205,7 @@ export function SupplierManager() {
       )}
 
       {/* --- MODAL CREAR/EDITAR --- */}
-      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+      <Dialog open={modalOpen} onOpenChange={(o) => o ? setModalOpen(true) : confirmExit(() => setModalOpen(false))}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -296,13 +303,15 @@ export function SupplierManager() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => confirmExit(() => setModalOpen(false))}>Cancelar</Button>
             <Button onClick={handleSave} disabled={saving || !form.name}>
               {saving ? 'Guardando...' : editingId ? 'Guardar Cambios' : 'Crear Proveedor'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
     </div>
   );
 }

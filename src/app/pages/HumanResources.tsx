@@ -32,6 +32,8 @@ import { es } from "date-fns/locale";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
 import { useSearchParams } from "react-router";
 import { SmartFilter, FilterConfig } from "../components/ui/smart-filter";
+import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
 
 const hrFilters: FilterConfig[] = [
   { id: 'search', label: 'Buscar empleados...', type: 'text', placeholder: 'Nombre, código o DUI...' }
@@ -284,6 +286,16 @@ export function HumanResources() {
   });
   const [leaveStartDate, setLeaveStartDate] = useState<Date | undefined>(undefined);
   const [leaveEndDate, setLeaveEndDate] = useState<Date | undefined>(undefined);
+
+  const isLeaveFormDirty =
+    isLeaveModalOpen &&
+    (leaveForm.reason?.trim() !== "" || !!leaveStartDate || !!leaveEndDate);
+  const {
+    confirmExit: confirmLeaveExit,
+    isOpen: exitLeaveDialogOpen,
+    handleConfirm: confirmLeaveDiscard,
+    handleCancel: cancelLeaveDiscard,
+  } = useUnsavedChangesGuard(isLeaveFormDirty);
 
   // Selected Department for Filtering Positions
   const [selectedDeptId, setSelectedDeptId] = useState<string>("");
@@ -1612,12 +1624,16 @@ export function HumanResources() {
 
       {/* --- MODAL: NUEVA SOLICITUD DE PERMISO --- */}
       <Dialog open={isLeaveModalOpen} onOpenChange={(open) => {
-        setIsLeaveModalOpen(open);
-        if (!open) {
+        if (open) {
+          setIsLeaveModalOpen(true);
+          return;
+        }
+        confirmLeaveExit(() => {
+          setIsLeaveModalOpen(false);
           setLeaveForm({ employeeId: "", leaveTypeId: "", reason: "" });
           setLeaveStartDate(undefined);
           setLeaveEndDate(undefined);
-        }
+        });
       }}>
         <DialogContent className="sm:max-w-lg w-[95vw] p-0 overflow-hidden border-[var(--border)] bg-[var(--card)] shadow-2xl">
           <DialogHeader className="p-6 border-b border-[var(--border)] bg-[var(--bg)]/50">
@@ -1747,7 +1763,12 @@ export function HumanResources() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setIsLeaveModalOpen(false)}
+                onClick={() => confirmLeaveExit(() => {
+                  setIsLeaveModalOpen(false);
+                  setLeaveForm({ employeeId: "", leaveTypeId: "", reason: "" });
+                  setLeaveStartDate(undefined);
+                  setLeaveEndDate(undefined);
+                })}
                 disabled={formLoading}
               >
                 Cancelar
@@ -2888,6 +2909,8 @@ export function HumanResources() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <UnsavedChangesDialog open={exitLeaveDialogOpen} onConfirm={confirmLeaveDiscard} onCancel={cancelLeaveDiscard} />
     </div>
   );
 }

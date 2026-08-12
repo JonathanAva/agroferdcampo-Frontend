@@ -2,7 +2,7 @@
 import logo from '../../assets/logo.png';
 import {
   Search, FileText, Eye, CheckCircle2, AlertCircle, Calendar as CalendarIcon, RefreshCcw, Filter, X,
-  Mail, UserCog, Clock, Send, Plus, Banknote, CreditCard, Smartphone, Trash2, Truck as TruckIcon, Printer
+  Mail, UserCog, Clock, Send, Plus, Banknote, CreditCard, Smartphone, Trash2, Truck as TruckIcon, Printer, PackageCheck
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { quotesService, QuoteResponse } from '../services/quotes.service';
@@ -22,14 +22,16 @@ import { apiRequest } from '../config/api';
 import { TransportSelector, TransportData } from '../components/transport/TransportSelector';
 import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
 import { useAuth } from '../context/AuthContext';
-import { 
-  Command, 
-  CommandInput, 
-  CommandList, 
-  CommandEmpty, 
-  CommandGroup, 
-  CommandItem 
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem
 } from '../components/ui/command';
+import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
+import { UnsavedChangesDialog } from '../components/ui/unsaved-changes-dialog';
 
 function _qEnteroALetras(n: number): string {
   if (n === 0) return 'Cero';
@@ -53,6 +55,15 @@ function _qNumerosALetras(n: number): string {
   const intPart = Math.floor(n);
   const cents = Math.round((n - intPart) * 100);
   return `${_qEnteroALetras(intPart)} dólares${cents > 0 ? ` con ${cents}/100` : ''}`;
+}
+
+/** Formatea un UnitType del backend (ej. "MEDIA_ARROBA") a una etiqueta legible ("Media Arroba"). */
+function formatUnitLabel(unitType?: string | null): string {
+  if (!unitType) return '';
+  return unitType
+    .split('_')
+    .map(w => w.charAt(0) + w.slice(1).toLowerCase())
+    .join(' ');
 }
 
 const quotesFilters: FilterConfig[] = [
@@ -204,17 +215,17 @@ export function Quotes() {
 <html><head><meta charset="utf-8"><title>Cotización ${quoteNumber}</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Courier New',monospace;font-size:11px;width:80mm;padding:8px;color:#000}
-  h1{font-size:14px;text-align:center;font-weight:bold;margin-bottom:2px}
-  h2{font-size:12px;text-align:center;font-weight:bold;letter-spacing:2px;margin:4px 0}
+  body{font-family:'Courier New',monospace;font-size:12px;font-weight:bold;width:80mm;padding:8px;color:#000}
+  h1{font-size:15px;text-align:center;font-weight:bold;margin-bottom:2px}
+  h2{font-size:13px;text-align:center;font-weight:bold;letter-spacing:2px;margin:4px 0}
   .center{text-align:center} .bold{font-weight:bold}
   hr{border:none;border-top:1px solid #000;margin:5px 0}
   hr.d{border-top:1px dashed #000}
-  table{width:100%;border-collapse:collapse;font-size:10px}
+  table{width:100%;border-collapse:collapse;font-size:11px}
   th{font-weight:bold;text-align:left;padding:1px 2px}
   td{padding:1px 2px;vertical-align:top}
   .tr{text-align:right}
-  .row{display:flex;justify-content:space-between;gap:4px;margin:1px 0;font-size:10.5px}
+  .row{display:flex;justify-content:space-between;gap:4px;margin:1px 0;font-size:11.5px}
   .stitle{font-weight:bold;margin:3px 0 1px}
   @media print{@page{margin:0;size:80mm auto}body{margin:0;padding:4px}}
 </style></head><body>
@@ -254,7 +265,7 @@ ${customerEmail ? `<div class="row"><span>Correo:</span><span>${customerEmail}</
   </tr></thead>
   <tbody>
     ${fullQuote.items.map(i => `<tr>
-      <td>${Number(i.quantity)}</td>
+      <td>${Number(i.quantity)}${i.unitType ? ` ${formatUnitLabel(i.unitType)}` : ''}</td>
       <td>${i.product?.name || ''}</td>
       <td class="tr">${fmt(Number(i.unitPrice))}</td>
       <td class="tr">${fmt(Number(i.totalPrice))}</td>
@@ -464,6 +475,17 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
       setSendingEmail(false);
     }
   };
+
+  // Nota: `createQuoteModalOpen` (modal "Nueva Cotización") es código muerto — nunca se abre
+  // desde ningún botón, solo se cierra. No se le aplica el guard de cambios sin guardar.
+  const isDirty =
+    (paymentModalOpen && (
+      selectedPaymentMethod !== 'EFECTIVO' ||
+      !!(transportData && transportData.requiresTransport)
+    )) ||
+    (editCustomerModalOpen && selectedCustomerId !== (editingQuote?.customerId ?? null)) ||
+    (emailModalOpen && destinationEmail.trim() !== '');
+  const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
 
   const getStatusBadge = (quote: QuoteResponse) => {
     if (quote.status === 'EXPIRADA') {
@@ -745,7 +767,10 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
                     <TableBody>
                       {selectedQuote.items?.map(item => (
                         <TableRow key={item.id}>
-                          <TableCell className="font-bold">{item.quantity}</TableCell>
+                          <TableCell className="font-bold">
+                            {item.quantity}
+                            {item.unitType && <span className="ml-1 text-[10px] font-bold text-[var(--text-sec)] uppercase">{formatUnitLabel(item.unitType)}</span>}
+                          </TableCell>
                           <TableCell>{item.product?.name}</TableCell>
                           <TableCell className="text-right">${Number(item.unitPrice).toFixed(4)}</TableCell>
                           <TableCell className="text-right font-black text-[var(--primary)]">${Number(item.totalPrice).toFixed(4)}</TableCell>
@@ -759,7 +784,8 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
                         let totalCost = 0;
                         selectedQuote.items?.forEach(i => {
                           const cost = Number(i.costPrice) || Number(i.product?.costPrice) || 0;
-                          totalCost += cost * Number(i.quantity);
+                          const factor = Number(i.unitFactor) || 1;
+                          totalCost += cost * factor * Number(i.quantity);
                         });
                         const estimatedGain = Number(selectedQuote.totalAmount) - totalCost;
                         const gainPercent = totalCost > 0 ? (estimatedGain / totalCost) * 100 : 0;
@@ -844,7 +870,7 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
       </Dialog>
 
       {/* DIALOG DE EDITAR CLIENTE (PATCH) */}
-      <Dialog open={editCustomerModalOpen} onOpenChange={setEditCustomerModalOpen}>
+      <Dialog open={editCustomerModalOpen} onOpenChange={(o) => o ? setEditCustomerModalOpen(true) : confirmExit(() => setEditCustomerModalOpen(false))}>
         <DialogContent className="max-w-md bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -902,11 +928,11 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
           </div>
           
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditCustomerModalOpen(false)}>
+            <Button variant="outline" onClick={() => confirmExit(() => setEditCustomerModalOpen(false))}>
               Cancelar
             </Button>
-            <Button 
-              onClick={handleUpdateCustomer} 
+            <Button
+              onClick={handleUpdateCustomer}
               disabled={updatingCustomer || !selectedCustomerId}
               style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
               className="font-bold"
@@ -918,7 +944,7 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
       </Dialog>
 
       {/* DIALOG DE ENVIAR CORREO (resend-email) */}
-      <Dialog open={emailModalOpen} onOpenChange={setEmailModalOpen}>
+      <Dialog open={emailModalOpen} onOpenChange={(o) => o ? setEmailModalOpen(true) : confirmExit(() => setEmailModalOpen(false))}>
         <DialogContent className="max-w-md bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -952,11 +978,11 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
           </div>
           
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEmailModalOpen(false)}>
+            <Button variant="outline" onClick={() => confirmExit(() => setEmailModalOpen(false))}>
               Cancelar
             </Button>
-            <Button 
-              onClick={handleSendEmail} 
+            <Button
+              onClick={handleSendEmail}
               disabled={sendingEmail || !destinationEmail}
               style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
               className="font-bold flex items-center gap-2"
@@ -974,7 +1000,7 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
       </Dialog>
 
       {/* DIALOG CONFIRMAR VENTA Y MÉTODO DE PAGO */}
-      <Dialog open={paymentModalOpen} onOpenChange={setPaymentModalOpen}>
+      <Dialog open={paymentModalOpen} onOpenChange={(o) => o ? setPaymentModalOpen(true) : confirmExit(() => setPaymentModalOpen(false))}>
         <DialogContent className="max-w-md bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-emerald-600">
@@ -988,8 +1014,8 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
 
           <div className="py-4">
             <Label className="text-xs font-bold uppercase text-[var(--text-sec)] mb-3 block">Método de Pago</Label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div 
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+              <div
                 onClick={() => setSelectedPaymentMethod('EFECTIVO')}
                 className={cn(
                   "border rounded-xl p-3 flex flex-col items-center gap-2 cursor-pointer transition-all",
@@ -1037,7 +1063,27 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
                 <Clock size={24} />
                 <span className="text-sm">Crédito</span>
               </div>
+              <div
+                onClick={() => setSelectedPaymentMethod('CONTRAENTREGA')}
+                className={cn(
+                  "border rounded-xl p-3 flex flex-col items-center gap-2 cursor-pointer transition-all",
+                  selectedPaymentMethod === 'CONTRAENTREGA'
+                    ? "border-purple-500 bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold"
+                    : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]/50"
+                )}
+              >
+                <PackageCheck size={24} />
+                <span className="text-sm">Contraentrega</span>
+              </div>
             </div>
+            {selectedPaymentMethod === 'CONTRAENTREGA' && (
+              <div className="mt-4 p-3 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 text-sm flex items-center gap-2">
+                <Clock size={16} className="text-purple-600 shrink-0" />
+                <span className="text-purple-800 dark:text-purple-300 font-medium">
+                  Se registrará como pago pendiente con vencimiento fijo de 2 días. Requiere un cliente registrado.
+                </span>
+              </div>
+            )}
             {quoteToConfirm && (
               <div className="mt-6 p-4 rounded-lg bg-[var(--bg)]/50 border border-[var(--border)] flex justify-between items-center">
                 <span className="text-sm text-[var(--text-sec)] font-medium">Total a cobrar:</span>
@@ -1065,8 +1111,8 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPaymentModalOpen(false)}>Cancelar</Button>
-            <Button 
+            <Button variant="outline" onClick={() => confirmExit(() => setPaymentModalOpen(false))}>Cancelar</Button>
+            <Button
               onClick={handleConfirmQuote}
               disabled={!!confirmingId}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-2"
@@ -1356,6 +1402,8 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
     </div>
   );
 }

@@ -58,6 +58,7 @@ export interface SaleResponse {
   userId: number;
   customerId?: number;
   paymentMethod: string;
+  isMixedPayment?: boolean;
   totalAmount: string | number;
   taxAmount: string | number;
   status: 'COMPLETADA' | 'CANCELADA' | 'PENDIENTE';

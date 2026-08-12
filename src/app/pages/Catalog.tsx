@@ -55,6 +55,8 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { SmartFilter, FilterConfig } from "../components/ui/smart-filter";
+import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface ProductPrice {
@@ -246,7 +248,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   const canCreate = user?.roleId === 1 || user?.roleId === 2;
 
   // React Hook Form
-  const { register, control, handleSubmit, reset, setValue, watch } =
+  const { register, control, handleSubmit, reset, setValue, watch, formState: { isDirty: productFormIsDirty } } =
     useForm<ProductFormData>({
       resolver: zodResolver(productSchema),
       defaultValues: {
@@ -307,6 +309,13 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
     () => subcategories.filter((s) => String(s.categoryId) === watchCategoryId),
     [subcategories, watchCategoryId],
   );
+
+  const isDirty =
+    (isDialogOpen && productFormIsDirty) ||
+    (isCatDialogOpen && newCatName.trim().length > 0) ||
+    (isSubcatDialogOpen && (newSubcatName.trim().length > 0 || !!newSubcatCategoryId)) ||
+    (isTagDialogOpen && newTagName.trim().length > 0);
+  const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
 
   // Si cambia la búsqueda o categoría, reiniciamos a la página 1
   useEffect(() => {
@@ -990,7 +999,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       </div>
 
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={(o) => o ? setIsDialogOpen(true) : confirmExit(() => setIsDialogOpen(false))}>
         <DialogContent
           className="sm:max-w-7xl w-full max-h-[95vh] overflow-y-auto custom-scrollbar"
           style={{
@@ -1288,7 +1297,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                         <div className="text-left">
                           <p className="text-sm font-bold">Es un Servicio</p>
                           <p className="text-[10px] opacity-60">
-                            (No f�sico: luz, remesas, etc)
+                            (No f�sico: luz, remesas, etc)
                           </p>
                         </div>
                         <Switch
@@ -1322,7 +1331,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                           </Select>
                         </div>
                         <div className="space-y-2">
-                          <Label className="text-sm font-bold">Comisi�n Fija ($)</Label>
+                          <Label className="text-sm font-bold">Comisi�n Fija ($)</Label>
                           <Input
                             type="number"
                             step="0.01"
@@ -1697,7 +1706,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setIsDialogOpen(false)}
+                onClick={() => confirmExit(() => setIsDialogOpen(false))}
                 className="rounded-xl"
               >
                 Cancelar
@@ -1720,7 +1729,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       </Dialog>
 
       {/* Dialog Gestionar Categorías */}
-      <Dialog open={isCatDialogOpen} onOpenChange={setIsCatDialogOpen}>
+      <Dialog open={isCatDialogOpen} onOpenChange={(o) => o ? setIsCatDialogOpen(true) : confirmExit(() => setIsCatDialogOpen(false))}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Gestionar Categorías</DialogTitle>
@@ -1813,7 +1822,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
               type="button"
               variant="outline"
               className="w-full"
-              onClick={() => setIsCatDialogOpen(false)}
+              onClick={() => confirmExit(() => setIsCatDialogOpen(false))}
             >
               Cerrar
             </Button>
@@ -1822,7 +1831,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       </Dialog>
 
       {/* Dialog Gestionar Subcategorías */}
-      <Dialog open={isSubcatDialogOpen} onOpenChange={setIsSubcatDialogOpen}>
+      <Dialog open={isSubcatDialogOpen} onOpenChange={(o) => o ? setIsSubcatDialogOpen(true) : confirmExit(() => setIsSubcatDialogOpen(false))}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Gestionar Subcategorías</DialogTitle>
@@ -1911,7 +1920,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
               type="button"
               variant="outline"
               className="w-full"
-              onClick={() => setIsSubcatDialogOpen(false)}
+              onClick={() => confirmExit(() => setIsSubcatDialogOpen(false))}
             >
               Cerrar
             </Button>
@@ -1920,7 +1929,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       </Dialog>
 
       {/* Dialog Gestionar Etiquetas */}
-      <Dialog open={isTagDialogOpen} onOpenChange={setIsTagDialogOpen}>
+      <Dialog open={isTagDialogOpen} onOpenChange={(o) => o ? setIsTagDialogOpen(true) : confirmExit(() => setIsTagDialogOpen(false))}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Gestionar Etiquetas</DialogTitle>
@@ -1989,13 +1998,15 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
               type="button"
               variant="outline"
               className="w-full"
-              onClick={() => setIsTagDialogOpen(false)}
+              onClick={() => confirmExit(() => setIsTagDialogOpen(false))}
             >
               Cerrar
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
     </div>
   );
 }

@@ -23,6 +23,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Label } from '../components/ui/label';
 import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
 import { Switch } from '../components/ui/switch';
+import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
+import { UnsavedChangesDialog } from '../components/ui/unsaved-changes-dialog';
 
 export function Purchases() {
   const [activeTab, setActiveTab] = useState<'compras' | 'proveedores' | 'pagar'>('compras');
@@ -68,6 +70,15 @@ export function Purchases() {
   const [unlinkedPayments, setUnlinkedPayments] = useState<UnlinkedPayment[]>([]);
   const [loadingUnlinkedPayments, setLoadingUnlinkedPayments] = useState(false);
   const [selectedLinkedPaymentId, setSelectedLinkedPaymentId] = useState<string>('');
+
+  const isDirty =
+    (createModalOpen && ((newPurchase.items?.length ?? 0) > 0 || !!newPurchase.supplierId)) ||
+    (receiveModalOpen && (
+      !!receiveForm.documentNumber?.trim() ||
+      !!receiveForm.notes?.trim() ||
+      receivedItems.some((i) => !!i.expirationDate || !!i.lotCode || i.received !== i.quantity)
+    ));
+  const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
 
   useEffect(() => {
     if (activeTab === 'compras') {
@@ -912,7 +923,7 @@ export function Purchases() {
       </div>
 
       {/* --- MODAL CREAR ORDEN --- */}
-      <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
+      <Dialog open={createModalOpen} onOpenChange={(o) => o ? setCreateModalOpen(true) : confirmExit(() => setCreateModalOpen(false))}>
         <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col p-0">
           <DialogHeader className="p-6 border-b">
             <DialogTitle className="flex items-center gap-2 text-2xl">
@@ -1085,7 +1096,7 @@ export function Purchases() {
           </div>
 
           <DialogFooter className="p-6 border-t bg-[var(--card)]">
-            <Button variant="outline" onClick={() => setCreateModalOpen(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => confirmExit(() => setCreateModalOpen(false))}>Cancelar</Button>
             <Button onClick={handleCreatePurchase} disabled={savingPurchase || !newPurchase.items?.length}>
               {savingPurchase ? 'Guardando...' : 'Guardar Borrador'}
             </Button>
@@ -1145,7 +1156,7 @@ export function Purchases() {
       </Dialog>
 
       {/* --- MODAL RECIBIR MERCADERÍA --- */}
-      <Dialog open={receiveModalOpen} onOpenChange={setReceiveModalOpen}>
+      <Dialog open={receiveModalOpen} onOpenChange={(o) => o ? setReceiveModalOpen(true) : confirmExit(() => setReceiveModalOpen(false))}>
         <DialogContent className="sm:max-w-5xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1285,13 +1296,15 @@ export function Purchases() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setReceiveModalOpen(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => confirmExit(() => setReceiveModalOpen(false))}>Cancelar</Button>
             <Button onClick={handleReceivePurchaseSubmit} disabled={receiving || !receiveForm.documentNumber} className="bg-emerald-600 hover:bg-emerald-700">
               {receiving ? 'Procesando...' : 'Confirmar Recepción'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
         </>
       )}
     </div>

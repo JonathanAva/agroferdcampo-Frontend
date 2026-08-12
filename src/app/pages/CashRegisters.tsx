@@ -24,6 +24,8 @@ import { cn } from "../components/ui/utils";
 import { toast } from "sonner";
 import { useNavigate } from "react-router";
 import { cashRegistersService, CreateCashRegisterDto } from "../services/cash-registers.service";
+import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
 
 interface CashRegister {
   id: number;
@@ -53,6 +55,9 @@ export function CashRegisters() {
   const [formError, setFormError] = useState("");
 
   const isAdmin = user?.roleId === 1 || user?.roleId === 2;
+
+  const isDirty = showModal && formData.name.trim() !== "";
+  const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
 
   useEffect(() => {
     fetchData();
@@ -317,7 +322,7 @@ export function CashRegisters() {
       </div>
 
       {/* Modal */}
-      <Dialog open={showModal} onOpenChange={setShowModal}>
+      <Dialog open={showModal} onOpenChange={(o) => o ? setShowModal(true) : confirmExit(() => setShowModal(false))}>
         <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden border-[var(--border)] bg-[var(--card)] shadow-2xl">
           <DialogHeader className="p-6 border-b border-[var(--border)] bg-[var(--bg)]/50">
             <div className="flex items-center gap-4">
@@ -362,7 +367,7 @@ export function CashRegisters() {
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setShowModal(false)}
+                onClick={() => confirmExit(() => setShowModal(false))}
                 className="flex-1 h-12 rounded-xl font-black uppercase tracking-widest text-[10px]"
               >
                 Cancelar
@@ -378,6 +383,8 @@ export function CashRegisters() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
     </div>
   );
 }

@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
+import {
   Search, FileText, Filter, CheckCircle2,
   CreditCard, DollarSign, AlertCircle, Plus, Eye, History, Users as UsersIcon, RefreshCcw, Trash2, Printer,
-  Hash, User, Package, Building2
+  Hash, User, Package, Building2, X
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSearchParams } from 'react-router';
 
-import { creditService, CreditSale, CreditSummary, CreditPayment, RegisterPaymentDto, GroupedCreditCustomer } from '../services/credit.service';
+import { creditService, CreditSale, CreditSummary, CreditPayment, RegisterPaymentDto, CreateManualCreditDto, GroupedCreditCustomer } from '../services/credit.service';
 import { getSaleDetail } from '../services/sales.service';
+import { apiRequest } from '../config/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
@@ -21,6 +22,8 @@ import { NumberInput } from '../components/ui/number-input';
 import { SemaphoreBanner } from '../components/ui/semaphore-banner';
 import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
 import { cn } from '../components/ui/utils';
+import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
+import { UnsavedChangesDialog } from '../components/ui/unsaved-changes-dialog';
 
 const creditFilters: FilterConfig[] = [
   { id: 'search', label: 'Buscar cliente...', type: 'text', placeholder: 'Nombre del cliente...' },
@@ -79,7 +82,18 @@ export function Credit() {
   });
   const [savingPayment, setSavingPayment] = useState(false);
 
-
+  // Crear Cuenta por Cobrar Manual
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [creatingCredit, setCreatingCredit] = useState(false);
+  const [newCreditForm, setNewCreditForm] = useState<CreateManualCreditDto>({
+    customerId: 0,
+    amount: 0,
+    dueDate: '',
+    notes: '',
+  });
+  const [selectedCustomerForCreate, setSelectedCustomerForCreate] = useState<{ id: number; name: string; documentNumber?: string; nit?: string } | null>(null);
+  const [customerSearchForCreate, setCustomerSearchForCreate] = useState('');
+  const [customerResultsForCreate, setCustomerResultsForCreate] = useState<any[]>([]);
 
   useEffect(() => {
     fetchSummary();
@@ -139,7 +153,7 @@ export function Credit() {
     try {
       const [creditPayments, saleDetail] = await Promise.all([
         creditService.getPayments(sale.id),
-        getSaleDetail(sale.saleId)
+        sale.saleId ? getSaleDetail(sale.saleId) : Promise.resolve(null),
       ]);
       setSelectedSpecificCredit(sale);
       setSpecificPayments(Array.isArray(creditPayments) ? creditPayments : []);
@@ -169,6 +183,54 @@ export function Credit() {
   const handleOpenPaymentDetail = (payment: CreditPayment) => {
     setSelectedPaymentDetail(payment);
     setPaymentDetailModalOpen(true);
+  };
+
+  const handleOpenCreateModal = () => {
+    const defaultDueDate = new Date();
+    defaultDueDate.setDate(defaultDueDate.getDate() + 30);
+    setNewCreditForm({
+      customerId: 0,
+      amount: 0,
+      dueDate: defaultDueDate.toISOString().slice(0, 10),
+      notes: '',
+    });
+    setSelectedCustomerForCreate(null);
+    setCustomerSearchForCreate('');
+    setCustomerResultsForCreate([]);
+    setCreateModalOpen(true);
+  };
+
+  const handleCreateCredit = async () => {
+    if (!selectedCustomerForCreate) {
+      toast.error('Selecciona un cliente');
+      return;
+    }
+    if (!newCreditForm.amount || newCreditForm.amount <= 0) {
+      toast.error('El monto debe ser mayor a 0');
+      return;
+    }
+    if (!newCreditForm.dueDate) {
+      toast.error('Selecciona una fecha de vencimiento');
+      return;
+    }
+
+    setCreatingCredit(true);
+    try {
+      await creditService.createManualCredit({
+        customerId: selectedCustomerForCreate.id,
+        amount: Number(newCreditForm.amount),
+        dueDate: newCreditForm.dueDate,
+        notes: newCreditForm.notes,
+      });
+      toast.success('Cuenta por cobrar creada correctamente');
+      setCreateModalOpen(false);
+      fetchSummary();
+      fetchCredits();
+    } catch (e: any) {
+      toast.error(e.message || 'Error al crear la cuenta por cobrar');
+    } finally {
+      setCreatingCredit(false);
+    }
   };
 
   const handlePaymentSubmit = async () => {
@@ -256,13 +318,14 @@ export function Credit() {
         <title>Recibo de Abono #${payment.id}</title>
         <style>
           @page { margin: 0; }
-          body { 
-            font-family: 'Courier New', Courier, monospace; 
-            margin: 0; 
-            padding: 10px; 
-            width: 80mm; 
+          body {
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            padding: 10px;
+            width: 80mm;
             color: #000;
-            font-size: 12px;
+            font-size: 13px;
+            font-weight: bold;
           }
           .center { text-align: center; }
           .bold { font-weight: bold; }
@@ -366,6 +429,18 @@ export function Credit() {
     return true;
   }) || [];
 
+  const isDirty =
+    (createModalOpen && (
+      selectedCustomerForCreate !== null ||
+      Number(newCreditForm.amount) > 0 ||
+      !!newCreditForm.notes?.trim()
+    )) ||
+    (paymentModalOpen && (
+      !!paymentForm.reference?.trim() ||
+      !!paymentForm.notes?.trim()
+    ));
+  const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
+
   const itemsPerPage = 10;
   const specificPaymentsTotalPages = Math.ceil(specificPayments.length / itemsPerPage);
   const currentSpecificPayments = specificPayments.slice(
@@ -380,6 +455,13 @@ export function Credit() {
           <h1 className="text-3xl font-bold text-[var(--text-main)]">Cuentas por Cobrar (CxC)</h1>
           <p className="text-[var(--text-sec)]">Gestiona la cartera de créditos y abonos de clientes.</p>
         </div>
+        <Button
+          onClick={handleOpenCreateModal}
+          style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
+          className="font-bold"
+        >
+          <Plus size={16} className="mr-2" /> Crear Cuenta por Cobrar
+        </Button>
       </div>
 
       {/* Stats Cards */}
@@ -603,7 +685,7 @@ export function Credit() {
                             
                             return (
                               <TableRow key={s.id}>
-                                <TableCell className="font-bold">Venta #{s.saleId}</TableCell>
+                                <TableCell className="font-bold">{s.saleId ? `Venta #${s.saleId}` : 'Cuenta Manual'}</TableCell>
                                 <TableCell>{new Date(s.createdAt).toLocaleDateString()}</TableCell>
                                 <TableCell className={isOverdue ? 'text-rose-500 font-bold' : ''}>
                                   {dateToUse.toLocaleDateString()}
@@ -639,12 +721,12 @@ export function Credit() {
       </Dialog>
 
       {/* REGISTRAR ABONO */}
-      <Dialog open={paymentModalOpen} onOpenChange={setPaymentModalOpen}>
+      <Dialog open={paymentModalOpen} onOpenChange={(o) => o ? setPaymentModalOpen(true) : confirmExit(() => setPaymentModalOpen(false))}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Registrar Abono</DialogTitle>
             <DialogDescription>
-              {selectedGroup?.customer?.name ?? `Cliente #${selectedCreditForPayment?.customerId}`} — Venta #{selectedCreditForPayment?.saleId} — Saldo: ${remaining.toFixed(4)}
+              {selectedGroup?.customer?.name ?? `Cliente #${selectedCreditForPayment?.customerId}`} — {selectedCreditForPayment?.saleId ? `Venta #${selectedCreditForPayment.saleId}` : 'Cuenta Manual'} — Saldo: ${remaining.toFixed(4)}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -691,7 +773,7 @@ export function Credit() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPaymentModalOpen(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => confirmExit(() => setPaymentModalOpen(false))}>Cancelar</Button>
             <Button
               ref={submitBtnRef}
               onPointerDown={() => {
@@ -706,6 +788,101 @@ export function Credit() {
         </DialogContent>
       </Dialog>
 
+      {/* CREAR CUENTA POR COBRAR MANUAL */}
+      <Dialog open={createModalOpen} onOpenChange={(o) => o ? setCreateModalOpen(true) : confirmExit(() => setCreateModalOpen(false))}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Crear Cuenta por Cobrar</DialogTitle>
+            <DialogDescription>
+              Registra una deuda pendiente de un cliente sin necesidad de una venta en el sistema.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Cliente</Label>
+              {selectedCustomerForCreate ? (
+                <div className="flex items-center justify-between p-3 rounded-lg border border-[var(--border)] bg-[var(--bg)]">
+                  <div>
+                    <p className="font-bold text-sm">{selectedCustomerForCreate.name}</p>
+                    <p className="text-xs text-[var(--text-sec)]">{selectedCustomerForCreate.documentNumber || selectedCustomerForCreate.nit || 'Sin documento'}</p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => { setSelectedCustomerForCreate(null); setCustomerSearchForCreate(''); }}>
+                    <X size={14} />
+                  </Button>
+                </div>
+              ) : (
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-sec)]" />
+                  <Input
+                    className="pl-9"
+                    placeholder="Buscar cliente por nombre..."
+                    value={customerSearchForCreate}
+                    onChange={e => {
+                      setCustomerSearchForCreate(e.target.value);
+                      if (e.target.value.length > 1) {
+                        apiRequest<any>(`/customers/search?q=${encodeURIComponent(e.target.value)}`)
+                          .then(res => setCustomerResultsForCreate(Array.isArray(res) ? res : []))
+                          .catch(console.error);
+                      } else {
+                        setCustomerResultsForCreate([]);
+                      }
+                    }}
+                  />
+                  {customerResultsForCreate.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-xl z-50 max-h-40 overflow-y-auto">
+                      {customerResultsForCreate.map(c => (
+                        <div
+                          key={c.id}
+                          className="p-3 hover:bg-[var(--bg)]/50 cursor-pointer flex justify-between border-b border-[var(--border)] text-sm"
+                          onClick={() => { setSelectedCustomerForCreate(c); setCustomerResultsForCreate([]); setCustomerSearchForCreate(''); }}
+                        >
+                          <span className="font-bold">{c.name}</span>
+                          <span className="text-[var(--text-sec)] text-xs">{c.documentNumber || c.nit || ''}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>Monto Adeudado ($)</Label>
+              <NumberInput
+                value={newCreditForm.amount || 0}
+                min={0.01}
+                onValueChange={(val) => setNewCreditForm(prev => ({ ...prev, amount: val ?? 0 }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Fecha de Vencimiento</Label>
+              <Input
+                type="date"
+                value={newCreditForm.dueDate}
+                onChange={e => setNewCreditForm(prev => ({ ...prev, dueDate: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Notas (Opcional)</Label>
+              <Input
+                placeholder="Motivo de la deuda, detalles..."
+                value={newCreditForm.notes}
+                onChange={e => setNewCreditForm(prev => ({ ...prev, notes: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => confirmExit(() => setCreateModalOpen(false))}>Cancelar</Button>
+            <Button
+              onClick={handleCreateCredit}
+              disabled={creatingCredit}
+              style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
+            >
+              {creatingCredit ? 'Creando...' : 'Crear Cuenta'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* DETALLE DE FACTURA ESPECÍFICA (HISTORIAL DE ABONOS Y DOCUMENTOS) */}
       <Dialog open={specificDetailModalOpen} onOpenChange={setSpecificDetailModalOpen}>
         <DialogContent className="sm:max-w-5xl w-full flex flex-col p-0 max-h-[90vh]">
@@ -713,11 +890,13 @@ export function Credit() {
             <>
               <DialogHeader className="p-6 pr-16 border-b shrink-0 bg-[var(--bg)]/50">
                 <DialogTitle className="flex items-center justify-between">
-                  <span>Venta #{selectedSpecificCredit.saleId}</span>
+                  <span>{selectedSpecificCredit.saleId ? `Venta #${selectedSpecificCredit.saleId}` : 'Cuenta por Cobrar Manual'}</span>
                   {getStatusBadge(selectedSpecificCredit.status)}
                 </DialogTitle>
                 <DialogDescription>
-                  Historial de abonos y documentos requeridos para esta compra.
+                  {selectedSpecificCredit.saleId
+                    ? 'Historial de abonos y documentos requeridos para esta compra.'
+                    : (selectedSpecificCredit.notes || 'Historial de abonos de esta cuenta por cobrar.')}
                 </DialogDescription>
               </DialogHeader>
 
@@ -733,17 +912,19 @@ export function Credit() {
                   <History size={16} />
                   Historial de Abonos
                 </button>
-                <button
-                  className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors flex items-center justify-center gap-2 ${
-                    specificDetailTab === 'factura'
-                      ? 'border-[var(--primary)] text-[var(--primary)]'
-                      : 'border-transparent text-[var(--text-sec)] hover:text-[var(--text-main)]'
-                  }`}
-                  onClick={() => setSpecificDetailTab('factura')}
-                >
-                  <FileText size={16} />
-                  Detalle de Factura
-                </button>
+                {selectedSpecificCredit.saleId && (
+                  <button
+                    className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors flex items-center justify-center gap-2 ${
+                      specificDetailTab === 'factura'
+                        ? 'border-[var(--primary)] text-[var(--primary)]'
+                        : 'border-transparent text-[var(--text-sec)] hover:text-[var(--text-main)]'
+                    }`}
+                    onClick={() => setSpecificDetailTab('factura')}
+                  >
+                    <FileText size={16} />
+                    Detalle de Factura
+                  </button>
+                )}
               </div>
 
               <div className="p-6 overflow-y-auto flex-1 custom-scrollbar min-h-0">
@@ -1054,7 +1235,7 @@ export function Credit() {
         </DialogContent>
       </Dialog>
 
-
+      <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
     </div>
   );
 }

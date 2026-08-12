@@ -7,6 +7,8 @@ import { apiRequest } from '../../config/api';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from './popover';
 import { Badge } from './badge';
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
+import { UnsavedChangesDialog } from './unsaved-changes-dialog';
 
 interface Product {
   id: number;
@@ -47,6 +49,10 @@ export function BulkAssignModal({ isOpen, onClose, assignTarget, onSuccess }: Bu
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<number>>(new Set());
   const [selectedSubcategoryIds, setSelectedSubcategoryIds] = useState<Set<number>>(new Set());
   const [selectedTagIds, setSelectedTagIds] = useState<Set<number>>(new Set());
+
+  const isDirty = selectedIds.size > 0;
+  const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } =
+    useUnsavedChangesGuard(isDirty);
 
   useEffect(() => {
     if (isOpen) {
@@ -159,7 +165,8 @@ export function BulkAssignModal({ isOpen, onClose, assignTarget, onSuccess }: Bu
                     : 'Etiqueta';
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) confirmExit(onClose); }}>
       <DialogContent className="sm:max-w-3xl flex flex-col max-h-[85vh]">
         <DialogHeader>
           <DialogTitle>Asignar Productos a {targetLabel}: {assignTarget.name}</DialogTitle>
@@ -401,7 +408,7 @@ export function BulkAssignModal({ isOpen, onClose, assignTarget, onSuccess }: Bu
         </div>
 
         <DialogFooter className="mt-4 border-t border-[var(--border)] pt-4">
-          <Button variant="outline" onClick={onClose} disabled={saving} className="text-[var(--text-main)] border-[var(--border)] hover:bg-[var(--hover)]">
+          <Button variant="outline" onClick={() => confirmExit(onClose)} disabled={saving} className="text-[var(--text-main)] border-[var(--border)] hover:bg-[var(--hover)]">
             Cancelar
           </Button>
           <Button onClick={handleSave} disabled={saving || selectedIds.size === 0} className="bg-[var(--primary)] text-primary-foreground hover:bg-[var(--primary)]/90">
@@ -411,5 +418,7 @@ export function BulkAssignModal({ isOpen, onClose, assignTarget, onSuccess }: Bu
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
+    </>
   );
 }
