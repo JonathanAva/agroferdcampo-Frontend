@@ -96,9 +96,14 @@ export default function Vehicles({ hideTitle }: { hideTitle?: boolean } = {}) {
     setSaving(true);
     try {
       if (editingVehicle.id) {
+        // Extraer campos de lectura o relaciones que el backend rechaza en el PATCH
+        const { 
+          id, createdAt, updatedAt, driver, _count, isActive, branch, routes, deliveryNotes, ...updatePayload 
+        } = editingVehicle as any;
+        
         await apiRequest(`/vehicles/${editingVehicle.id}`, {
           method: 'PATCH',
-          body: JSON.stringify(editingVehicle),
+          body: JSON.stringify(updatePayload),
         });
         toast.success('Vehículo actualizado');
       } else {
@@ -200,8 +205,15 @@ export default function Vehicles({ hideTitle }: { hideTitle?: boolean } = {}) {
                       {getTypeIcon(vehicle.type)}
                     </div>
                     <div>
-                      <h3 className="text-xl font-black text-[var(--text-main)] uppercase tracking-wider">{vehicle.plate}</h3>
-                      <p className="text-sm font-bold text-[var(--text-sec)]">{vehicle.brand} {vehicle.model} {vehicle.year}</p>
+                      <div className="flex items-baseline gap-2">
+                        <h3 className="text-xl font-black text-[var(--text-main)] uppercase tracking-wider">{vehicle.plate}</h3>
+                      </div>
+                      {vehicle.nickname && (
+                        <p className="text-sm font-black text-[var(--text-sec)] italic tracking-wide uppercase mb-1">
+                          "{vehicle.nickname}"
+                        </p>
+                      )}
+                      <p className="text-sm font-bold text-[var(--text-muted)]">{vehicle.brand} {vehicle.model} {vehicle.year}</p>
                     </div>
                   </div>
                   <Badge variant="outline" className={`font-bold border ${vehicleStatusColor(vehicle.status)}`}>
@@ -281,6 +293,14 @@ export default function Vehicles({ hideTitle }: { hideTitle?: boolean } = {}) {
               />
             </div>
             <div className="space-y-2">
+              <Label>Sobrenombre (Opcional)</Label>
+              <Input 
+                value={editingVehicle?.nickname || ''} 
+                onChange={e => setEditingVehicle({ ...editingVehicle, nickname: e.target.value })}
+                placeholder="Ej. Camión Azul"
+              />
+            </div>
+            <div className="space-y-2">
               <Label>Tipo</Label>
               <Select 
                 value={editingVehicle?.type || 'CAMION'} 
@@ -324,7 +344,7 @@ export default function Vehicles({ hideTitle }: { hideTitle?: boolean } = {}) {
               <Label>Sucursal Asignada</Label>
               <Select 
                 value={editingVehicle?.branchId ? String(editingVehicle.branchId) : 'none'}
-                onValueChange={v => setEditingVehicle({ ...editingVehicle, branchId: v === 'none' ? undefined : Number(v) })}
+                onValueChange={v => setEditingVehicle({ ...editingVehicle, branchId: v === 'none' ? null : Number(v) })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar sucursal..." />

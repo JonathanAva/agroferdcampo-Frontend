@@ -654,7 +654,7 @@ export default function DeliveryRoutes({ hideTitle }: { hideTitle?: boolean } = 
                   <SelectContent>
                     {vehicles.map(v => (
                       <SelectItem key={v.id} value={v.id.toString()}>
-                        {v.plate} - {v.capacityKg ? `${v.capacityKg}kg` : ''} {v.status !== 'DISPONIBLE' ? `(${v.status})` : ''}
+                        {v.plate} {v.brand ? `- ${v.brand} ${v.model}` : ""} - {v.capacityKg ? `${v.capacityKg}kg` : ''} {v.status !== 'DISPONIBLE' ? `(${v.status})` : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>

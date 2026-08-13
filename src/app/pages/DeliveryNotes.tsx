@@ -154,7 +154,7 @@ function DeliveryNotesList() {
       { label: 'Con Transporte', value: 'true' },
       { label: 'Sin Transporte', value: 'false' }
     ]},
-    { id: 'vehicle', label: 'Vehículo', type: 'category', options: Array.isArray(vehicles) ? vehicles.map((v: any) => ({ label: v.plate, value: v.id.toString() })) : [] },
+    { id: 'vehicle', label: 'Vehículo', type: 'category', options: Array.isArray(vehicles) ? vehicles.map((v: any) => ({ label: v.nickname ? `${v.plate} - ${v.nickname}` : v.plate, value: v.id.toString() })) : [] },
     { id: 'route', label: 'Ruta', type: 'category', options: Array.isArray(routesList) ? routesList.map((r: any) => ({ label: r.name, value: r.id.toString() })) : [] },
     { id: 'date', label: 'Fecha Específica', type: 'date_range' }
   ], [vehicles, routesList]);
@@ -1232,7 +1232,7 @@ function DeliveryNotesList() {
                   <SelectItem value="none">Sin vehículo</SelectItem>
                   {vehicles.map(v => (
                     <SelectItem key={v.id} value={String(v.id)}>
-                      {v.plate} - {v.brand} {v.model}
+                      {v.plate} {v.nickname ? `- ${v.nickname}` : ""} - {v.brand} {v.model}
                     </SelectItem>
                   ))}
                 </SelectContent>
