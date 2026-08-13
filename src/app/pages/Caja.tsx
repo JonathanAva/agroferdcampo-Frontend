@@ -19,6 +19,8 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { apiRequest } from "../config/api";
 import { uploadsService } from "../services/uploads.service";
+import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
 
 type PaymentMethod = "EFECTIVO" | "TARJETA" | "TRANSFERENCIA" | "CREDITO";
 
@@ -73,6 +75,11 @@ export function Caja() {
   const [sysConfig, setSysConfig] = useState<any>(null);
   const [transferReceiptUrl, setTransferReceiptUrl] = useState<string | null>(null);
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
+
+  const isDirty =
+    showConfirmModal &&
+    (paymentMethod !== "EFECTIVO" || !!dueDate || !!transferReceiptUrl);
+  const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
 
   const loadTickets = useCallback(async () => {
     setLoading(true);
@@ -212,17 +219,17 @@ export function Caja() {
 <html><head><meta charset="utf-8"><title>Recibo ${ticket.ticketNumber}</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Courier New',monospace;font-size:11px;width:80mm;padding:8px;color:#000}
-  h1{font-size:14px;text-align:center;font-weight:bold;margin-bottom:2px}
+  body{font-family:'Courier New',monospace;font-size:12px;font-weight:bold;width:80mm;padding:8px;color:#000}
+  h1{font-size:15px;text-align:center;font-weight:bold;margin-bottom:2px}
   .center{text-align:center} .bold{font-weight:bold} .right{text-align:right}
   hr{border:none;border-top:1px solid #000;margin:5px 0}
   hr.d{border-top:1px dashed #000}
-  table{width:100%;border-collapse:collapse;font-size:10px}
+  table{width:100%;border-collapse:collapse;font-size:11px}
   th{font-weight:bold;text-align:left;padding:1px 2px}
   td{padding:1px 2px;vertical-align:top}
   .tr{text-align:right}
-  .row{display:flex;justify-content:space-between;gap:4px;margin:1px 0;font-size:10.5px}
-  .row.sm{font-size:9.5px}
+  .row{display:flex;justify-content:space-between;gap:4px;margin:1px 0;font-size:11.5px}
+  .row.sm{font-size:10.5px}
   .stitle{font-weight:bold;margin:3px 0 1px}
   @media print{@page{margin:0;size:80mm auto}body{margin:0;padding:4px}}
 </style></head><body>
@@ -434,7 +441,7 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
       )}
 
       {/* Modal: Confirmar Cobro */}
-      <Dialog open={showConfirmModal} onOpenChange={(o) => { if (!o) setShowConfirmModal(false); }}>
+      <Dialog open={showConfirmModal} onOpenChange={(o) => o ? setShowConfirmModal(true) : confirmExit(() => setShowConfirmModal(false))}>
         <DialogContent className="sm:max-w-md p-0">
           <div className="p-5 border-b border-[var(--border)]">
             <DialogHeader>
@@ -574,7 +581,7 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
           )}
 
           <DialogFooter className="p-5 border-t border-[var(--border)] flex gap-2">
-            <Button variant="ghost" onClick={() => setShowConfirmModal(false)} className="flex-1" disabled={processing}>
+            <Button variant="ghost" onClick={() => confirmExit(() => setShowConfirmModal(false))} className="flex-1" disabled={processing}>
               Cancelar
             </Button>
             <Button
@@ -643,6 +650,8 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
     </div>
   );
 }

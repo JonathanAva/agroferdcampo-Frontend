@@ -18,6 +18,8 @@ import { NumberInput } from '../components/ui/number-input';
 import { useAuth } from '../context/AuthContext';
 import { useBranch } from '../context/BranchContext';
 import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
+import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
+import { UnsavedChangesDialog } from '../components/ui/unsaved-changes-dialog';
 
 const vehicleFilters: FilterConfig[] = [
   { id: 'search', label: 'Buscar vehículo...', type: 'text', placeholder: 'Placa, marca, conductor...' },
@@ -47,6 +49,9 @@ export default function Vehicles({ hideTitle }: { hideTitle?: boolean } = {}) {
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const isDirty = showDialog && (!!editingVehicle?.plate || !!editingVehicle?.brand || !!editingVehicle?.model);
+  const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -255,7 +260,7 @@ export default function Vehicles({ hideTitle }: { hideTitle?: boolean } = {}) {
       )}
 
       {/* CREATE/EDIT DIALOG */}
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+      <Dialog open={showDialog} onOpenChange={(o) => o ? setShowDialog(true) : confirmExit(() => setShowDialog(false))}>
         <DialogContent className="max-w-2xl bg-[var(--card)] border-[var(--border)]">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
@@ -354,7 +359,7 @@ export default function Vehicles({ hideTitle }: { hideTitle?: boolean } = {}) {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDialog(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => confirmExit(() => setShowDialog(false))}>Cancelar</Button>
             <Button onClick={handleSave} disabled={saving} className="bg-[var(--primary)] text-white font-bold">
               {saving ? 'Guardando...' : 'Guardar Vehículo'}
             </Button>
@@ -421,6 +426,8 @@ export default function Vehicles({ hideTitle }: { hideTitle?: boolean } = {}) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
     </div>
   );
 }

@@ -7,6 +7,8 @@ export interface QuoteItemDto {
   productId: number;
   quantity: number;
   unitPrice: number;
+  unitType?: string;
+  unitFactor?: number;
 }
 
 export interface CreateQuoteDto {
@@ -60,11 +62,14 @@ export interface QuoteResponse {
     unitPrice: string | number;
     totalPrice: string | number;
     costPrice?: string | number;
+    unitType?: string | null;
+    unitFactor?: string | number | null;
     product?: {
       id: number;
       name: string;
       internalCode?: string;
       costPrice?: string | number;
+      unit?: string;
     };
   }>;
 }

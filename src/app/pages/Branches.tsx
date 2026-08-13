@@ -28,6 +28,8 @@ import {
   AlertDialogContent,
 } from "../components/ui/alert-dialog";
 import { ShieldAlert, ShieldCheck } from "lucide-react";
+import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
 
 interface Branch {
   id: number;
@@ -73,6 +75,9 @@ export function Branches() {
   const [toggleLoading, setToggleLoading] = useState(false);
 
   const isAdmin = user?.roleId === 1 || user?.roleId === 2;
+
+  const isDirty = showModal && (formData.name.trim() !== "" || formData.address.trim() !== "" || formData.taxId.trim() !== "" || formData.phone.trim() !== "");
+  const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
 
   useEffect(() => {
     fetchBranches();
@@ -412,7 +417,7 @@ export function Branches() {
       </div>
 
       {/* Modal - Estilo consistente con el sistema */}
-      <Dialog open={showModal} onOpenChange={setShowModal}>
+      <Dialog open={showModal} onOpenChange={(o) => o ? setShowModal(true) : confirmExit(() => setShowModal(false))}>
         <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden border-[var(--border)] bg-[var(--card)] shadow-2xl">
           <DialogHeader className="p-6 border-b border-[var(--border)] bg-[var(--bg)]/50">
             <div className="flex items-center gap-4">
@@ -541,7 +546,7 @@ export function Branches() {
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setShowModal(false)}
+                onClick={() => confirmExit(() => setShowModal(false))}
                 className="flex-1 h-12 rounded-xl font-black uppercase tracking-widest text-[10px]"
               >
                 Cancelar
@@ -605,6 +610,8 @@ export function Branches() {
           </div>
         </AlertDialogContent>
       </AlertDialog>
+
+      <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
     </div>
   );
 }

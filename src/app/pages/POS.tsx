@@ -51,6 +51,8 @@ import { ScrollArea } from "../components/ui/scroll-area";
 import { Label } from "../components/ui/label";
 import { SystemConfigData } from "./SystemConfig";
 import { TransportSelector, TransportData } from "../components/transport/TransportSelector";
+import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
 
 // --- Types ---
 interface PriceOption {
@@ -124,6 +126,7 @@ const PAYMENT_METHOD_LABEL: Record<string, string> = {
   TARJETA: "Tarjeta",
   TRANSFERENCIA: "Transferencia",
   CREDITO: "Crédito",
+  CONTRAENTREGA: "Contraentrega",
 };
 
 function formatExpirationDate(dateStr: string): string {
@@ -410,6 +413,29 @@ export function POS() {
 
   // Transport State
   const [transportData, setTransportData] = useState<TransportData | null>(null);
+
+  // Nota: "Apertura de Caja" (showOpenShiftModal) y "Cierre de Caja" (showCloseShiftModal)
+  // tienen su propio flujo obligatorio y NO llevan este guard.
+  const isDirty =
+    (showUniversalModal && (
+      !!universalForm.nombre.trim() ||
+      !!universalForm.precio ||
+      !!universalForm.costo ||
+      universalForm.cantidad !== "1" ||
+      universalForm.medida !== "UNIDAD"
+    )) ||
+    (showServiceModal && (
+      !!serviceForm.monto ||
+      !!serviceForm.comision ||
+      !!serviceForm.referencia
+    )) ||
+    (showQuoteModal && quoteValidDays !== 15) ||
+    (showMixedPaymentModal && (
+      payments.length > 1 ||
+      payments.some((p) => !!p.reference?.trim() || !!p.transferReceiptUrl)
+    )) ||
+    (showPreSaleModal && preSaleDescription.trim() !== "");
+  const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
 
   const parseLocalDate = (dateStr: string) => {
     if (!dateStr) return undefined;
@@ -1392,18 +1418,18 @@ export function POS() {
 <html><head><meta charset="utf-8"><title>Ticket ${ticket.ticketNumber}</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Courier New',monospace;font-size:11px;width:80mm;padding:8px;color:#000}
-  h1{font-size:14px;text-align:center;font-weight:bold;margin-bottom:2px}
+  body{font-family:'Courier New',monospace;font-size:12px;font-weight:bold;width:80mm;padding:8px;color:#000}
+  h1{font-size:15px;text-align:center;font-weight:bold;margin-bottom:2px}
   .center{text-align:center} .bold{font-weight:bold}
   hr{border:none;border-top:1px solid #000;margin:5px 0}
   hr.d{border-top:1px dashed #000}
-  table{width:100%;border-collapse:collapse;font-size:10px}
+  table{width:100%;border-collapse:collapse;font-size:11px}
   th{font-weight:bold;text-align:left;padding:1px 2px}
   td{padding:1px 2px;vertical-align:top}
   .tr{text-align:right}
-  .row{display:flex;justify-content:space-between;gap:4px;margin:1px 0;font-size:10.5px}
+  .row{display:flex;justify-content:space-between;gap:4px;margin:1px 0;font-size:11.5px}
   .stitle{font-weight:bold;margin:3px 0 1px}
-  .badge{text-align:center;border:2px solid #000;padding:3px 8px;font-weight:bold;font-size:12px;margin:4px 0}
+  .badge{text-align:center;border:2px solid #000;padding:3px 8px;font-weight:bold;font-size:13px;margin:4px 0}
   @media print{@page{margin:0;size:80mm auto}body{margin:0;padding:4px}}
 </style></head><body>
 
@@ -1518,17 +1544,17 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
 <html><head><meta charset="utf-8"><title>Venta ${saleNumber}</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Courier New',monospace;font-size:11px;width:80mm;padding:8px;color:#000}
-  h1{font-size:14px;text-align:center;font-weight:bold;margin-bottom:2px}
+  body{font-family:'Courier New',monospace;font-size:12px;font-weight:bold;width:80mm;padding:8px;color:#000}
+  h1{font-size:15px;text-align:center;font-weight:bold;margin-bottom:2px}
   .center{text-align:center} .bold{font-weight:bold} .right{text-align:right}
   hr{border:none;border-top:1px solid #000;margin:5px 0}
   hr.d{border-top:1px dashed #000}
-  table{width:100%;border-collapse:collapse;font-size:10px}
+  table{width:100%;border-collapse:collapse;font-size:11px}
   th{font-weight:bold;text-align:left;padding:1px 2px}
   td{padding:1px 2px;vertical-align:top}
   .tr{text-align:right}
-  .row{display:flex;justify-content:space-between;gap:4px;margin:1px 0;font-size:10.5px}
-  .row.sm{font-size:9.5px}
+  .row{display:flex;justify-content:space-between;gap:4px;margin:1px 0;font-size:11.5px}
+  .row.sm{font-size:10.5px}
   .stitle{font-weight:bold;margin:3px 0 1px}
   @media print{@page{margin:0;size:80mm auto}body{margin:0;padding:4px}}
 </style></head><body>
@@ -2249,7 +2275,7 @@ ${paymentConditionHtml}
       />
 
       {/* Modal Servicio */}
-      <Dialog open={showServiceModal} onOpenChange={setShowServiceModal}>
+      <Dialog open={showServiceModal} onOpenChange={(o) => o ? setShowServiceModal(true) : confirmExit(() => setShowServiceModal(false))}>
         <DialogContent className="sm:max-w-md w-full" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--text-main)" }}>
           <DialogHeader>
             <DialogTitle>{serviceProduct?.name || "Servicio"}</DialogTitle>
@@ -2286,7 +2312,7 @@ ${paymentConditionHtml}
             </div>
           </div>
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setShowServiceModal(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => confirmExit(() => setShowServiceModal(false))}>Cancelar</Button>
             <Button
               className="bg-[var(--primary)] text-white hover:brightness-110"
               onClick={addServiceToCart}
@@ -2298,7 +2324,7 @@ ${paymentConditionHtml}
       </Dialog>
 
       {/* Modal Producto Universal — venta rápida configurada a mano */}
-      <Dialog open={showUniversalModal} onOpenChange={setShowUniversalModal}>
+      <Dialog open={showUniversalModal} onOpenChange={(o) => o ? setShowUniversalModal(true) : confirmExit(() => setShowUniversalModal(false))}>
         <DialogContent className="sm:max-w-md w-full" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--text-main)" }}>
           <DialogHeader>
             <DialogTitle>Producto Universal</DialogTitle>
@@ -2374,7 +2400,7 @@ ${paymentConditionHtml}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowUniversalModal(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => confirmExit(() => setShowUniversalModal(false))}>Cancelar</Button>
             <Button
               className="bg-[var(--primary)]"
               onClick={() => {
@@ -2470,13 +2496,13 @@ ${paymentConditionHtml}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   {[
-                    { key: 'd100', label: '$100' },
-                    { key: 'd50',  label: '$50'  },
-                    { key: 'd20',  label: '$20'  },
-                    { key: 'd10',  label: '$10'  },
-                    { key: 'd5',   label: '$5'   },
-                    { key: 'd1',   label: '$1'   },
-                  ].map(({ key, label }) => (
+                    { key: 'd100', label: '$100', value: 100 },
+                    { key: 'd50',  label: '$50',  value: 50  },
+                    { key: 'd20',  label: '$20',  value: 20  },
+                    { key: 'd10',  label: '$10',  value: 10  },
+                    { key: 'd5',   label: '$5',   value: 5   },
+                    { key: 'd1',   label: '$1',   value: 1   },
+                  ].map(({ key, label, value }) => (
                     <div key={key} className="space-y-1.5 group">
                       <label className="text-xs font-bold text-[var(--text-sec)] tracking-wider">{label}</label>
                       <NumberInput
@@ -2490,6 +2516,9 @@ ${paymentConditionHtml}
                         placeholder="0"
                         className="font-bold text-lg group-focus-within:border-[var(--primary)] transition-colors h-11"
                       />
+                      <p className="text-xs font-bold text-[var(--text-sec)] text-right">
+                        = ${(openBills[key as keyof BillsBreakdown] * value).toFixed(2)}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -2507,11 +2536,11 @@ ${paymentConditionHtml}
                 </div>
                 <div className="grid grid-cols-2 gap-4 flex-1 content-start">
                   {[
-                    { key: 'c25', label: '$0.25' },
-                    { key: 'c10', label: '$0.10' },
-                    { key: 'c5',  label: '$0.05' },
-                    { key: 'c1',  label: '$0.01' },
-                  ].map(({ key, label }) => (
+                    { key: 'c25', label: '$0.25', value: 0.25 },
+                    { key: 'c10', label: '$0.10', value: 0.10 },
+                    { key: 'c5',  label: '$0.05', value: 0.05 },
+                    { key: 'c1',  label: '$0.01', value: 0.01 },
+                  ].map(({ key, label, value }) => (
                     <div key={key} className="space-y-1.5 group">
                       <label className="text-xs font-bold text-[var(--text-sec)] tracking-wider">{label}</label>
                       <NumberInput
@@ -2525,6 +2554,9 @@ ${paymentConditionHtml}
                         placeholder="0"
                         className="font-bold text-lg group-focus-within:border-[var(--primary)] transition-colors h-11"
                       />
+                      <p className="text-xs font-bold text-[var(--text-sec)] text-right">
+                        = ${(openCoins[key as keyof CoinsBreakdown] * value).toFixed(2)}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -2668,13 +2700,13 @@ ${paymentConditionHtml}
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     {[
-                      { key: 'd100', label: '$100' },
-                      { key: 'd50',  label: '$50'  },
-                      { key: 'd20',  label: '$20'  },
-                      { key: 'd10',  label: '$10'  },
-                      { key: 'd5',   label: '$5'   },
-                      { key: 'd1',   label: '$1'   },
-                    ].map(({ key, label }) => (
+                      { key: 'd100', label: '$100', value: 100 },
+                      { key: 'd50',  label: '$50',  value: 50  },
+                      { key: 'd20',  label: '$20',  value: 20  },
+                      { key: 'd10',  label: '$10',  value: 10  },
+                      { key: 'd5',   label: '$5',   value: 5   },
+                      { key: 'd1',   label: '$1',   value: 1   },
+                    ].map(({ key, label, value }) => (
                       <div key={key} className="space-y-1.5 group">
                         <label className="text-xs font-bold text-[var(--text-sec)] tracking-wider">{label}</label>
                         <NumberInput
@@ -2688,6 +2720,9 @@ ${paymentConditionHtml}
                           placeholder="0"
                           className="font-bold text-lg group-focus-within:border-[var(--primary)] transition-colors h-11"
                         />
+                        <p className="text-xs font-bold text-[var(--text-sec)] text-right">
+                          = ${(closeBills[key as keyof BillsBreakdown] * value).toFixed(2)}
+                        </p>
                       </div>
                     ))}
                   </div>
@@ -2705,11 +2740,11 @@ ${paymentConditionHtml}
                   </div>
                   <div className="grid grid-cols-2 gap-4 flex-1 content-start">
                     {[
-                      { key: 'c25', label: '$0.25' },
-                      { key: 'c10', label: '$0.10' },
-                      { key: 'c5',  label: '$0.05' },
-                      { key: 'c1',  label: '$0.01' },
-                    ].map(({ key, label }) => (
+                      { key: 'c25', label: '$0.25', value: 0.25 },
+                      { key: 'c10', label: '$0.10', value: 0.10 },
+                      { key: 'c5',  label: '$0.05', value: 0.05 },
+                      { key: 'c1',  label: '$0.01', value: 0.01 },
+                    ].map(({ key, label, value }) => (
                       <div key={key} className="space-y-1.5 group">
                         <label className="text-xs font-bold text-[var(--text-sec)] tracking-wider">{label}</label>
                         <NumberInput
@@ -2723,6 +2758,9 @@ ${paymentConditionHtml}
                           placeholder="0"
                           className="font-bold text-lg group-focus-within:border-[var(--primary)] transition-colors h-11"
                         />
+                        <p className="text-xs font-bold text-[var(--text-sec)] text-right">
+                          = ${(closeCoins[key as keyof CoinsBreakdown] * value).toFixed(2)}
+                        </p>
                       </div>
                     ))}
                   </div>
@@ -2794,13 +2832,13 @@ ${paymentConditionHtml}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   {[
-                    { key: 'd100', label: '$100' },
-                    { key: 'd50',  label: '$50'  },
-                    { key: 'd20',  label: '$20'  },
-                    { key: 'd10',  label: '$10'  },
-                    { key: 'd5',   label: '$5'   },
-                    { key: 'd1',   label: '$1'   },
-                  ].map(({ key, label }) => (
+                    { key: 'd100', label: '$100', value: 100 },
+                    { key: 'd50',  label: '$50',  value: 50  },
+                    { key: 'd20',  label: '$20',  value: 20  },
+                    { key: 'd10',  label: '$10',  value: 10  },
+                    { key: 'd5',   label: '$5',   value: 5   },
+                    { key: 'd1',   label: '$1',   value: 1   },
+                  ].map(({ key, label, value }) => (
                     <div key={key} className="space-y-1.5">
                       <label className="text-xs font-bold text-[var(--text-sec)]">{label}</label>
                       <NumberInput
@@ -2808,6 +2846,9 @@ ${paymentConditionHtml}
                         onValueChange={(val) => setTransferBills(prev => ({ ...prev, [key]: val ?? 0 }))}
                         min={0} max={500} step={1} placeholder="0" className="h-11"
                       />
+                      <p className="text-xs font-bold text-[var(--text-sec)] text-right">
+                        = ${(transferBills[key as keyof BillsBreakdown] * value).toFixed(2)}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -2818,11 +2859,11 @@ ${paymentConditionHtml}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   {[
-                    { key: 'c25', label: '$0.25' },
-                    { key: 'c10', label: '$0.10' },
-                    { key: 'c5',  label: '$0.05' },
-                    { key: 'c1',  label: '$0.01' },
-                  ].map(({ key, label }) => (
+                    { key: 'c25', label: '$0.25', value: 0.25 },
+                    { key: 'c10', label: '$0.10', value: 0.10 },
+                    { key: 'c5',  label: '$0.05', value: 0.05 },
+                    { key: 'c1',  label: '$0.01', value: 0.01 },
+                  ].map(({ key, label, value }) => (
                     <div key={key} className="space-y-1.5">
                       <label className="text-xs font-bold text-[var(--text-sec)]">{label}</label>
                       <NumberInput
@@ -2830,6 +2871,9 @@ ${paymentConditionHtml}
                         onValueChange={(val) => setTransferCoins(prev => ({ ...prev, [key]: val ?? 0 }))}
                         min={0} max={2000} step={1} placeholder="0" className="h-11"
                       />
+                      <p className="text-xs font-bold text-[var(--text-sec)] text-right">
+                        = ${(transferCoins[key as keyof CoinsBreakdown] * value).toFixed(2)}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -2856,7 +2900,7 @@ ${paymentConditionHtml}
       </Dialog>
 
       {/* Modal de Cotización */}
-      <Dialog open={showQuoteModal} onOpenChange={setShowQuoteModal}>
+      <Dialog open={showQuoteModal} onOpenChange={(o) => o ? setShowQuoteModal(true) : confirmExit(() => setShowQuoteModal(false))}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -2889,7 +2933,7 @@ ${paymentConditionHtml}
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowQuoteModal(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => confirmExit(() => setShowQuoteModal(false))}>Cancelar</Button>
             <Button
               ref={quoteBtnRef}
               onClick={() => {
@@ -2929,7 +2973,7 @@ ${paymentConditionHtml}
       </Dialog>
 
       {/* Modal de Cobro Mixto */}
-      <Dialog open={showMixedPaymentModal} onOpenChange={setShowMixedPaymentModal}>
+      <Dialog open={showMixedPaymentModal} onOpenChange={(o) => o ? setShowMixedPaymentModal(true) : confirmExit(() => setShowMixedPaymentModal(false))}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black flex items-center gap-2">
@@ -3099,7 +3143,7 @@ ${paymentConditionHtml}
               </span>
             </div>
             <div className="flex gap-2 w-full sm:w-auto">
-              <Button variant="ghost" onClick={() => setShowMixedPaymentModal(false)} className="flex-1 sm:flex-none">
+              <Button variant="ghost" onClick={() => confirmExit(() => setShowMixedPaymentModal(false))} className="flex-1 sm:flex-none">
                 Cancelar
               </Button>
               <Button
@@ -3116,7 +3160,7 @@ ${paymentConditionHtml}
         </DialogContent>
       </Dialog>
       {/* Modal: Confirmar Pre-Venta (Ticket) */}
-      <Dialog open={showPreSaleModal} onOpenChange={setShowPreSaleModal}>
+      <Dialog open={showPreSaleModal} onOpenChange={(o) => o ? setShowPreSaleModal(true) : confirmExit(() => setShowPreSaleModal(false))}>
         <DialogContent className="sm:max-w-md p-0">
           <div className="p-5 border-b border-[var(--border)]">
             <DialogHeader>
@@ -3159,7 +3203,7 @@ ${paymentConditionHtml}
             </div>
           </div>
           <DialogFooter className="p-5 border-t border-[var(--border)] flex gap-2">
-            <Button variant="ghost" onClick={() => setShowPreSaleModal(false)} className="flex-1">
+            <Button variant="ghost" onClick={() => confirmExit(() => setShowPreSaleModal(false))} className="flex-1">
               Cancelar
             </Button>
             <Button
@@ -3208,6 +3252,8 @@ ${paymentConditionHtml}
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
     </div>
   );
 }

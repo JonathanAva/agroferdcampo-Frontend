@@ -26,6 +26,8 @@ import { Input } from "../components/ui/input";
 import { InlinePills } from "../components/ui/inline-pills";
 import { useSearchParams } from "react-router";
 import { SmartFilter, FilterConfig } from "../components/ui/smart-filter";
+import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
 
 const usersFilters: FilterConfig[] = [
   { id: 'search', label: 'Buscar usuarios...', type: 'text', placeholder: 'Nombre, código o DUI...' },
@@ -121,6 +123,9 @@ export function Users() {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [userToToggle, setUserToToggle] = useState<User | null>(null);
   const [toggleLoading, setToggleLoading] = useState(false);
+
+  const isDirty = showModal && (formData.fullName.trim() !== "" || formData.email.trim() !== "");
+  const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
 
   useEffect(() => {
     fetchUsers();
@@ -385,7 +390,7 @@ export function Users() {
       </Card>
 
       {/* Modal Nuevo/Editar Usuario */}
-      <Dialog open={showModal} onOpenChange={setShowModal}>
+      <Dialog open={showModal} onOpenChange={(o) => o ? setShowModal(true) : confirmExit(() => setShowModal(false))}>
         <DialogContent 
           className="sm:max-w-xl w-full"
           style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--text-main)" }}
@@ -504,7 +509,7 @@ export function Users() {
             )}
 
             <DialogFooter className="pt-6 border-t border-[var(--border)] gap-2">
-              <Button type="button" variant="ghost" onClick={() => setShowModal(false)} className="rounded-xl">
+              <Button type="button" variant="ghost" onClick={() => confirmExit(() => setShowModal(false))} className="rounded-xl">
                 Cancelar
               </Button>
               <Button 
@@ -587,6 +592,8 @@ export function Users() {
           </div>
         </AlertDialogContent>
       </AlertDialog>
+
+      <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
     </div>
   );
 }

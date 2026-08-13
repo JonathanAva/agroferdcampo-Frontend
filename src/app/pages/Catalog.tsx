@@ -55,6 +55,8 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { SmartFilter, FilterConfig } from "../components/ui/smart-filter";
+import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface ProductPrice {
@@ -130,10 +132,28 @@ interface PriceRow {
 }
 
 const UNITS = [
-  "UNIDAD", "KG", "LB", "QUINTAL", "CAJA", "LITRO",
-  "ARROBA", "KINTALE", "METRO", "YARDA", "PIE", "GALON",
-  "CUBETA", "CUARTO_GALON", "GRAMO", "CENTIMETRO",
-  "PULGADA", "ONZA", "SACO", "MEDIA_ARROBA", "PAQUETE", "TONELADA"
+  "UNIDAD",
+  "KG",
+  "LB",
+  "QUINTAL",
+  "CAJA",
+  "LITRO",
+  "ARROBA",
+  "KINTALE",
+  "METRO",
+  "YARDA",
+  "PIE",
+  "GALON",
+  "CUBETA",
+  "CUARTO_GALON",
+  "GRAMO",
+  "CENTIMETRO",
+  "PULGADA",
+  "ONZA",
+  "SACO",
+  "MEDIA_ARROBA",
+  "PAQUETE",
+  "TONELADA",
 ];
 const PRICE_TYPES = ["PUBLICO", "MAYOREO", "ESPECIAL"];
 
@@ -164,16 +184,18 @@ const productSchema = z.object({
       }),
     )
     .min(1, "Al menos un precio es requerido"),
-  units: z.array(
-    z.object({
-      id: z.number().optional(),
-      unit: z.string().min(1, "Unidad requerida"),
-      factor: z.string().min(1, "Factor requerido"),
-      priceDetalle: z.string().optional(),
-      priceMayorista: z.string().optional(),
-      barcode: z.string().optional(),
-    })
-  ).optional(),
+  units: z
+    .array(
+      z.object({
+        id: z.number().optional(),
+        unit: z.string().min(1, "Unidad requerida"),
+        factor: z.string().min(1, "Factor requerido"),
+        priceDetalle: z.string().optional(),
+        priceMayorista: z.string().optional(),
+        barcode: z.string().optional(),
+      }),
+    )
+    .optional(),
   stockRows: z.array(
     z.object({
       branchId: z.string(),
@@ -207,25 +229,54 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   const [formLoading, setFormLoading] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const searchTerm = searchParams.get('search') || '';
-  const showInactive = searchParams.get('showInactive') === 'true';
-  const categoriesFilter = searchParams.get('categories') || '';
-  const subcategoriesFilter = searchParams.get('subcategories') || '';
-  const tagsFilter = searchParams.get('tags') || '';
-  const priceRangeFilter = searchParams.get('priceRange') || '';
-  const page = parseInt(searchParams.get('page') || '1', 10);
+  const searchTerm = searchParams.get("search") || "";
+  const showInactive = searchParams.get("showInactive") === "true";
+  const categoriesFilter = searchParams.get("categories") || "";
+  const subcategoriesFilter = searchParams.get("subcategories") || "";
+  const tagsFilter = searchParams.get("tags") || "";
+  const priceRangeFilter = searchParams.get("priceRange") || "";
+  const page = parseInt(searchParams.get("page") || "1", 10);
   const limit = 50;
 
   const [total, setTotal] = useState(0);
 
-  const catalogFilters: FilterConfig[] = useMemo(() => [
-    { id: 'search', label: 'Buscar producto...', type: 'text', placeholder: 'Buscar por nombre, código o categoría...' },
-    { id: 'categories', label: 'Categorías', type: 'multi_category', options: categories.map(c => ({ label: c.name, value: c.id.toString() })) },
-    { id: 'subcategories', label: 'Subcategorías', type: 'multi_category', options: subcategories.map(c => ({ label: c.name, value: c.id.toString() })) },
-    { id: 'tags', label: 'Etiquetas', type: 'multi_category', options: tags.map(t => ({ label: t.name, value: t.id.toString() })) },
-    { id: 'priceRange', label: 'Precio', type: 'number_range' },
-    { id: 'showInactive', label: 'Ver inactivos', type: 'boolean' }
-  ], [categories, subcategories, tags]);
+  const catalogFilters: FilterConfig[] = useMemo(
+    () => [
+      {
+        id: "search",
+        label: "Buscar producto...",
+        type: "text",
+        placeholder: "Buscar por nombre, código o categoría...",
+      },
+      {
+        id: "categories",
+        label: "Categorías",
+        type: "multi_category",
+        options: categories.map((c) => ({
+          label: c.name,
+          value: c.id.toString(),
+        })),
+      },
+      {
+        id: "subcategories",
+        label: "Subcategorías",
+        type: "multi_category",
+        options: subcategories.map((c) => ({
+          label: c.name,
+          value: c.id.toString(),
+        })),
+      },
+      {
+        id: "tags",
+        label: "Etiquetas",
+        type: "multi_category",
+        options: tags.map((t) => ({ label: t.name, value: t.id.toString() })),
+      },
+      { id: "priceRange", label: "Precio", type: "number_range" },
+      { id: "showInactive", label: "Ver inactivos", type: "boolean" },
+    ],
+    [categories, subcategories, tags],
+  );
 
   // Form state
   const [editingProduct, setEditingProduct] = useState<CatalogProduct | null>(
@@ -246,29 +297,36 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   const canCreate = user?.roleId === 1 || user?.roleId === 2;
 
   // React Hook Form
-  const { register, control, handleSubmit, reset, setValue, watch } =
-    useForm<ProductFormData>({
-      resolver: zodResolver(productSchema),
-      defaultValues: {
-        name: "",
-        internalCode: "",
-        barcode: "",
-        description: "",
-        unit: "UNIDAD",
-        categoryId: "",
-        subcategoryId: "",
-        tagIds: [],
-        expirationDate: "",
-        costPrice: "",
-        trackStock: true,
-        isUniversal: false,
-        isService: false,
-        serviceType: "",
-        fixedCommission: "",
-        prices: [{ priceType: "PUBLICO", branchId: "global", price: "" }],
-        stockRows: [],
-      },
-    });
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { isDirty: productFormIsDirty },
+  } = useForm<ProductFormData>({
+    resolver: zodResolver(productSchema),
+    defaultValues: {
+      name: "",
+      internalCode: "",
+      barcode: "",
+      description: "",
+      unit: "UNIDAD",
+      categoryId: "",
+      subcategoryId: "",
+      tagIds: [],
+      expirationDate: "",
+      costPrice: "",
+      trackStock: true,
+      isUniversal: false,
+      isService: false,
+      serviceType: "",
+      fixedCommission: "",
+      prices: [{ priceType: "PUBLICO", branchId: "global", price: "" }],
+      stockRows: [],
+    },
+  });
 
   const {
     fields: priceFields,
@@ -308,22 +366,56 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
     [subcategories, watchCategoryId],
   );
 
+  const isDirty =
+    (isDialogOpen && productFormIsDirty) ||
+    (isCatDialogOpen && newCatName.trim().length > 0) ||
+    (isSubcatDialogOpen &&
+      (newSubcatName.trim().length > 0 || !!newSubcatCategoryId)) ||
+    (isTagDialogOpen && newTagName.trim().length > 0);
+  const {
+    confirmExit,
+    isOpen: exitDialogOpen,
+    handleConfirm: confirmDiscard,
+    handleCancel: cancelDiscard,
+  } = useUnsavedChangesGuard(isDirty);
+
   // Si cambia la búsqueda o categoría, reiniciamos a la página 1
   useEffect(() => {
     if (page !== 1) {
-      setSearchParams(prev => { prev.set('page', '1'); return prev; });
+      setSearchParams((prev) => {
+        prev.set("page", "1");
+        return prev;
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, categoriesFilter, subcategoriesFilter, tagsFilter, priceRangeFilter, showInactive]);
+  }, [
+    searchTerm,
+    categoriesFilter,
+    subcategoriesFilter,
+    tagsFilter,
+    priceRangeFilter,
+    showInactive,
+  ]);
 
   useEffect(() => {
     fetchData();
-  }, [searchTerm, categoriesFilter, subcategoriesFilter, tagsFilter, priceRangeFilter, showInactive, page]);
+  }, [
+    searchTerm,
+    categoriesFilter,
+    subcategoriesFilter,
+    tagsFilter,
+    priceRangeFilter,
+    showInactive,
+    page,
+  ]);
 
   // Si la categoría cambia y la subcategoría seleccionada ya no le pertenece, la limpiamos
   useEffect(() => {
     const currentSubcatId = watch("subcategoryId");
-    if (currentSubcatId && !availableSubcategories.some((s) => String(s.id) === currentSubcatId)) {
+    if (
+      currentSubcatId &&
+      !availableSubcategories.some((s) => String(s.id) === currentSubcatId)
+    ) {
       setValue("subcategoryId", "");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -333,7 +425,9 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
     const current = watch("tagIds") || [];
     setValue(
       "tagIds",
-      current.includes(tagId) ? current.filter((t) => t !== tagId) : [...current, tagId],
+      current.includes(tagId)
+        ? current.filter((t) => t !== tagId)
+        : [...current, tagId],
     );
   };
 
@@ -344,7 +438,9 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         method: "POST",
         body: JSON.stringify({ name: quickTagName.trim() }),
       });
-      setTags((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      setTags((prev) =>
+        [...prev, created].sort((a, b) => a.name.localeCompare(b.name)),
+      );
       setValue("tagIds", [...(watch("tagIds") || []), String(created.id)]);
       setQuickTagName("");
     } catch (err: any) {
@@ -360,30 +456,35 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       queryParams.append("page", page.toString());
       if (searchTerm) queryParams.append("search", searchTerm);
       if (categoriesFilter) {
-        categoriesFilter.split(',').forEach(id => queryParams.append("categoryIds", id));
+        categoriesFilter
+          .split(",")
+          .forEach((id) => queryParams.append("categoryIds", id));
       }
       if (subcategoriesFilter) {
-        subcategoriesFilter.split(',').forEach(id => queryParams.append("subcategoryIds", id));
+        subcategoriesFilter
+          .split(",")
+          .forEach((id) => queryParams.append("subcategoryIds", id));
       }
       if (tagsFilter) {
-        tagsFilter.split(',').forEach(id => queryParams.append("tagIds", id));
+        tagsFilter.split(",").forEach((id) => queryParams.append("tagIds", id));
       }
       if (priceRangeFilter) {
-        const [min, max] = priceRangeFilter.split('-');
+        const [min, max] = priceRangeFilter.split("-");
         if (min) queryParams.append("minPrice", min);
         if (max) queryParams.append("maxPrice", max);
       }
       queryParams.append("isActive", showInactive ? "false" : "true");
 
-      const [prodData, catData, subcatData, tagData, brData] = await Promise.all([
-        apiRequest<{ data: CatalogProduct[]; total: number }>(
-          `/catalog/products?${queryParams.toString()}`,
-        ),
-        apiRequest<Category[]>("/catalog/categories").catch(() => []),
-        apiRequest<Subcategory[]>("/catalog/subcategories").catch(() => []),
-        apiRequest<ProductTag[]>("/catalog/tags").catch(() => []),
-        apiRequest<Branch[]>("/branches").catch(() => []),
-      ]);
+      const [prodData, catData, subcatData, tagData, brData] =
+        await Promise.all([
+          apiRequest<{ data: CatalogProduct[]; total: number }>(
+            `/catalog/products?${queryParams.toString()}`,
+          ),
+          apiRequest<Category[]>("/catalog/categories").catch(() => []),
+          apiRequest<Subcategory[]>("/catalog/subcategories").catch(() => []),
+          apiRequest<ProductTag[]>("/catalog/tags").catch(() => []),
+          apiRequest<Branch[]>("/branches").catch(() => []),
+        ]);
 
       setProducts(prodData?.data || []);
       setTotal(prodData?.total || 0);
@@ -421,15 +522,19 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         description: product.description || "",
         unit: product.unit,
         categoryId: product.category?.id ? String(product.category.id) : "",
-        subcategoryId: product.subcategory?.id ? String(product.subcategory.id) : "",
+        subcategoryId: product.subcategory?.id
+          ? String(product.subcategory.id)
+          : "",
         tagIds: product.tags?.map((t) => String(t.id)) || [],
         expirationDate: "",
         costPrice: product.costPrice?.toString() || "",
         trackStock: product.trackStock,
         isUniversal: product.isUniversal || false,
-          isService: product.isService || false,
-          serviceType: product.serviceType || "",
-          fixedCommission: product.fixedCommission ? String(product.fixedCommission) : "",
+        isService: product.isService || false,
+        serviceType: product.serviceType || "",
+        fixedCommission: product.fixedCommission
+          ? String(product.fixedCommission)
+          : "",
 
         prices: product.prices.map((p) => ({
           id: p.id,
@@ -437,14 +542,16 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
           branchId: p.branchId === null ? "global" : String(p.branchId),
           price: String(p.price),
         })),
-        units: product.units ? product.units.map((u) => ({
-          id: u.id,
-          unit: u.unit,
-          factor: String(u.factor),
-          priceDetalle: u.priceDetalle ? String(u.priceDetalle) : "",
-          priceMayorista: u.priceMayorista ? String(u.priceMayorista) : "",
-          barcode: u.barcode || "",
-        })) : [],
+        units: product.units
+          ? product.units.map((u) => ({
+              id: u.id,
+              unit: u.unit,
+              factor: String(u.factor),
+              priceDetalle: u.priceDetalle ? String(u.priceDetalle) : "",
+              priceMayorista: u.priceMayorista ? String(u.priceMayorista) : "",
+              barcode: u.barcode || "",
+            }))
+          : [],
         stockRows: [],
       });
     } else {
@@ -481,7 +588,9 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       description: product.description || "",
       unit: product.unit,
       categoryId: product.category?.id ? String(product.category.id) : "",
-      subcategoryId: product.subcategory?.id ? String(product.subcategory.id) : "",
+      subcategoryId: product.subcategory?.id
+        ? String(product.subcategory.id)
+        : "",
       tagIds: product.tags?.map((t) => String(t.id)) || [],
       expirationDate: "",
       costPrice: product.costPrice?.toString() || "",
@@ -492,13 +601,15 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         branchId: p.branchId === null ? "global" : String(p.branchId),
         price: String(p.price),
       })),
-      units: product.units ? product.units.map((u) => ({
-        unit: u.unit,
-        factor: String(u.factor),
-        priceDetalle: u.priceDetalle ? String(u.priceDetalle) : "",
-        priceMayorista: u.priceMayorista ? String(u.priceMayorista) : "",
-        barcode: "",
-      })) : [],
+      units: product.units
+        ? product.units.map((u) => ({
+            unit: u.unit,
+            factor: String(u.factor),
+            priceDetalle: u.priceDetalle ? String(u.priceDetalle) : "",
+            priceMayorista: u.priceMayorista ? String(u.priceMayorista) : "",
+            barcode: "",
+          }))
+        : [],
       stockRows: [],
     });
     setIsDialogOpen(true);
@@ -534,9 +645,12 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       unit: data.unit,
       trackStock: data.trackStock,
       isUniversal: data.isUniversal,
-        isService: data.isService,
-        serviceType: data.isService ? data.serviceType : null,
-        fixedCommission: data.isService && data.fixedCommission ? Number(data.fixedCommission) : null,
+      isService: data.isService,
+      serviceType: data.isService ? data.serviceType : null,
+      fixedCommission:
+        data.isService && data.fixedCommission
+          ? Number(data.fixedCommission)
+          : null,
       categoryId: data.categoryId ? Number(data.categoryId) : null,
       subcategoryId: data.subcategoryId ? Number(data.subcategoryId) : null,
       tagIds: data.tagIds.map(Number),
@@ -545,13 +659,14 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       barcode: data.barcode?.trim() || undefined,
       description: data.description?.trim() || undefined,
       imageUrl: productImageUrl || undefined,
-      units: data.units?.map((u) => ({
-        unit: u.unit,
-        factor: Number(u.factor),
-        priceDetalle: u.priceDetalle ? Number(u.priceDetalle) : null,
-        priceMayorista: u.priceMayorista ? Number(u.priceMayorista) : null,
-        barcode: u.barcode?.trim() || undefined,
-      })) || [],
+      units:
+        data.units?.map((u) => ({
+          unit: u.unit,
+          factor: Number(u.factor),
+          priceDetalle: u.priceDetalle ? Number(u.priceDetalle) : null,
+          priceMayorista: u.priceMayorista ? Number(u.priceMayorista) : null,
+          barcode: u.barcode?.trim() || undefined,
+        })) || [],
     };
 
     if (!editingProduct) {
@@ -702,7 +817,6 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
 
   const filtered = products;
 
-
   return (
     <div className="animate-in fade-in duration-500 pb-10">
       {/* Header */}
@@ -720,7 +834,9 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
             </p>
           </div>
         )}
-        <div className={hideTitle ? "w-full flex justify-end gap-2" : "flex gap-2"}>
+        <div
+          className={hideTitle ? "w-full flex justify-end gap-2" : "flex gap-2"}
+        >
           {!hideTitle && (
             <Button variant="outline" onClick={() => navigate("/inventory")}>
               <PackagePlus size={16} />
@@ -778,7 +894,9 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
               color: "var(--primary)",
             },
             {
-              label: showInactive ? "Visibles en pág. (Inactivos)" : "Visibles en pág. (Activos)",
+              label: showInactive
+                ? "Visibles en pág. (Inactivos)"
+                : "Visibles en pág. (Activos)",
               value: products.length,
               icon: ToggleRight,
               color: "#34d399",
@@ -813,7 +931,12 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
               type="button"
               variant="outline"
               disabled={page === 1}
-              onClick={() => setSearchParams(prev => { prev.set('page', String(page - 1)); return prev; })}
+              onClick={() =>
+                setSearchParams((prev) => {
+                  prev.set("page", String(page - 1));
+                  return prev;
+                })
+              }
               className="border-[var(--border)] hover:bg-[var(--hover)] text-[var(--text-main)]"
             >
               Anterior
@@ -822,7 +945,12 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
               type="button"
               variant="outline"
               disabled={page * limit >= total}
-              onClick={() => setSearchParams(prev => { prev.set('page', String(page + 1)); return prev; })}
+              onClick={() =>
+                setSearchParams((prev) => {
+                  prev.set("page", String(page + 1));
+                  return prev;
+                })
+              }
               className="border-[var(--border)] hover:bg-[var(--hover)] text-[var(--text-main)]"
             >
               Siguiente
@@ -834,163 +962,188 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50">
-                <TableHead className="font-semibold text-foreground">Producto</TableHead>
-                <TableHead className="font-semibold text-foreground">Categoría</TableHead>
-                <TableHead className="font-semibold text-foreground">Unidad</TableHead>
-                <TableHead className="text-right font-semibold text-foreground">Precio Público</TableHead>
-                <TableHead className="text-center font-semibold text-foreground">Estado</TableHead>
-                <TableHead className="text-center font-semibold text-foreground">Acciones</TableHead>
+                <TableHead className="font-semibold text-foreground">
+                  Producto
+                </TableHead>
+                <TableHead className="font-semibold text-foreground">
+                  Categoría
+                </TableHead>
+                <TableHead className="font-semibold text-foreground">
+                  Unidad
+                </TableHead>
+                <TableHead className="text-right font-semibold text-foreground">
+                  Precio Público
+                </TableHead>
+                <TableHead className="text-center font-semibold text-foreground">
+                  Estado
+                </TableHead>
+                <TableHead className="text-center font-semibold text-foreground">
+                  Acciones
+                </TableHead>
               </TableRow>
             </TableHeader>
-        <TableBody>
-          {loading && products.length === 0 ? (
-            <TableRow>
-              <TableCell
-                colSpan={6}
-                className="h-32 text-center text-[var(--primary)] animate-pulse"
-              >
-                <div className="flex items-center justify-center">
-                  <Store size={32} />
-                </div>
-              </TableCell>
-            </TableRow>
-          ) : filtered.length === 0 ? (
-            <TableRow>
-              <TableCell
-                colSpan={6}
-                className="h-32 text-center text-[var(--text-sec)]"
-              >
-                No se encontraron productos en el catálogo.
-              </TableCell>
-            </TableRow>
-          ) : (
-            filtered.map((product) => (
-              <TableRow key={product.id} className="group cursor-pointer">
-                <TableCell>
-                  <div className="flex items-center gap-3">
-                    {product.imageUrl ? (
-                      <img
-                        src={product.imageUrl}
-                        alt={product.name}
-                        className="w-9 h-9 rounded-lg object-cover flex-shrink-0 border border-[var(--border)]"
-                      />
-                    ) : (
-                      <div className="w-9 h-9 rounded-lg flex-shrink-0 border border-[var(--border)] bg-[var(--card)] flex items-center justify-center opacity-30">
-                        <ImageIcon size={16} />
-                      </div>
-                    )}
-                    <div className="flex flex-col">
-                      <span className="font-bold text-[var(--text-main)] group-hover:text-[var(--primary)] transition-colors">
-                        {product.name}
-                      </span>
-                      <span className="text-[10px] font-mono font-bold opacity-40 uppercase tracking-tighter text-[var(--text-sec)]">
-                        {product.internalCode || product.barcode || "SIN-CÓDIGO"}
-                      </span>
-                      {product.nearestExpirationDate && (() => {
-                        const days = Math.ceil(
-                          (new Date(product.nearestExpirationDate).getTime() - Date.now()) / 86400000
-                        );
-                        return (
-                          <span
-                            className={`text-[9px] font-bold ${days < 0 ? "text-red-500" : days <= 30 ? "text-amber-500" : "opacity-40"}`}
-                          >
-                            {days < 0 ? "Vencido" : "Vence"}: {new Date(product.nearestExpirationDate).toLocaleDateString()}
-                          </span>
-                        );
-                      })()}
+            <TableBody>
+              {loading && products.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={6}
+                    className="h-32 text-center text-[var(--primary)] animate-pulse"
+                  >
+                    <div className="flex items-center justify-center">
+                      <Store size={32} />
                     </div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-col gap-1 items-start">
-                    <Badge
-                      variant="secondary"
-                      className="font-bold tracking-tight"
-                    >
-                      {product.category?.name || "General"}
-                    </Badge>
-                    {product.subcategory && (
-                      <span className="text-[9px] font-bold opacity-50 text-[var(--text-sec)] pl-1">
-                        {product.subcategory.name}
-                      </span>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <span className="text-xs font-mono font-bold text-[var(--text-sec)]">
-                    {product.unit?.replace('_', ' ')}
-                  </span>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex flex-col items-end">
-                    <span className="font-black text-[var(--primary)] text-base">
-                      ${getPublicPrice(product.prices)}
-                    </span>
-                    <span className="text-[9px] font-bold opacity-40 text-[var(--text-sec)]">
-                      / {product.unit?.replace('_', ' ')}
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex justify-center">
-                    <Badge
-                      onClick={() => handleToggleActive(product.id)}
-                      variant={product.isActive ? "success" : "destructive"}
-                      className="cursor-pointer hover:scale-105 transition-all px-2"
-                    >
-                      <div
-                        className={cn(
-                          "size-1.5 rounded-full bg-current mr-1.5",
-                          product.isActive && "animate-pulse",
+                  </TableCell>
+                </TableRow>
+              ) : filtered.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={6}
+                    className="h-32 text-center text-[var(--text-sec)]"
+                  >
+                    No se encontraron productos en el catálogo.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filtered.map((product) => (
+                  <TableRow key={product.id} className="group cursor-pointer">
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        {product.imageUrl ? (
+                          <img
+                            src={product.imageUrl}
+                            alt={product.name}
+                            className="w-9 h-9 rounded-lg object-cover flex-shrink-0 border border-[var(--border)]"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-lg flex-shrink-0 border border-[var(--border)] bg-[var(--card)] flex items-center justify-center opacity-30">
+                            <ImageIcon size={16} />
+                          </div>
                         )}
-                      />
-                      {product.isActive ? "Activo" : "Inactivo"}
-                    </Badge>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center justify-center gap-1 transition-all">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => openDialog(product)}
-                      className="h-8 w-8 text-[var(--primary)] hover:bg-[var(--primary)]/10 rounded-lg"
-                      title="Editar"
-                    >
-                      <Edit size={16} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => openCopyDialog(product)}
-                      className="h-8 w-8 text-[var(--primary)] hover:bg-[var(--primary)]/10 rounded-lg"
-                      title="Copiar Item"
-                    >
-                      <Copy size={16} />
-                    </Button>
-                    {isOwner && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteProduct(product.id)}
-                        className="h-8 w-8 text-red-500 hover:bg-red-50 rounded-lg"
-                      >
-                        <Trash2 size={16} />
-                      </Button>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-
+                        <div className="flex flex-col">
+                          <span className="font-bold text-[var(--text-main)] group-hover:text-[var(--primary)] transition-colors">
+                            {product.name}
+                          </span>
+                          <span className="text-[10px] font-mono font-bold opacity-40 uppercase tracking-tighter text-[var(--text-sec)]">
+                            {product.internalCode ||
+                              product.barcode ||
+                              "SIN-CÓDIGO"}
+                          </span>
+                          {product.nearestExpirationDate &&
+                            (() => {
+                              const days = Math.ceil(
+                                (new Date(
+                                  product.nearestExpirationDate,
+                                ).getTime() -
+                                  Date.now()) /
+                                  86400000,
+                              );
+                              return (
+                                <span
+                                  className={`text-[9px] font-bold ${days < 0 ? "text-red-500" : days <= 30 ? "text-amber-500" : "opacity-40"}`}
+                                >
+                                  {days < 0 ? "Vencido" : "Vence"}:{" "}
+                                  {new Date(
+                                    product.nearestExpirationDate,
+                                  ).toLocaleDateString()}
+                                </span>
+                              );
+                            })()}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1 items-start">
+                        <Badge
+                          variant="secondary"
+                          className="font-bold tracking-tight"
+                        >
+                          {product.category?.name || "General"}
+                        </Badge>
+                        {product.subcategory && (
+                          <span className="text-[9px] font-bold opacity-50 text-[var(--text-sec)] pl-1">
+                            {product.subcategory.name}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-xs font-mono font-bold text-[var(--text-sec)]">
+                        {product.unit?.replace("_", " ")}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex flex-col items-end">
+                        <span className="font-black text-[var(--primary)] text-base">
+                          ${getPublicPrice(product.prices)}
+                        </span>
+                        <span className="text-[9px] font-bold opacity-40 text-[var(--text-sec)]">
+                          / {product.unit?.replace("_", " ")}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-center">
+                        <Badge
+                          onClick={() => handleToggleActive(product.id)}
+                          variant={product.isActive ? "success" : "destructive"}
+                          className="cursor-pointer hover:scale-105 transition-all px-2"
+                        >
+                          <div
+                            className={cn(
+                              "size-1.5 rounded-full bg-current mr-1.5",
+                              product.isActive && "animate-pulse",
+                            )}
+                          />
+                          {product.isActive ? "Activo" : "Inactivo"}
+                        </Badge>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-center gap-1 transition-all">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openDialog(product)}
+                          className="h-8 w-8 text-[var(--primary)] hover:bg-[var(--primary)]/10 rounded-lg"
+                          title="Editar"
+                        >
+                          <Edit size={16} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openCopyDialog(product)}
+                          className="h-8 w-8 text-[var(--primary)] hover:bg-[var(--primary)]/10 rounded-lg"
+                          title="Copiar Item"
+                        >
+                          <Copy size={16} />
+                        </Button>
+                        {isOwner && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteProduct(product.id)}
+                            className="h-8 w-8 text-red-500 hover:bg-red-50 rounded-lg"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </div>
       </div>
 
-
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog
+        open={isDialogOpen}
+        onOpenChange={(o) =>
+          o ? setIsDialogOpen(true) : confirmExit(() => setIsDialogOpen(false))
+        }
+      >
         <DialogContent
           className="sm:max-w-7xl w-full max-h-[95vh] overflow-y-auto custom-scrollbar"
           style={{
@@ -1045,7 +1198,9 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                               />
                               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
                                 <Upload size={16} className="text-white" />
-                                <span className="text-white text-[10px] font-bold">Cambiar</span>
+                                <span className="text-white text-[10px] font-bold">
+                                  Cambiar
+                                </span>
                               </div>
                             </>
                           ) : uploadingImage ? (
@@ -1055,7 +1210,9 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                           ) : (
                             <div className="flex flex-col items-center gap-1 opacity-40 group-hover:opacity-70 transition-opacity px-2 text-center">
                               <Upload size={18} />
-                              <span className="text-[9px] font-bold">Subir foto</span>
+                              <span className="text-[9px] font-bold">
+                                Subir foto
+                              </span>
                             </div>
                           )}
                         </div>
@@ -1113,7 +1270,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                         <SelectContent>
                           {UNITS.map((u) => (
                             <SelectItem key={u} value={u}>
-                              {u?.replace('_', ' ')}
+                              {u?.replace("_", " ")}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -1149,7 +1306,11 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                       >
                         <SelectTrigger className="h-11 rounded-xl bg-[var(--card)]">
                           <SelectValue
-                            placeholder={watchCategoryId ? "Sin subcategoría" : "Elige categoría"}
+                            placeholder={
+                              watchCategoryId
+                                ? "Sin subcategoría"
+                                : "Elige categoría"
+                            }
                           />
                         </SelectTrigger>
                         <SelectContent>
@@ -1231,7 +1392,8 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                       </div>
                     </div>
                     <p className="text-[10px] opacity-60 ml-1">
-                      Solo se usan para buscar el producto por descripción, no dividen visualmente el catálogo.
+                      Solo se usan para buscar el producto por descripción, no
+                      dividen visualmente el catálogo.
                     </p>
                   </div>
 
@@ -1283,57 +1445,70 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                     </div>
                   </div>
 
-                    <div className="pt-4 border-t border-[var(--border)]">
-                      <div className="flex items-center justify-between">
-                        <div className="text-left">
-                          <p className="text-sm font-bold">Es un Servicio</p>
-                          <p className="text-[10px] opacity-60">
-                            (No f�sico: luz, remesas, etc)
-                          </p>
-                        </div>
-                        <Switch
-                          checked={watchIsService}
-                          onCheckedChange={(v) => {
-                            setValue("isService", v);
-                            if (v) {
-                              setValue("trackStock", false);
-                              setValue("prices", [{ priceType: "PUBLICO", branchId: "global", price: "0" }]);
-                            }
-                          }}
+                  <div className="pt-4 border-t border-[var(--border)]">
+                    <div className="flex items-center justify-between">
+                      <div className="text-left">
+                        <p className="text-sm font-bold">Es un Servicio</p>
+                        <p className="text-[10px] opacity-60">
+                          (No f�sico: luz, remesas, etc)
+                        </p>
+                      </div>
+                      <Switch
+                        checked={watchIsService}
+                        onCheckedChange={(v) => {
+                          setValue("isService", v);
+                          if (v) {
+                            setValue("trackStock", false);
+                            setValue("prices", [
+                              {
+                                priceType: "PUBLICO",
+                                branchId: "global",
+                                price: "0",
+                              },
+                            ]);
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {watchIsService && (
+                    <div className="pt-4 border-t border-[var(--border)] space-y-4">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-bold">
+                          Tipo de Servicio
+                        </Label>
+                        <Select
+                          onValueChange={(val) => setValue("serviceType", val)}
+                          value={watch("serviceType") || ""}
+                        >
+                          <SelectTrigger className="h-11 rounded-xl bg-[var(--card)]">
+                            <SelectValue placeholder="Selecciona tipo de servicio" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="INGRESO">
+                              Ingreso a Caja (Ej. Cobro de Luz)
+                            </SelectItem>
+                            <SelectItem value="SALIDA">
+                              Salida de Caja (Ej. Pago de Remesa)
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-bold">
+                          Comisión Fija ($)
+                        </Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          {...register("fixedCommission")}
+                          placeholder="0.00"
+                          className="h-11 rounded-xl bg-[var(--card)]"
                         />
                       </div>
                     </div>
-
-                    {watchIsService && (
-                      <div className="pt-4 border-t border-[var(--border)] space-y-4">
-                        <div className="space-y-2">
-                          <Label className="text-sm font-bold">Tipo de Servicio</Label>
-                          <Select
-                            onValueChange={(val) => setValue("serviceType", val)}
-                            value={watch("serviceType") || ""}
-                          >
-                            <SelectTrigger className="h-11 rounded-xl bg-[var(--card)]">
-                              <SelectValue placeholder="Selecciona tipo de servicio" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="INGRESO">Ingreso a Caja (Ej. Cobro de Luz)</SelectItem>
-                              <SelectItem value="SALIDA">Salida de Caja (Ej. Pago de Remesa)</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-bold">Comisión Fija ($)</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            {...register("fixedCommission")}
-                            placeholder="0.00"
-                            className="h-11 rounded-xl bg-[var(--card)]"
-                          />
-                        </div>
-                      </div>
-                    )}
-
+                  )}
                 </div>
               </div>
 
@@ -1343,128 +1518,139 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                 {watchIsUniversal || watchIsService ? (
                   <div className="p-6 rounded-xl border border-dashed border-[var(--border)] bg-transparent">
                     <p className="text-xs font-bold text-[var(--text-sec)]">
-                      Este producto no lleva precio fijo — se ingresa cada vez que se vende desde el POS.
+                      Este producto no lleva precio fijo — se ingresa cada vez
+                      que se vende desde el POS.
                     </p>
                   </div>
                 ) : (
-                <div className="p-6 rounded-xl border border-[var(--border)] space-y-6 bg-transparent">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-black uppercase tracking-widest opacity-60 text-[var(--text-sec)]">
-                      Precios de Venta
-                    </p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        appendPrice({
-                          priceType: "MAYOREO",
-                          branchId: "global",
-                          price: "",
-                        })
-                      }
-                      className="h-8"
-                    >
-                      <Plus size={14} className="mr-1" /> Agregar Precio
-                    </Button>
-                  </div>
-
-                  <div className="space-y-4">
-                    {priceFields.map((field, i) => (
-                      <div
-                        key={field.id}
-                        className="p-3 rounded-xl border bg-[var(--card)] border-[var(--border)] relative group"
+                  <div className="p-6 rounded-xl border border-[var(--border)] space-y-6 bg-transparent">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-black uppercase tracking-widest opacity-60 text-[var(--text-sec)]">
+                        Precios de Venta
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          appendPrice({
+                            priceType: "MAYOREO",
+                            branchId: "global",
+                            price: "",
+                          })
+                        }
+                        className="h-8"
                       >
-                        <div className="grid grid-cols-12 gap-2 sm:gap-3 items-end">
-                          <div className="col-span-5 sm:col-span-4 space-y-1">
-                            <Label className="text-[10px] font-bold uppercase opacity-50">
-                              Tipo
-                            </Label>
-                            <Select
-                              value={watch(`prices.${i}.priceType`)}
-                              onValueChange={(v) =>
-                                setValue(`prices.${i}.priceType`, v)
-                              }
-                            >
-                              <SelectTrigger className="h-9 rounded-lg">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {PRICE_TYPES.map((t) => (
-                                  <SelectItem key={t} value={t}>
-                                    {t?.replace('_', ' ')}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="col-span-4 sm:col-span-4 space-y-1">
-                            <Label className="text-[10px] font-bold uppercase opacity-50">
-                              Sucursal
-                            </Label>
-                            <Select
-                              value={watch(`prices.${i}.branchId`)}
-                              onValueChange={(v) =>
-                                setValue(`prices.${i}.branchId`, v)
-                              }
-                            >
-                              <SelectTrigger className="h-9 rounded-lg">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="global">Global</SelectItem>
-                                {branches.map((b) => (
-                                  <SelectItem key={b.id} value={String(b.id)}>
-                                    {b.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="col-span-3 sm:col-span-4 space-y-1">
-                            <Label className="text-[10px] font-bold uppercase opacity-50">
-                              Precio
-                            </Label>
-                            <div className="relative">
-                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-bold">
-                                $
-                              </span>
-                              <Input
-                                type="number"
-                                step="0.01"
-                                {...register(`prices.${i}.price`)}
-                                className="h-9 pl-6 rounded-lg font-bold"
-                                placeholder="0.00"
-                              />
+                        <Plus size={14} className="mr-1" /> Agregar Precio
+                      </Button>
+                    </div>
+
+                    <div className="space-y-4">
+                      {priceFields.map((field, i) => (
+                        <div
+                          key={field.id}
+                          className="p-3 rounded-xl border bg-[var(--card)] border-[var(--border)] relative group"
+                        >
+                          <div className="grid grid-cols-12 gap-2 sm:gap-3 items-end">
+                            <div className="col-span-5 sm:col-span-4 space-y-1">
+                              <Label className="text-[10px] font-bold uppercase opacity-50">
+                                Tipo
+                              </Label>
+                              <Select
+                                value={watch(`prices.${i}.priceType`)}
+                                onValueChange={(v) =>
+                                  setValue(`prices.${i}.priceType`, v)
+                                }
+                              >
+                                <SelectTrigger className="h-9 rounded-lg">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {PRICE_TYPES.map((t) => (
+                                    <SelectItem key={t} value={t}>
+                                      {t?.replace("_", " ")}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="col-span-4 sm:col-span-4 space-y-1">
+                              <Label className="text-[10px] font-bold uppercase opacity-50">
+                                Sucursal
+                              </Label>
+                              <Select
+                                value={watch(`prices.${i}.branchId`)}
+                                onValueChange={(v) =>
+                                  setValue(`prices.${i}.branchId`, v)
+                                }
+                              >
+                                <SelectTrigger className="h-9 rounded-lg">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="global">Global</SelectItem>
+                                  {branches.map((b) => (
+                                    <SelectItem key={b.id} value={String(b.id)}>
+                                      {b.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="col-span-3 sm:col-span-4 space-y-1">
+                              <Label className="text-[10px] font-bold uppercase opacity-50">
+                                Precio
+                              </Label>
+                              <div className="relative">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-bold">
+                                  $
+                                </span>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  {...register(`prices.${i}.price`)}
+                                  className="h-9 pl-6 rounded-lg font-bold"
+                                  placeholder="0.00"
+                                />
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        {priceFields.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const priceId = watch(`prices.${i}.id`);
-                              if (priceId && editingProduct) {
-                                if (!confirm("¿Eliminar este precio? Se aplicará inmediatamente.")) return;
-                                try {
-                                  await apiRequest(`/catalog/products/${editingProduct.id}/prices/${priceId}`, { method: "DELETE" });
-                                  toast.success("Precio eliminado");
-                                } catch (e: any) {
-                                  toast.error(e.message || "Error al eliminar precio");
-                                  return; // Stop removal from UI if failed
+                          {priceFields.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const priceId = watch(`prices.${i}.id`);
+                                if (priceId && editingProduct) {
+                                  if (
+                                    !confirm(
+                                      "¿Eliminar este precio? Se aplicará inmediatamente.",
+                                    )
+                                  )
+                                    return;
+                                  try {
+                                    await apiRequest(
+                                      `/catalog/products/${editingProduct.id}/prices/${priceId}`,
+                                      { method: "DELETE" },
+                                    );
+                                    toast.success("Precio eliminado");
+                                  } catch (e: any) {
+                                    toast.error(
+                                      e.message || "Error al eliminar precio",
+                                    );
+                                    return; // Stop removal from UI if failed
+                                  }
                                 }
-                              }
-                              removePrice(i);
-                            }}
-                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-10 hover:scale-110"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                                removePrice(i);
+                              }}
+                              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-10 hover:scale-110"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
                 )}
 
                 {/* Sección Unidades Secundarias */}
@@ -1474,7 +1660,10 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                       <p className="text-xs font-black uppercase tracking-widest opacity-60 text-[var(--text-sec)]">
                         Unidades de Venta Adicionales
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">Si vendes este producto en otras presentaciones (Ej. por Caja, Docena, etc.), agrégalas aquí.</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Si vendes este producto en otras presentaciones (Ej. por
+                        Caja, Docena, etc.), agrégalas aquí.
+                      </p>
                     </div>
                     <Button
                       type="button"
@@ -1503,10 +1692,14 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                       >
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <Label className="text-[10px] font-bold uppercase opacity-50 block">Selecciona la Unidad Alternativa</Label>
+                            <Label className="text-[10px] font-bold uppercase opacity-50 block">
+                              Selecciona la Unidad Alternativa
+                            </Label>
                             <Select
                               value={watch(`units.${i}.unit`)}
-                              onValueChange={(v) => setValue(`units.${i}.unit`, v)}
+                              onValueChange={(v) =>
+                                setValue(`units.${i}.unit`, v)
+                              }
                             >
                               <SelectTrigger className="h-9 rounded-lg font-bold">
                                 <SelectValue placeholder="Ej. CAJA, DOCENA..." />
@@ -1514,7 +1707,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                               <SelectContent>
                                 {UNITS.map((t) => (
                                   <SelectItem key={t} value={t}>
-                                    {t?.replace('_', ' ')}
+                                    {t?.replace("_", " ")}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -1522,9 +1715,11 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                           </div>
 
                           <div className="flex flex-col gap-2 p-3 bg-[var(--surface)] rounded-xl border border-[var(--border)] border-dashed relative">
-                            <Label className="text-[9px] font-bold uppercase opacity-60 absolute -top-2 left-3 bg-[var(--card)] px-1.5">¿Equivalencia?</Label>
+                            <Label className="text-[9px] font-bold uppercase opacity-60 absolute -top-2 left-3 bg-[var(--card)] px-1.5">
+                              ¿Equivalencia?
+                            </Label>
                             <p className="text-[10px] font-bold opacity-60 mt-1">
-                              1 {watch(`units.${i}.unit`) || 'Nueva'} =
+                              1 {watch(`units.${i}.unit`) || "Nueva"} =
                             </p>
                             <div className="flex items-center gap-2">
                               <Input
@@ -1535,7 +1730,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                                 placeholder="0"
                               />
                               <span className="text-xs font-bold text-[var(--primary)] whitespace-nowrap shrink-0">
-                                {watch("unit") || 'Base'}
+                                {watch("unit") || "Base"}
                               </span>
                             </div>
                           </div>
@@ -1543,9 +1738,13 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div className="space-y-1">
-                            <Label className="text-[10px] font-bold uppercase opacity-50 block">Precio (Detalle)</Label>
+                            <Label className="text-[10px] font-bold uppercase opacity-50 block">
+                              Precio (Detalle)
+                            </Label>
                             <div className="relative">
-                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-xs">$</span>
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-xs">
+                                $
+                              </span>
                               <Input
                                 type="number"
                                 step="0.01"
@@ -1554,12 +1753,18 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                                 placeholder="0.00"
                               />
                             </div>
-                            <p className="text-[9px] font-bold text-[var(--primary)] opacity-70 leading-none pt-0.5">Dejar vacío para auto-calcular</p>
+                            <p className="text-[9px] font-bold text-[var(--primary)] opacity-70 leading-none pt-0.5">
+                              Dejar vacío para auto-calcular
+                            </p>
                           </div>
                           <div className="space-y-1">
-                            <Label className="text-[10px] font-bold uppercase opacity-50 block">Precio (Mayorista)</Label>
+                            <Label className="text-[10px] font-bold uppercase opacity-50 block">
+                              Precio (Mayorista)
+                            </Label>
                             <div className="relative">
-                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-xs">$</span>
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-xs">
+                                $
+                              </span>
                               <Input
                                 type="number"
                                 step="0.01"
@@ -1568,10 +1773,14 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                                 placeholder="0.00"
                               />
                             </div>
-                            <p className="text-[9px] font-bold text-[var(--primary)] opacity-70 leading-none pt-0.5">Dejar vacío para auto-calcular</p>
+                            <p className="text-[9px] font-bold text-[var(--primary)] opacity-70 leading-none pt-0.5">
+                              Dejar vacío para auto-calcular
+                            </p>
                           </div>
                           <div className="space-y-1">
-                            <Label className="text-[10px] font-bold uppercase opacity-50 block">Cód. Barras</Label>
+                            <Label className="text-[10px] font-bold uppercase opacity-50 block">
+                              Cód. Barras
+                            </Label>
                             <Input
                               type="text"
                               {...register(`units.${i}.barcode`)}
@@ -1586,7 +1795,12 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                           onClick={async () => {
                             const unitId = watch(`units.${i}.id`);
                             if (unitId && editingProduct) {
-                              if (!confirm("¿Eliminar esta presentación? Se aplicará inmediatamente.")) return;
+                              if (
+                                !confirm(
+                                  "¿Eliminar esta presentación? Se aplicará inmediatamente.",
+                                )
+                              )
+                                return;
                             }
                             removeUnit(i);
                           }}
@@ -1697,7 +1911,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setIsDialogOpen(false)}
+                onClick={() => confirmExit(() => setIsDialogOpen(false))}
                 className="rounded-xl"
               >
                 Cancelar
@@ -1720,7 +1934,14 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       </Dialog>
 
       {/* Dialog Gestionar Categorías */}
-      <Dialog open={isCatDialogOpen} onOpenChange={setIsCatDialogOpen}>
+      <Dialog
+        open={isCatDialogOpen}
+        onOpenChange={(o) =>
+          o
+            ? setIsCatDialogOpen(true)
+            : confirmExit(() => setIsCatDialogOpen(false))
+        }
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Gestionar Categorías</DialogTitle>
@@ -1813,7 +2034,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
               type="button"
               variant="outline"
               className="w-full"
-              onClick={() => setIsCatDialogOpen(false)}
+              onClick={() => confirmExit(() => setIsCatDialogOpen(false))}
             >
               Cerrar
             </Button>
@@ -1822,12 +2043,20 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       </Dialog>
 
       {/* Dialog Gestionar Subcategorías */}
-      <Dialog open={isSubcatDialogOpen} onOpenChange={setIsSubcatDialogOpen}>
+      <Dialog
+        open={isSubcatDialogOpen}
+        onOpenChange={(o) =>
+          o
+            ? setIsSubcatDialogOpen(true)
+            : confirmExit(() => setIsSubcatDialogOpen(false))
+        }
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Gestionar Subcategorías</DialogTitle>
             <DialogDescription>
-              Divide una categoría en subcategorías (ej. Agroservicio → Tubería PVC, Concentrado, Agroquímicos).
+              Divide una categoría en subcategorías (ej. Agroservicio → Tubería
+              PVC, Concentrado, Agroquímicos).
             </DialogDescription>
           </DialogHeader>
 
@@ -1835,7 +2064,10 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
             <form onSubmit={handleCreateSubcategory} className="space-y-3">
               <div className="space-y-2">
                 <Label>Categoría</Label>
-                <Select value={newSubcatCategoryId} onValueChange={setNewSubcatCategoryId}>
+                <Select
+                  value={newSubcatCategoryId}
+                  onValueChange={setNewSubcatCategoryId}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecciona una categoría..." />
                   </SelectTrigger>
@@ -1874,10 +2106,16 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
               <Label>Subcategorías Existentes</Label>
               <div
                 className="max-h-[220px] overflow-y-auto rounded-xl border p-2 space-y-1"
-                style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)" }}
+                style={{
+                  borderColor: "var(--border)",
+                  backgroundColor: "var(--bg)",
+                }}
               >
                 {subcategories.length === 0 && (
-                  <p className="text-xs text-center py-4 opacity-50" style={{ color: "var(--text-sec)" }}>
+                  <p
+                    className="text-xs text-center py-4 opacity-50"
+                    style={{ color: "var(--text-sec)" }}
+                  >
                     Sin subcategorías registradas.
                   </p>
                 )}
@@ -1887,11 +2125,18 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                     className="flex items-center justify-between p-2 rounded-lg hover:bg-[var(--card)] transition-colors group"
                   >
                     <div className="flex flex-col">
-                      <span className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                      <span
+                        className="text-sm font-medium"
+                        style={{ color: "var(--text-main)" }}
+                      >
                         {sub.name}
                       </span>
-                      <span className="text-[10px] opacity-50" style={{ color: "var(--text-sec)" }}>
-                        {sub.category?.name || categories.find((c) => c.id === sub.categoryId)?.name}
+                      <span
+                        className="text-[10px] opacity-50"
+                        style={{ color: "var(--text-sec)" }}
+                      >
+                        {sub.category?.name ||
+                          categories.find((c) => c.id === sub.categoryId)?.name}
                       </span>
                     </div>
                     <button
@@ -1911,7 +2156,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
               type="button"
               variant="outline"
               className="w-full"
-              onClick={() => setIsSubcatDialogOpen(false)}
+              onClick={() => confirmExit(() => setIsSubcatDialogOpen(false))}
             >
               Cerrar
             </Button>
@@ -1920,12 +2165,20 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       </Dialog>
 
       {/* Dialog Gestionar Etiquetas */}
-      <Dialog open={isTagDialogOpen} onOpenChange={setIsTagDialogOpen}>
+      <Dialog
+        open={isTagDialogOpen}
+        onOpenChange={(o) =>
+          o
+            ? setIsTagDialogOpen(true)
+            : confirmExit(() => setIsTagDialogOpen(false))
+        }
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Gestionar Etiquetas</DialogTitle>
             <DialogDescription>
-              Las etiquetas se usan solo para buscar productos por descripción (ej. "para tomate"), no dividen el catálogo visualmente.
+              Las etiquetas se usan solo para buscar productos por descripción
+              (ej. "para tomate"), no dividen el catálogo visualmente.
             </DialogDescription>
           </DialogHeader>
 
@@ -1957,10 +2210,16 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
               <Label>Etiquetas Existentes</Label>
               <div
                 className="max-h-[200px] overflow-y-auto rounded-xl border p-2 space-y-1"
-                style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)" }}
+                style={{
+                  borderColor: "var(--border)",
+                  backgroundColor: "var(--bg)",
+                }}
               >
                 {tags.length === 0 && (
-                  <p className="text-xs text-center py-4 opacity-50" style={{ color: "var(--text-sec)" }}>
+                  <p
+                    className="text-xs text-center py-4 opacity-50"
+                    style={{ color: "var(--text-sec)" }}
+                  >
                     Sin etiquetas registradas.
                   </p>
                 )}
@@ -1969,7 +2228,10 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                     key={t.id}
                     className="flex items-center justify-between p-2 rounded-lg hover:bg-[var(--card)] transition-colors group"
                   >
-                    <span className="text-sm font-medium" style={{ color: "var(--text-main)" }}>
+                    <span
+                      className="text-sm font-medium"
+                      style={{ color: "var(--text-main)" }}
+                    >
                       {t.name}
                     </span>
                     <button
@@ -1989,19 +2251,19 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
               type="button"
               variant="outline"
               className="w-full"
-              onClick={() => setIsTagDialogOpen(false)}
+              onClick={() => confirmExit(() => setIsTagDialogOpen(false))}
             >
               Cerrar
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <UnsavedChangesDialog
+        open={exitDialogOpen}
+        onConfirm={confirmDiscard}
+        onCancel={cancelDiscard}
+      />
     </div>
   );
 }
-
-
-
-
-
-

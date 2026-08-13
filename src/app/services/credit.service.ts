@@ -21,7 +21,7 @@ export interface CreditPayment {
 
 export interface CreditSale {
   id: number;
-  saleId: number;
+  saleId?: number | null;
   customerId: number;
   branchId: number;
   originalAmount: number | string;
@@ -29,6 +29,7 @@ export interface CreditSale {
   remainingAmount: number | string;
   dueDate?: string | null;
   status: 'PENDIENTE' | 'VENCIDO' | 'PAGADO' | 'ANULADO';
+  notes?: string | null;
   createdAt: string;
   updatedAt: string;
   customer?: {
@@ -63,6 +64,13 @@ export interface RegisterPaymentDto {
   amount: number;
   paymentMethod: string;
   reference?: string;
+  notes?: string;
+}
+
+export interface CreateManualCreditDto {
+  customerId: number;
+  amount: number;
+  dueDate: string;
   notes?: string;
 }
 
@@ -137,6 +145,13 @@ export const creditService = {
 
   getSummary: () => {
     return apiRequest<CreditSummary>('/credit/summary');
+  },
+
+  createManualCredit: (data: CreateManualCreditDto) => {
+    return apiRequest<CreditSale>('/credit', {
+      method: 'POST',
+      body: JSON.stringify({ ...data, amount: Number(data.amount) }),
+    });
   },
 
   getAging: () => {

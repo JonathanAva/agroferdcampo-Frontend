@@ -23,6 +23,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
+import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
+import { UnsavedChangesDialog } from '../components/ui/unsaved-changes-dialog';
 
 const financeFilters: FilterConfig[] = [
   { id: 'type', label: 'Tipo', type: 'category', options: [
@@ -103,6 +105,13 @@ export function Finance() {
 
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [setupForm, setSetupForm] = useState({ maxBalance: '', minBalance: '' });
+
+  const isDirty =
+    (showAddGeneralModal && (Number(newGeneralEntry.amount) > 0 || !!newGeneralEntry.description)) ||
+    (showExpenseModal && (Number(newExpense.amount) > 0 || !!newExpense.description || !!newExpense.receiptRef)) ||
+    (showSetupModal && (!!setupForm.maxBalance || !!setupForm.minBalance)) ||
+    (showReplenishModal && (Number(replenishForm.amount) > 0 || !!replenishForm.reason));
+  const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
 
   // --- SHIFTS HISTORY STATE ---
   const [shiftsHistory, setShiftsHistory] = useState<any[]>([]);
@@ -810,7 +819,7 @@ export function Finance() {
 
       {/* MODALS */}
       {/* Agregar Movimiento General */}
-      <Dialog open={showAddGeneralModal} onOpenChange={setShowAddGeneralModal}>
+      <Dialog open={showAddGeneralModal} onOpenChange={(o) => o ? setShowAddGeneralModal(true) : confirmExit(() => setShowAddGeneralModal(false))}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Registrar Movimiento - Caja General</DialogTitle>
@@ -895,14 +904,14 @@ export function Finance() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddGeneralModal(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => confirmExit(() => setShowAddGeneralModal(false))}>Cancelar</Button>
             <Button onClick={handleCreateGeneralEntry}>Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Registrar Gasto Caja Fuerte */}
-      <Dialog open={showExpenseModal} onOpenChange={setShowExpenseModal}>
+      <Dialog open={showExpenseModal} onOpenChange={(o) => o ? setShowExpenseModal(true) : confirmExit(() => setShowExpenseModal(false))}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Registrar Gasto de Caja Fuerte</DialogTitle>
@@ -920,14 +929,14 @@ export function Finance() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowExpenseModal(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => confirmExit(() => setShowExpenseModal(false))}>Cancelar</Button>
             <Button variant="destructive" onClick={handleRegisterExpense}>Registrar Gasto</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Setup Caja Fuerte */}
-      <Dialog open={showSetupModal} onOpenChange={setShowSetupModal}>
+      <Dialog open={showSetupModal} onOpenChange={(o) => o ? setShowSetupModal(true) : confirmExit(() => setShowSetupModal(false))}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Configurar Caja Fuerte</DialogTitle>
@@ -944,14 +953,14 @@ export function Finance() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSetupModal(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => confirmExit(() => setShowSetupModal(false))}>Cancelar</Button>
             <Button onClick={handleSetupPettyCash}>Configurar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Solicitar Reposición */}
-      <Dialog open={showReplenishModal} onOpenChange={setShowReplenishModal}>
+      <Dialog open={showReplenishModal} onOpenChange={(o) => o ? setShowReplenishModal(true) : confirmExit(() => setShowReplenishModal(false))}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Solicitar Reposición</DialogTitle>
@@ -967,7 +976,7 @@ export function Finance() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowReplenishModal(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => confirmExit(() => setShowReplenishModal(false))}>Cancelar</Button>
             <Button onClick={handleRequestReplenish}>Enviar Solicitud</Button>
           </DialogFooter>
         </DialogContent>
@@ -1085,6 +1094,8 @@ export function Finance() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
     </div>
   );
 }

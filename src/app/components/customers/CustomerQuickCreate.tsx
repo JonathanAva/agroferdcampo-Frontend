@@ -8,6 +8,8 @@ import { Label } from '../ui/label';
 import { apiRequest } from '../../config/api';
 import { toast } from 'sonner';
 import { UserPlus } from 'lucide-react';
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
+import { UnsavedChangesDialog } from '../ui/unsaved-changes-dialog';
 
 interface CustomerQuickCreateProps {
   open: boolean;
@@ -22,6 +24,11 @@ export function CustomerQuickCreate({ open, onOpenChange, onSuccess }: CustomerQ
     phone: '',
     email: '',
   });
+
+  const isDirty =
+    formData.name.trim() !== '' || formData.phone.trim() !== '' || formData.email.trim() !== '';
+  const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } =
+    useUnsavedChangesGuard(isDirty);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,7 +56,8 @@ export function CustomerQuickCreate({ open, onOpenChange, onSuccess }: CustomerQ
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+    <Dialog open={open} onOpenChange={(o) => o ? onOpenChange(true) : confirmExit(() => onOpenChange(false))}>
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
           <div className="flex items-center gap-2 text-[var(--accent)] mb-2">
@@ -96,7 +104,7 @@ export function CustomerQuickCreate({ open, onOpenChange, onSuccess }: CustomerQ
           </div>
 
           <DialogFooter className="pt-4">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => confirmExit(() => onOpenChange(false))}>
               Cancelar
             </Button>
             <Button 
@@ -110,5 +118,7 @@ export function CustomerQuickCreate({ open, onOpenChange, onSuccess }: CustomerQ
         </form>
       </DialogContent>
     </Dialog>
+    <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
+    </>
   );
 }

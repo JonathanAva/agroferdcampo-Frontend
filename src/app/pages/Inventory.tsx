@@ -59,6 +59,8 @@ import {
   TableHeader,
   TableRow,
 } from "../components/ui/table";
+import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface ProductPrice {
@@ -267,6 +269,13 @@ function InventoryList() {
   const [minStockVal, setMinStockVal] = useState("");
   const [alerts, setAlerts] = useState<any[]>([]);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
+
+  const isDirty =
+    (isNewEntryOpen && (!!entrySelectedProduct || Number(entryQty) > 0)) ||
+    (isAdjustOpen && (Number(adjustData.quantity) > 0 || !!adjustData.reference)) ||
+    (isTransferOpen && (!!transferData.toBranchId || Number(transferData.quantity) > 0 || !!transferData.reference || !!transferData.lotId)) ||
+    (isMinStockOpen && !!minStockVal);
+  const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
 
   useEffect(() => {
     if (page !== 1) {
@@ -578,7 +587,7 @@ function InventoryList() {
       </div>
 
       {/* Modal Nuevo Ingreso (Para productos que pueden o no estar en la tabla aún) */}
-      <Dialog open={isNewEntryOpen} onOpenChange={setIsNewEntryOpen}>
+      <Dialog open={isNewEntryOpen} onOpenChange={(o) => o ? setIsNewEntryOpen(true) : confirmExit(() => setIsNewEntryOpen(false))}>
         <DialogContent 
           className="sm:max-w-md w-full"
           style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--text-main)" }}
@@ -673,7 +682,7 @@ function InventoryList() {
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setIsNewEntryOpen(false)}
+                onClick={() => confirmExit(() => setIsNewEntryOpen(false))}
                 className="rounded-xl"
               >
                 Cancelar
@@ -924,7 +933,7 @@ function InventoryList() {
       </div>
 
       {/* Modal Ajustar Stock */}
-      <Dialog open={isAdjustOpen} onOpenChange={setIsAdjustOpen}>
+      <Dialog open={isAdjustOpen} onOpenChange={(o) => o ? setIsAdjustOpen(true) : confirmExit(() => setIsAdjustOpen(false))}>
         <DialogContent 
           className="sm:max-w-md w-full"
           style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--text-main)" }}
@@ -1052,7 +1061,7 @@ function InventoryList() {
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={() => setIsAdjustOpen(false)}
+                  onClick={() => confirmExit(() => setIsAdjustOpen(false))}
                   className="rounded-xl"
                 >
                   Cancelar
@@ -1072,7 +1081,7 @@ function InventoryList() {
       </Dialog>
 
       {/* Modal Transferencia */}
-      <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
+      <Dialog open={isTransferOpen} onOpenChange={(o) => o ? setIsTransferOpen(true) : confirmExit(() => setIsTransferOpen(false))}>
         <DialogContent 
           className="sm:max-w-md w-full"
           style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--text-main)" }}
@@ -1226,7 +1235,7 @@ function InventoryList() {
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={() => setIsTransferOpen(false)}
+                  onClick={() => confirmExit(() => setIsTransferOpen(false))}
                   className="rounded-xl"
                 >
                   Cancelar
@@ -1377,7 +1386,7 @@ function InventoryList() {
       </Dialog>
 
       {/* Modal Fijar Stock Mínimo */}
-      <Dialog open={isMinStockOpen} onOpenChange={setIsMinStockOpen}>
+      <Dialog open={isMinStockOpen} onOpenChange={(o) => o ? setIsMinStockOpen(true) : confirmExit(() => setIsMinStockOpen(false))}>
         <DialogContent className="sm:max-w-sm w-full" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--text-main)" }}>
           <form onSubmit={handleUpdateMinStock}>
             <DialogHeader>
@@ -1399,7 +1408,7 @@ function InventoryList() {
               </div>
             </div>
             <DialogFooter className="gap-3">
-              <Button type="button" variant="ghost" onClick={() => setIsMinStockOpen(false)}>Cancelar</Button>
+              <Button type="button" variant="ghost" onClick={() => confirmExit(() => setIsMinStockOpen(false))}>Cancelar</Button>
               <Button type="submit" disabled={formLoading} variant="default">Guardar</Button>
             </DialogFooter>
           </form>
@@ -1445,6 +1454,8 @@ function InventoryList() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
     </div>
   );
 }

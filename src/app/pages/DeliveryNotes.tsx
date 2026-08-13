@@ -31,6 +31,8 @@ import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
 import { SignaturePad } from '../components/ui/signature/SignaturePad';
 import Vehicles from './Vehicles';
 import DeliveryRoutes from './DeliveryRoutes';
+import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
+import { UnsavedChangesDialog } from '../components/ui/unsaved-changes-dialog';
 
 export function DeliveryNotes() {
   const [activeTab, setActiveTab] = useState<'albaranes' | 'flota' | 'rutas'>('albaranes');
@@ -123,6 +125,23 @@ function DeliveryNotesList() {
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [noteToDuplicate, setNoteToDuplicate] = useState<DeliveryNoteResponse | null>(null);
   const [duplicating, setDuplicating] = useState(false);
+
+  const deliverItemsChanged = selectedNote?.items?.some((item: any) => {
+    const formItem = deliverForm.items.find(i => i.productId === item.productId);
+    return !!formItem && formItem.receivedQty !== item.quantity;
+  }) || false;
+
+  const isDirty =
+    (deliverModalOpen && (
+      !!deliverForm.notes?.trim() ||
+      !!deliverForm.clientSignedBy?.trim() ||
+      !!deliverForm.clientSignature ||
+      (deliverForm.proofPhotos?.length || 0) > 0 ||
+      deliverItemsChanged
+    )) ||
+    (assignModalOpen && (!!assignForm.vehicleId || !!assignForm.scheduledAt)) ||
+    (closeObservationModalOpen && observationText.trim() !== '');
+  const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
 
   const deliveryNotesFilters: FilterConfig[] = useMemo(() => [
     { id: 'status', label: 'Estado', type: 'category', options: [
@@ -1020,7 +1039,7 @@ function DeliveryNotesList() {
       </Dialog>
 
       {/* MODAL CONFIRMAR ENTREGA (Signature) */}
-      <Dialog open={deliverModalOpen} onOpenChange={setDeliverModalOpen}>
+      <Dialog open={deliverModalOpen} onOpenChange={(o) => o ? setDeliverModalOpen(true) : confirmExit(() => setDeliverModalOpen(false))}>
         <DialogContent className="max-w-5xl sm:max-w-5xl p-0 flex flex-col md:flex-row h-auto max-h-[90vh] md:h-[85vh] bg-[var(--bg)] border-[var(--border)] overflow-y-auto md:overflow-hidden rounded-2xl shadow-2xl">
           {selectedNote && (
             <>
@@ -1175,9 +1194,9 @@ function DeliveryNotesList() {
                       <span className="flex items-center gap-2"><CheckCircle2 size={22}/> Confirmar Entrega</span>
                     )}
                   </Button>
-                  <Button 
-                    variant="ghost" 
-                    onClick={() => setDeliverModalOpen(false)} 
+                  <Button
+                    variant="ghost"
+                    onClick={() => confirmExit(() => setDeliverModalOpen(false))}
                     className="w-full h-12 text-[var(--text-sec)] hover:text-[var(--text-main)] hover:bg-[var(--border)]/50 rounded-xl font-semibold"
                   >
                     Cancelar
@@ -1190,7 +1209,7 @@ function DeliveryNotesList() {
       </Dialog>
 
       {/* MODAL ASIGNAR TRANSPORTE */}
-      <Dialog open={assignModalOpen} onOpenChange={setAssignModalOpen}>
+      <Dialog open={assignModalOpen} onOpenChange={(o) => o ? setAssignModalOpen(true) : confirmExit(() => setAssignModalOpen(false))}>
         <DialogContent className="max-w-md sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-amber-600"><TruckIcon /> Asignar Transporte</DialogTitle>
@@ -1251,14 +1270,14 @@ function DeliveryNotesList() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAssignModalOpen(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => confirmExit(() => setAssignModalOpen(false))}>Cancelar</Button>
             <Button onClick={handleAssignSubmit} disabled={assigning} className="bg-amber-600 text-white hover:bg-amber-700">{assigning ? 'Asignando...' : 'Asignar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* MODAL CERRAR CON OBSERVACIÓN */}
-      <Dialog open={closeObservationModalOpen} onOpenChange={setCloseObservationModalOpen}>
+      <Dialog open={closeObservationModalOpen} onOpenChange={(o) => o ? setCloseObservationModalOpen(true) : confirmExit(() => setCloseObservationModalOpen(false))}>
         <DialogContent className="max-w-md sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-emerald-600">
@@ -1280,7 +1299,7 @@ function DeliveryNotesList() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setCloseObservationModalOpen(false); setObservationText(''); setClosingNote(null); }}>Cancelar</Button>
+            <Button variant="outline" onClick={() => confirmExit(() => { setCloseObservationModalOpen(false); setObservationText(''); setClosingNote(null); })}>Cancelar</Button>
             <Button onClick={handleCloseWithObservation} disabled={closing || !observationText.trim()} className="bg-emerald-600 text-white hover:bg-emerald-700">
               {closing ? 'Cerrando...' : 'Cerrar Albarán'}
             </Button>
@@ -1310,6 +1329,8 @@ function DeliveryNotesList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
     </div>
   );
 }

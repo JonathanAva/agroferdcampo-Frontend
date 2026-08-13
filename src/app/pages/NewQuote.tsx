@@ -18,6 +18,15 @@ import { ScrollArea } from "../components/ui/scroll-area";
 import { Label } from "../components/ui/label";
 import { Switch } from "../components/ui/switch";
 import { TransportSelector, TransportData } from "../components/transport/TransportSelector";
+import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
+
+interface ProductUnitOption {
+  unit: string;
+  factor: number;
+  priceDetalle?: number | null;
+  priceMayorista?: number | null;
+}
 
 interface Product {
   id: number;
@@ -28,14 +37,26 @@ interface Product {
   stock: number;
   category: { name: string };
   unit: string;
+  units?: ProductUnitOption[];
 }
 
 interface CartItem extends Product {
+  cartId: string;
   quantity: number;
   subtotal: number;
   unitPrice: number;
   marginPercent: number;
   costTotal: number;
+  unitType: string;
+  unitFactor: number;
+}
+
+/** Formatea un UnitType del backend (ej. "MEDIA_ARROBA") a una etiqueta legible ("Media Arroba"). */
+function formatUnitLabel(unitType: string): string {
+  return unitType
+    .split('_')
+    .map(w => w.charAt(0) + w.slice(1).toLowerCase())
+    .join(' ');
 }
 
 interface Customer {
@@ -76,10 +97,25 @@ export function NewQuote() {
   const [marginForm, setMarginForm] = useState({
     quantity: 1,
     unitPrice: 0,
-    marginPercent: 0
+    marginPercent: 0,
+    unitType: "",
+    unitFactor: 1,
   });
 
   const [savingQuote, setSavingQuote] = useState(false);
+
+  const isDirty = cart.length > 0 || selectedCustomer !== null || notes.trim().length > 0;
+  const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
+
+  // Tras guardar se limpia el estado (isDirty pasa a false) y solo entonces navegamos:
+  // si navegáramos en el mismo tick que los setState del guardado, el blocker aún vería
+  // el isDirty anterior (true) y bloquearía la salida que sí queremos permitir.
+  const [justSaved, setJustSaved] = useState(false);
+  useEffect(() => {
+    if (justSaved) {
+      navigate('/quotes');
+    }
+  }, [justSaved, navigate]);
 
   useEffect(() => {
     searchProducts("");
@@ -121,6 +157,12 @@ export function NewQuote() {
           stock: Number(stockValue),
           category: p.category || { name: "General" },
           unit: p.unit,
+          units: Array.isArray(p.units) ? p.units.map((u: any) => ({
+            unit: u.unit,
+            factor: Number(u.factor),
+            priceDetalle: u.priceDetalle !== null && u.priceDetalle !== undefined ? Number(u.priceDetalle) : null,
+            priceMayorista: u.priceMayorista !== null && u.priceMayorista !== undefined ? Number(u.priceMayorista) : null,
+          })) : [],
         };
       });
       setProducts(mapped);
@@ -165,6 +207,24 @@ export function NewQuote() {
     return () => clearTimeout(delayDebounceFn);
   }, [customerSearch]);
 
+  /** Factor de la unidad seleccionada respecto a la unidad base del producto (1 si es la unidad base). */
+  const resolveUnitFactor = (product: Product, unitType: string) => {
+    if (unitType === product.unit) return 1;
+    return product.units?.find(u => u.unit === unitType)?.factor ?? 1;
+  };
+
+  /** Precio sugerido para la unidad seleccionada: precio detalle configurado, o precio base × factor. */
+  const resolveUnitDefaultPrice = (product: Product, unitType: string) => {
+    if (unitType === product.unit) return Number(product.price) || 0;
+    const u = product.units?.find(x => x.unit === unitType);
+    if (!u) return Number(product.price) || 0;
+    return u.priceDetalle ? Number(u.priceDetalle) : (Number(product.price) || 0) * u.factor;
+  };
+
+  /** Stock (en unidad base) ya reservado en el carrito para este producto, sumando todas sus líneas de unidad. */
+  const usedStockForProduct = (productId: number) =>
+    cart.filter(i => i.id === productId).reduce((sum, i) => sum + i.quantity * i.unitFactor, 0);
+
   const openAddProductModal = (product: Product) => {
     setSelectedProduct(product);
     const cost = Number(product.costPrice) || 0;
@@ -176,31 +236,45 @@ export function NewQuote() {
     setMarginForm({
       quantity: 1,
       unitPrice: initialPrice,
-      marginPercent: initialMargin
+      marginPercent: initialMargin,
+      unitType: product.unit,
+      unitFactor: 1,
     });
     setShowAddModal(true);
   };
 
+  const handleUnitTypeChange = (newUnitType: string) => {
+    if (!selectedProduct) return;
+    const factor = resolveUnitFactor(selectedProduct, newUnitType);
+    const price = resolveUnitDefaultPrice(selectedProduct, newUnitType);
+    const costPerUnit = (Number(selectedProduct.costPrice) || 0) * factor;
+    let margin = 0;
+    if (costPerUnit > 0 && price > costPerUnit) {
+      margin = ((price - costPerUnit) / costPerUnit) * 100;
+    }
+    setMarginForm({ quantity: 1, unitPrice: price, marginPercent: margin, unitType: newUnitType, unitFactor: factor });
+  };
+
   const handleApplyQuickMargin = (percent: number) => {
     if (!selectedProduct) return;
-    const cost = Number(selectedProduct.costPrice) || 0;
-    if (cost <= 0) {
+    const costPerUnit = (Number(selectedProduct.costPrice) || 0) * marginForm.unitFactor;
+    if (costPerUnit <= 0) {
       toast.warning("El producto no tiene costo configurado.");
       return;
     }
-    const newPrice = cost * (1 + percent / 100);
+    const newPrice = costPerUnit * (1 + percent / 100);
     setMarginForm({ ...marginForm, marginPercent: percent, unitPrice: newPrice });
   };
 
   const handleCustomPriceChange = (val: number | undefined) => {
     if (!selectedProduct || val === undefined) return;
-    const cost = Number(selectedProduct.costPrice) || 0;
+    const costPerUnit = (Number(selectedProduct.costPrice) || 0) * marginForm.unitFactor;
     let newMargin = 0;
-    if (cost > 0 && val > cost) {
-      newMargin = ((val - cost) / cost) * 100;
-    } else if (cost > 0 && val <= cost) {
-      newMargin = val === cost ? 0 : -1;
-    } else if (cost === 0 && val > 0) {
+    if (costPerUnit > 0 && val > costPerUnit) {
+      newMargin = ((val - costPerUnit) / costPerUnit) * 100;
+    } else if (costPerUnit > 0 && val <= costPerUnit) {
+      newMargin = val === costPerUnit ? 0 : -1;
+    } else if (costPerUnit === 0 && val > 0) {
       newMargin = 100;
     }
     setMarginForm({ ...marginForm, unitPrice: val, marginPercent: newMargin });
@@ -217,41 +291,64 @@ export function NewQuote() {
       return;
     }
 
-    const existing = cart.find(i => i.id === selectedProduct.id);
+    const usedStock = usedStockForProduct(selectedProduct.id);
+    if (usedStock + marginForm.quantity * marginForm.unitFactor > selectedProduct.stock) {
+      toast.error("No hay suficiente stock disponible");
+      return;
+    }
+
+    const costPerUnit = (Number(selectedProduct.costPrice) || 0) * marginForm.unitFactor;
+    const cartId = `${selectedProduct.id}-${marginForm.unitType}`;
+
+    const existing = cart.find(i => i.cartId === cartId);
     if (existing) {
-      setCart(cart.map(i => i.id === selectedProduct.id ? {
-        ...i, 
-        quantity: i.quantity + marginForm.quantity,
-        subtotal: (i.quantity + marginForm.quantity) * marginForm.unitPrice,
+      const newQty = existing.quantity + marginForm.quantity;
+      setCart(cart.map(i => i.cartId === cartId ? {
+        ...i,
+        quantity: newQty,
+        subtotal: newQty * marginForm.unitPrice,
         unitPrice: marginForm.unitPrice,
         marginPercent: marginForm.marginPercent,
-        costTotal: (i.quantity + marginForm.quantity) * (Number(selectedProduct.costPrice) || 0)
+        costTotal: newQty * costPerUnit
       } : i));
     } else {
       setCart([{
         ...selectedProduct,
+        cartId,
         quantity: marginForm.quantity,
         unitPrice: marginForm.unitPrice,
         subtotal: marginForm.quantity * marginForm.unitPrice,
         marginPercent: marginForm.marginPercent,
-        costTotal: marginForm.quantity * (Number(selectedProduct.costPrice) || 0)
+        costTotal: marginForm.quantity * costPerUnit,
+        unitType: marginForm.unitType,
+        unitFactor: marginForm.unitFactor,
       }, ...cart]);
     }
     setShowAddModal(false);
     setSelectedProduct(null);
   };
 
-  const updateCartQuantity = (id: number, qty: number) => {
+  const updateCartQuantity = (cartId: string, qty: number) => {
+    const item = cart.find(i => i.cartId === cartId);
+    if (!item) return;
     if (qty <= 0) {
-      setCart(cart.filter(item => item.id !== id));
+      setCart(cart.filter(i => i.cartId !== cartId));
       return;
     }
-    setCart(cart.map(item => item.id === id ? {
-      ...item, 
-      quantity: qty, 
-      subtotal: qty * item.unitPrice,
-      costTotal: qty * (Number(item.costPrice) || 0)
-    } : item));
+
+    const otherUsedStock = usedStockForProduct(item.id) - item.quantity * item.unitFactor;
+    if (otherUsedStock + qty * item.unitFactor > item.stock) {
+      toast.error("No hay suficiente stock disponible");
+      return;
+    }
+
+    const costPerUnit = (Number(item.costPrice) || 0) * item.unitFactor;
+    setCart(cart.map(i => i.cartId === cartId ? {
+      ...i,
+      quantity: qty,
+      subtotal: qty * i.unitPrice,
+      costTotal: qty * costPerUnit
+    } : i));
   };
 
   const cartTotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
@@ -283,10 +380,15 @@ export function NewQuote() {
           productId: i.id,
           quantity: i.quantity,
           unitPrice: i.unitPrice,
+          unitType: i.unitType,
+          unitFactor: i.unitFactor,
         }))
       });
       toast.success("Cotización guardada exitosamente");
-      navigate('/quotes');
+      setCart([]);
+      setSelectedCustomer(null);
+      setNotes("");
+      setJustSaved(true);
     } catch (e: any) {
       toast.error(e.message || "Error al crear la cotización");
     } finally {
@@ -303,7 +405,7 @@ export function NewQuote() {
       <div className="flex-1 flex flex-col bg-[var(--card)] rounded-xl border border-[var(--border)] overflow-hidden shadow-sm">
         <div className="p-4 border-b border-[var(--border)] space-y-4 bg-[var(--bg)]/50">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" onClick={() => navigate('/quotes')} className="w-10 h-10 p-0 rounded-full hover:bg-[var(--primary)] hover:text-white transition-colors text-[var(--text-sec)]">
+            <Button variant="ghost" onClick={() => confirmExit(() => navigate('/quotes'))} className="w-10 h-10 p-0 rounded-full hover:bg-[var(--primary)] hover:text-white transition-colors text-[var(--text-sec)]">
               <ArrowLeft size={20} />
             </Button>
             <div>
@@ -475,20 +577,23 @@ export function NewQuote() {
               </Label>
               <div className="space-y-2">
                 {cart.map(item => (
-                  <div key={item.id} className="bg-[var(--bg)] border border-[var(--border)] p-3 rounded-xl flex flex-col gap-2 relative group">
-                    <Button 
-                      variant="ghost" size="icon" 
+                  <div key={item.cartId} className="bg-[var(--bg)] border border-[var(--border)] p-3 rounded-xl flex flex-col gap-2 relative group">
+                    <Button
+                      variant="ghost" size="icon"
                       className="absolute top-1 right-1 w-6 h-6 text-[var(--text-sec)] opacity-0 group-hover:opacity-100 hover:text-red-500 hover:bg-red-500/10 transition-all"
-                      onClick={() => updateCartQuantity(item.id, 0)}
+                      onClick={() => updateCartQuantity(item.cartId, 0)}
                     >
                       <X size={12} />
                     </Button>
-                    <p className="font-bold text-sm text-[var(--text-main)] pr-6 leading-tight">{item.name}</p>
+                    <div className="pr-6">
+                      <p className="font-bold text-sm text-[var(--text-main)] leading-tight">{item.name}</p>
+                      <span className="text-[10px] font-bold text-[var(--primary)] uppercase tracking-wide">{formatUnitLabel(item.unitType)}</span>
+                    </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center border border-[var(--border)] rounded-lg overflow-hidden bg-[var(--card)] shadow-sm">
-                        <Button variant="ghost" size="icon" className="w-7 h-7 rounded-none hover:bg-[var(--primary)]/10 hover:text-[var(--primary)]" onClick={() => updateCartQuantity(item.id, item.quantity - 1)}><Minus size={12} /></Button>
+                        <Button variant="ghost" size="icon" className="w-7 h-7 rounded-none hover:bg-[var(--primary)]/10 hover:text-[var(--primary)]" onClick={() => updateCartQuantity(item.cartId, item.quantity - 1)}><Minus size={12} /></Button>
                         <div className="w-10 text-center text-xs font-black bg-[var(--bg)]/50 h-full flex items-center justify-center border-x border-[var(--border)]">{item.quantity}</div>
-                        <Button variant="ghost" size="icon" className="w-7 h-7 rounded-none hover:bg-[var(--primary)]/10 hover:text-[var(--primary)]" onClick={() => updateCartQuantity(item.id, item.quantity + 1)}><Plus size={12} /></Button>
+                        <Button variant="ghost" size="icon" className="w-7 h-7 rounded-none hover:bg-[var(--primary)]/10 hover:text-[var(--primary)]" onClick={() => updateCartQuantity(item.cartId, item.quantity + 1)}><Plus size={12} /></Button>
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-[var(--text-sec)] font-mono">${item.unitPrice.toFixed(4)}</p>
@@ -547,9 +652,25 @@ export function NewQuote() {
                 </div>
               </div>
               <div className="p-6 space-y-6">
+                {selectedProduct.units && selectedProduct.units.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">Unidad de Venta</Label>
+                    <select
+                      value={marginForm.unitType}
+                      onChange={(e) => handleUnitTypeChange(e.target.value)}
+                      className="w-full h-11 px-3 text-sm font-bold bg-[var(--bg)] border border-[var(--border)] rounded-lg text-[var(--text-main)] focus:outline-none focus:border-[var(--primary)] cursor-pointer"
+                    >
+                      <option value={selectedProduct.unit}>{formatUnitLabel(selectedProduct.unit)}</option>
+                      {selectedProduct.units.map(u => (
+                        <option key={u.unit} value={u.unit}>{formatUnitLabel(u.unit)}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                  <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Costo Unitario</span>
-                  <span className="text-lg font-black text-emerald-700">${Number(selectedProduct.costPrice || 0).toFixed(4)}</span>
+                  <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Costo por {formatUnitLabel(marginForm.unitType || selectedProduct.unit)}</span>
+                  <span className="text-lg font-black text-emerald-700">${((Number(selectedProduct.costPrice) || 0) * marginForm.unitFactor).toFixed(4)}</span>
                 </div>
 
                 <div className="space-y-3">
@@ -582,13 +703,13 @@ export function NewQuote() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">Cantidad</Label>
-                    <NumberInput 
-                      value={marginForm.quantity} 
+                    <Label className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">Cantidad ({formatUnitLabel(marginForm.unitType || selectedProduct.unit)})</Label>
+                    <NumberInput
+                      value={marginForm.quantity}
                       onValueChange={v => setMarginForm({...marginForm, quantity: v || 1})}
                       className="h-12 text-lg font-black bg-[var(--bg)]"
                       min={1}
-                      max={selectedProduct.stock}
+                      max={Math.max(1, Math.floor((selectedProduct.stock - usedStockForProduct(selectedProduct.id)) / (marginForm.unitFactor || 1)))}
                     />
                   </div>
                 </div>
@@ -623,6 +744,8 @@ export function NewQuote() {
       </Dialog>
 
       <CustomerQuickCreate open={isQuickCreateOpen} onOpenChange={setIsQuickCreateOpen} onSuccess={(c) => setSelectedCustomer(c)} />
+
+      <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
     </div>
   );
 }

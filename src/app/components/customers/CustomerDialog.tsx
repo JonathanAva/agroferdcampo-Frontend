@@ -15,6 +15,8 @@ import { User, Building2, UserCheck, ShieldCheck } from 'lucide-react';
 import { cn } from '../ui/utils';
 import { useAuth } from '../../context/AuthContext';
 import { departments, zones as municipalities, districts, economicActivities } from '../../types/catalogs';
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
+import { UnsavedChangesDialog } from '../ui/unsaved-changes-dialog';
 
 interface CustomerDialogProps {
   open: boolean;
@@ -30,7 +32,7 @@ export function CustomerDialog({ open, onOpenChange, customer, onSuccess }: Cust
   const isEdit = !!customer;
 
   // Form State
-  const [formData, setFormData] = useState({
+  const emptyForm = {
     customerType: 'CONSUMIDOR_FINAL',
     name: '',
     comercialName: '',
@@ -47,11 +49,14 @@ export function CustomerDialog({ open, onOpenChange, customer, onSuccess }: Cust
     activityCode: '',
     activityDescription: '',
     creditLimit: 0,
-  });
+  };
+  const [formData, setFormData] = useState(emptyForm);
+  // Copia "inicial" del formulario para comparar y detectar cambios sin guardar.
+  const [initialFormData, setInitialFormData] = useState(emptyForm);
 
   useEffect(() => {
     if (customer) {
-      setFormData({
+      const loaded = {
         customerType: customer.customerType || 'CONSUMIDOR_FINAL',
         name: customer.name || '',
         comercialName: customer.comercialName || '',
@@ -68,29 +73,19 @@ export function CustomerDialog({ open, onOpenChange, customer, onSuccess }: Cust
         activityCode: customer.activityCode || '',
         activityDescription: customer.activityDescription || '',
         creditLimit: Number(customer.creditLimit) || 0,
-      });
+      };
+      setFormData(loaded);
+      setInitialFormData(loaded);
     } else {
       // Reset form
-      setFormData({
-        customerType: 'CONSUMIDOR_FINAL',
-        name: '',
-        comercialName: '',
-        nit: '',
-        nrc: '',
-        documentType: '13',
-        documentNumber: '',
-        phone: '',
-        email: '',
-        department: '',
-        municipality: '',
-        district: '',
-        addressComplement: '',
-        activityCode: '',
-        activityDescription: '',
-        creditLimit: 0,
-      });
+      setFormData(emptyForm);
+      setInitialFormData(emptyForm);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customer, open]);
+
+  const isDirty = open && JSON.stringify(formData) !== JSON.stringify(initialFormData);
+  const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,7 +115,8 @@ export function CustomerDialog({ open, onOpenChange, customer, onSuccess }: Cust
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+    <Dialog open={open} onOpenChange={(o) => o ? onOpenChange(true) : confirmExit(() => onOpenChange(false))}>
       <DialogContent 
         className="sm:max-w-3xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar"
         style={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--text-main)" }}
@@ -391,10 +387,10 @@ export function CustomerDialog({ open, onOpenChange, customer, onSuccess }: Cust
           )}
 
           <DialogFooter className="pt-6 border-t border-[var(--border)] gap-3">
-            <Button 
-              type="button" 
-              variant="ghost" 
-              onClick={() => onOpenChange(false)}
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => confirmExit(() => onOpenChange(false))}
               className="rounded-xl"
             >
               Cancelar
@@ -411,5 +407,7 @@ export function CustomerDialog({ open, onOpenChange, customer, onSuccess }: Cust
         </form>
       </DialogContent>
     </Dialog>
+    <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
+    </>
   );
 }
