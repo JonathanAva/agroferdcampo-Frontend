@@ -1288,7 +1288,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                         <div className="text-left">
                           <p className="text-sm font-bold">Es un Servicio</p>
                           <p className="text-[10px] opacity-60">
-                            (No físico: luz, remesas, etc)
+                            (No fï¿½sico: luz, remesas, etc)
                           </p>
                         </div>
                         <Switch
@@ -1322,7 +1322,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                           </Select>
                         </div>
                         <div className="space-y-2">
-                          <Label className="text-sm font-bold">Comisión Fija ($)</Label>
+                          <Label className="text-sm font-bold">ComisiÃ³n Fija ($)</Label>
                           <Input
                             type="number"
                             step="0.01"
