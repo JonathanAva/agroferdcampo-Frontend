@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, User, CheckCircle2,
@@ -482,7 +482,7 @@ export function NewQuote() {
 
       {/* RIGHT PANEL - CART & DETAILS */}
       <div className="w-[300px] lg:w-[360px] xl:w-[420px] 2xl:w-[480px] flex flex-col bg-[var(--card)] rounded-xl border border-[var(--border)] shadow-sm overflow-hidden flex-shrink-0">
-        <ScrollArea className="flex-1 p-4">
+        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
           <div className="space-y-6">
             {/* Cliente */}
             <div className="space-y-3">
@@ -614,7 +614,7 @@ export function NewQuote() {
               </div>
             </div>
           </div>
-        </ScrollArea>
+        </div>
 
         <div className="bg-[var(--card)] border-t border-[var(--border)] p-4 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)] relative z-10 space-y-3">
           <div className="flex justify-between text-xs font-bold text-[var(--text-sec)]">

@@ -1040,7 +1040,7 @@ function DeliveryNotesList() {
 
       {/* MODAL CONFIRMAR ENTREGA (Signature) */}
       <Dialog open={deliverModalOpen} onOpenChange={(o) => o ? setDeliverModalOpen(true) : confirmExit(() => setDeliverModalOpen(false))}>
-        <DialogContent className="max-w-5xl sm:max-w-5xl p-0 flex flex-col md:flex-row h-auto max-h-[90vh] md:h-[85vh] bg-[var(--bg)] border-[var(--border)] overflow-y-auto md:overflow-hidden rounded-2xl shadow-2xl">
+        <DialogContent className="max-w-6xl sm:max-w-6xl p-0 flex flex-col md:flex-row h-auto max-h-[90vh] md:h-[85vh] bg-[var(--bg)] border-[var(--border)] overflow-y-auto md:overflow-hidden rounded-2xl shadow-2xl">
           {selectedNote && (
             <>
               {/* Left Column: Details & Items */}
@@ -1074,6 +1074,7 @@ function DeliveryNotesList() {
                         <TableHeader className="bg-[var(--bg)]/50">
                           <TableRow className="border-[var(--border)]">
                             <TableHead className="font-semibold text-[var(--text-sec)]">Producto</TableHead>
+                            <TableHead className="text-center font-semibold text-[var(--text-sec)]">Unidad</TableHead>
                             <TableHead className="text-center font-semibold text-[var(--text-sec)]">Cant. Original</TableHead>
                             <TableHead className="text-right font-semibold text-[var(--text-sec)] pr-6">Cant. Real</TableHead>
                           </TableRow>
@@ -1082,9 +1083,18 @@ function DeliveryNotesList() {
                           {selectedNote.items?.map((item: any) => {
                             const formItem = deliverForm.items.find(i => i.productId === item.productId);
                             const isDiff = formItem?.receivedQty !== item.quantity;
+                            const saleItem = selectedNote.sale?.items?.find((si: any) => si.productId === item.productId);
+                            const rawUnit = saleItem?.unitType || item.product?.unitOfMeasure || 'UNIDADES';
+                            const unitDisplay = rawUnit.replace(/_/g, ' ');
+                            
                             return (
                               <TableRow key={item.id} className={`border-[var(--border)] transition-colors ${isDiff ? 'bg-amber-500/5 dark:bg-amber-500/10' : 'hover:bg-[var(--bg)]/50'}`}>
-                                <TableCell className="font-semibold text-[var(--text-main)] py-4">{item.product?.name}</TableCell>
+                                <TableCell className="font-semibold text-[var(--text-main)] py-4">
+                                  {item.product?.name}
+                                </TableCell>
+                                <TableCell className="text-center text-xs font-bold text-[var(--text-muted)] tracking-wider uppercase py-4">
+                                  {unitDisplay}
+                                </TableCell>
                                 <TableCell className="text-center font-bold text-[var(--text-sec)] py-4">{item.quantity}</TableCell>
                                 <TableCell className="text-right flex justify-end py-3 pr-4">
                                   <div className="w-28">
