@@ -26,6 +26,7 @@ import {
   ImageIcon,
   Layers,
 } from "lucide-react";
+import { usePOSTabs } from "../hooks/usePOSTabs";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
@@ -342,14 +343,15 @@ export function POS() {
   const [showExpiringSoonOnly, setShowExpiringSoonOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [cart, setCart] = useState<CartItem[]>(() => {
-    try {
-      const saved = sessionStorage.getItem('pos-cart');
-      return saved ? (JSON.parse(saved) as CartItem[]) : [];
-    } catch {
-      return [];
+  const posTabs = usePOSTabs();
+  const cart = posTabs.activeTab.cart as CartItem[];
+  const setCart = (val: CartItem[] | ((prev: CartItem[]) => CartItem[])) => {
+    if (typeof val === 'function') {
+      posTabs.updateTab({ cart: val(posTabs.activeTab.cart) });
+    } else {
+      posTabs.updateTab({ cart: val });
     }
-  });
+  };
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<
@@ -363,9 +365,8 @@ export function POS() {
   // Customer State
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerResults, setCustomerResults] = useState<Customer[]>([]);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
-    null,
-  );
+  const selectedCustomer = posTabs.activeTab.selectedCustomer as Customer | null;
+  const setSelectedCustomer = (val: any) => posTabs.updateTab({ selectedCustomer: val });
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
   const [searchingCustomer, setSearchingCustomer] = useState(false);
   
@@ -375,7 +376,14 @@ export function POS() {
   // New Checkout States
   const [processingOverlay, setProcessingOverlay] = useState(false);
   const [showMixedPaymentModal, setShowMixedPaymentModal] = useState(false);
-  const [payments, setPayments] = useState<{ paymentMethod: 'EFECTIVO' | 'TARJETA' | 'TRANSFERENCIA' | 'CREDITO'; amount: number; reference?: string; transferReceiptUrl?: string }[]>([]);
+  const payments = posTabs.activeTab.payments;
+  const setPayments = (val: any[] | ((prev: any[]) => any[])) => {
+    if (typeof val === 'function') {
+      posTabs.updateTab({ payments: val(posTabs.activeTab.payments) });
+    } else {
+      posTabs.updateTab({ payments: val });
+    }
+  };
   const [uploadingReceipt, setUploadingReceipt] = useState<Record<number, boolean>>({});
 
   // Cash Shift States
@@ -403,16 +411,19 @@ export function POS() {
   // Quote States
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [quoteValidDays, setQuoteValidDays] = useState<number | "">(15);
-  const [checkoutDueDate, setCheckoutDueDate] = useState("");
+  const checkoutDueDate = posTabs.activeTab.checkoutDueDate;
+  const setCheckoutDueDate = (val: any) => posTabs.updateTab({ checkoutDueDate: val });
 
   // Pre-venta (Ticket) States
   const [showPreSaleModal, setShowPreSaleModal] = useState(false);
-  const [preSaleDescription, setPreSaleDescription] = useState("");
+  const preSaleDescription = posTabs.activeTab.preSaleDescription;
+  const setPreSaleDescription = (val: any) => posTabs.updateTab({ preSaleDescription: val });
   const [preSaleLoading, setPreSaleLoading] = useState(false);
   const [createdTicket, setCreatedTicket] = useState<PreSaleTicket | null>(null);
 
   // Transport State
-  const [transportData, setTransportData] = useState<TransportData | null>(null);
+  const transportData = posTabs.activeTab.transportData as TransportData | null;
+  const setTransportData = (val: any) => posTabs.updateTab({ transportData: val });
 
   // Nota: "Apertura de Caja" (showOpenShiftModal) y "Cierre de Caja" (showCloseShiftModal)
   // tienen su propio flujo obligatorio y NO llevan este guard.
@@ -1679,6 +1690,53 @@ ${paymentConditionHtml}
             </Button>
           )}
         </div>
+      </div>
+
+      
+      {/* TABS MULTI-CARRITO */}
+      <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar">
+        {posTabs.tabs.map((tab, idx) => (
+          <div 
+            key={tab.id}
+            onClick={() => posTabs.setActiveTabId(tab.id)}
+            className={`group relative flex items-center gap-2 px-4 py-2 rounded-t-xl border-t border-x cursor-pointer transition-all ${
+              posTabs.activeTabId === tab.id 
+                ? 'bg-[var(--card)] border-[var(--primary)] shadow-[0_-4px_10px_-5px_var(--primary)] text-[var(--primary)] z-10' 
+                : 'bg-[var(--bg)] border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--card)] hover:text-[var(--text-main)]'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <ShoppingCart size={14} className={posTabs.activeTabId === tab.id ? "text-[var(--primary)]" : "opacity-50"} />
+              <span className="text-sm font-bold whitespace-nowrap">
+                {tab.selectedCustomer ? tab.selectedCustomer.name.split(' ')[0] : tab.name}
+              </span>
+              {tab.cart.length > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-black w-4 h-4 flex items-center justify-center rounded-full ml-1">
+                  {tab.cart.length}
+                </span>
+              )}
+            </div>
+            
+            <button 
+              onClick={(e) => { e.stopPropagation(); posTabs.removeTab(tab.id); }}
+              className={`ml-2 w-5 h-5 rounded-full flex items-center justify-center transition-colors ${
+                posTabs.tabs.length === 1 ? 'opacity-0 pointer-events-none' : 'hover:bg-red-500 hover:text-white text-gray-400'
+              }`}
+            >
+              <X size={12} />
+            </button>
+          </div>
+        ))}
+        
+        {posTabs.tabs.length < 5 && (
+          <button 
+            onClick={() => posTabs.addTab()}
+            className="flex items-center gap-1 px-3 py-2 rounded-t-xl border border-dashed border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--card)] hover:text-[var(--primary)] hover:border-[var(--primary)] transition-all mb-1"
+          >
+            <Plus size={16} />
+            <span className="text-xs font-bold uppercase tracking-wider">Nueva Venta</span>
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0">
