@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, User, CheckCircle2,
   X, ArrowLeft, Percent, Package
@@ -72,6 +72,65 @@ interface Customer {
 
 export function NewQuote() {
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const cloneId = searchParams.get('clone');
+  const isEditMode = !!id;
+
+  useEffect(() => {
+    const fetchQuote = async () => {
+      const targetId = id || cloneId;
+      if (!targetId) return;
+      try {
+        const quote = await quotesService.getQuoteDetail(Number(targetId));
+        if (quote.customer) setSelectedCustomer(quote.customer as any);
+        if (quote.validDays) setValidDays(quote.validDays);
+        if (quote.notes) setNotes(quote.notes);
+        if (quote.requiresTransport) {
+          setTransportData({
+            requiresTransport: true,
+            vehicleId: quote.vehicleId || undefined,
+            driverId: quote.driverId || undefined,
+            deliveryAddress: quote.deliveryAddress || "",
+            scheduledDeliveryAt: undefined // o extraer si existe
+          });
+        }
+        
+        // Cargar productos
+        if (quote.items) {
+          const newCart = quote.items.map((item: any) => {
+            const qty = Number(item.quantity);
+            const price = Number(item.unitPrice);
+            const costPerUnit = (Number(item.product?.costPrice) || 0) * (item.unitFactor || 1);
+            const subtotal = qty * price;
+            let margin = 0;
+            if (costPerUnit > 0 && price > costPerUnit) {
+              margin = ((price - costPerUnit) / costPerUnit) * 100;
+            }
+            return {
+              ...item.product,
+              cartId: Math.random().toString(36).substr(2, 9),
+              id: item.productId,
+              internalCode: item.product?.internalCode || "",
+              name: item.product?.name || "Producto",
+              unitType: item.unitType || item.product?.unit || "UNIDAD",
+              unitFactor: item.unitFactor || 1,
+              unitPrice: price,
+              costTotal: qty * costPerUnit,
+              quantity: qty,
+              subtotal,
+              marginPercent: margin,
+            };
+          });
+          setCart(newCart as any);
+        }
+      } catch (e: any) {
+        toast.error("Error al cargar la cotización: " + e.message);
+      }
+    };
+    fetchQuote();
+  }, [id, cloneId]);
+
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -367,23 +426,30 @@ export function NewQuote() {
 
     setSavingQuote(true);
     try {
-      await quotesService.createQuote({
+      const payload = {
         customerId: selectedCustomer?.id,
         validDays: Number(validDays),
         notes: notes || undefined,
         requiresTransport: transportData?.requiresTransport,
-        vehicleId: transportData?.requiresTransport ? transportData.vehicleId : undefined,
-        driverId: transportData?.requiresTransport ? transportData.driverId : undefined,
-        deliveryAddress: transportData?.requiresTransport ? transportData.deliveryAddress : undefined,
-        scheduledAt: transportData?.requiresTransport ? transportData.scheduledDeliveryAt : undefined,
+        vehicleId: transportData?.requiresTransport ? (transportData as any).vehicleId : undefined,
+        driverId: transportData?.requiresTransport ? (transportData as any).driverId : undefined,
+        deliveryAddress: transportData?.requiresTransport ? (transportData as any).deliveryAddress : undefined,
+        scheduledAt: transportData?.requiresTransport ? (transportData as any).scheduledDeliveryAt : undefined,
         items: cart.map(i => ({
           productId: i.id,
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
+          quantity: Number(i.quantity),
+          unitPrice: Number(i.unitPrice),
           unitType: i.unitType,
-          unitFactor: i.unitFactor,
+          unitFactor: Number(i.unitFactor) || 1,
         }))
-      });
+      };
+
+      if (isEditMode) {
+        await quotesService.updateQuote(Number(id), payload);
+      } else {
+        await quotesService.createQuote(payload);
+      }
+      
       toast.success("Cotización guardada exitosamente");
       setCart([]);
       setSelectedCustomer(null);
@@ -409,7 +475,7 @@ export function NewQuote() {
               <ArrowLeft size={20} />
             </Button>
             <div>
-              <h2 className="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">Nueva Cotización</h2>
+              <h2 className="text-xl font-black text-[var(--text-main)] uppercase tracking-tight">{isEditMode ? "Editar Cotización" : (cloneId ? "Clonando Cotización" : "Nueva Cotización")}</h2>
               <p className="text-xs text-[var(--text-sec)]">Selecciona productos y calcula márgenes</p>
             </div>
           </div>

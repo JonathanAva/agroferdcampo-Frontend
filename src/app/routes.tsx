@@ -84,6 +84,7 @@ export const router = createBrowserRouter([
           { path: "pos", element: <POS /> },
           { path: "quotes", element: <Quotes /> },
           { path: "quotes/new", element: <NewQuote /> },
+          { path: "quotes/edit/:id", element: <NewQuote /> },
           { path: "customers", element: <Customers /> },
         ],
       },

@@ -1,8 +1,8 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import logo from '../../assets/logo.png';
 import {
   Search, FileText, Eye, CheckCircle2, AlertCircle, Calendar as CalendarIcon, RefreshCcw, Filter, X,
-  Mail, UserCog, Clock, Send, Plus, Banknote, CreditCard, Smartphone, Trash2, Truck as TruckIcon, Printer, PackageCheck
+  Mail, UserCog, Clock, Send, Plus, Banknote, CreditCard, Smartphone, Trash2, Truck as TruckIcon, Printer, PackageCheck, Edit3, Copy
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { quotesService, QuoteResponse } from '../services/quotes.service';
@@ -620,7 +620,16 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
                           <DropdownMenuItem onClick={() => handleOpenEmailModal(quote)} className="font-bold cursor-pointer">
                             <Mail size={14} className="mr-2 text-indigo-600" /> Enviar por Correo
                           </DropdownMenuItem>
+
+                          <DropdownMenuItem onClick={() => navigate('/quotes/new?clone=' + quote.id)} className="font-bold cursor-pointer">
+                            <Copy size={14} className="mr-2 text-purple-600" /> Reabrir / Clonar
+                          </DropdownMenuItem>
                           
+                          {(quote.status === 'PENDIENTE' || (quote.status === 'CONFIRMADA' && user?.roleId === 4 && (!quote.validUntil || new Date(quote.validUntil) >= new Date()))) && (
+                            <DropdownMenuItem onClick={() => navigate('/quotes/edit/' + quote.id)} className="font-bold cursor-pointer text-blue-600 focus:text-blue-700">
+                              <Edit3 size={14} className="mr-2" /> Editar Cotización
+                            </DropdownMenuItem>
+                          )}
                           {quote.status === 'PENDIENTE' && (
                             <>
                               <DropdownMenuItem 

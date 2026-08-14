@@ -344,7 +344,7 @@ export default function Vehicles({ hideTitle }: { hideTitle?: boolean } = {}) {
               <Label>Sucursal Asignada</Label>
               <Select 
                 value={editingVehicle?.branchId ? String(editingVehicle.branchId) : 'none'}
-                onValueChange={v => setEditingVehicle({ ...editingVehicle, branchId: v === 'none' ? null : Number(v) })}
+                onValueChange={v => setEditingVehicle({ ...editingVehicle, branchId: v === 'none' ? undefined : Number(v) } as any)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar sucursal..." />

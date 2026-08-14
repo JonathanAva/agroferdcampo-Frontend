@@ -35,6 +35,10 @@ export interface QuoteResponse {
   status: 'PENDIENTE' | 'CONFIRMADA' | 'EXPIRADA' | 'CANCELADA';
   createdAt: string;
   requiresTransport?: boolean;
+  notes?: string;
+  vehicleId?: number;
+  driverId?: number;
+  deliveryAddress?: string;
   customer?: {
     id: number;
     name: string;
@@ -117,10 +121,10 @@ export const quotesService = {
     return await apiRequest<QuoteResponse>(`${BASE}/${id}`);
   },
 
-  updateQuote: async (id: number, customerId: number): Promise<QuoteResponse> => {
+  updateQuote: async (id: number, data: any): Promise<QuoteResponse> => {
     return await apiRequest<QuoteResponse>(`${BASE}/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ customerId }),
+      body: JSON.stringify(data),
     });
   },
 

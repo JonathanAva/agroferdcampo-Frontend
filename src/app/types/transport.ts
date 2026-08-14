@@ -7,6 +7,7 @@ export type DispatchType = 'TOTAL' | 'PARCIAL';
 
 export interface Vehicle {
   id: number;
+  nickname?: string;
   plate: string;
   brand: string;
   model: string;

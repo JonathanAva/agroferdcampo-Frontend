@@ -84,7 +84,7 @@ export function BulkAssignModal({ isOpen, onClose, assignTarget, onSuccess }: Bu
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const response = await apiRequest('/catalog/products?limit=2000', 'GET');
+      const response: any = await apiRequest('/catalog/products?limit=2000');
       if (response && response.data) {
         setProducts(response.data);
       }
