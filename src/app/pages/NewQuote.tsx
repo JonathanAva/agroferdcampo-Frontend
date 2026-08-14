@@ -131,6 +131,60 @@ export function NewQuote() {
     fetchQuote();
   }, [id, cloneId]);
 
+  useEffect(() => {
+    const fetchQuote = async () => {
+      const targetId = id || cloneId;
+      if (!targetId) return;
+      try {
+        const quote = await quotesService.getQuoteDetail(Number(targetId));
+        if (quote.customer) setSelectedCustomer(quote.customer as any);
+        if (quote.validDays) setValidDays(quote.validDays);
+        if (quote.notes) setNotes(quote.notes);
+        if (quote.requiresTransport) {
+          setTransportData({
+            requiresTransport: true,
+            vehicleId: quote.vehicleId || undefined,
+            driverId: quote.driverId || undefined,
+            deliveryAddress: quote.deliveryAddress || "",
+            scheduledDeliveryAt: undefined // o extraer si existe
+          });
+        }
+        
+        // Cargar productos
+        if (quote.items) {
+          const newCart = quote.items.map((item: any) => {
+            const qty = Number(item.quantity);
+            const price = Number(item.unitPrice);
+            const costPerUnit = (Number(item.product?.costPrice) || 0) * (item.unitFactor || 1);
+            const subtotal = qty * price;
+            let margin = 0;
+            if (costPerUnit > 0 && price > costPerUnit) {
+              margin = ((price - costPerUnit) / costPerUnit) * 100;
+            }
+            return {
+              ...item.product,
+              cartId: Math.random().toString(36).substr(2, 9),
+              id: item.productId,
+              internalCode: item.product?.internalCode || "",
+              name: item.product?.name || "Producto",
+              unitType: item.unitType || item.product?.unit || "UNIDAD",
+              unitFactor: item.unitFactor || 1,
+              unitPrice: price,
+              costTotal: qty * costPerUnit,
+              quantity: qty,
+              subtotal,
+              marginPercent: margin,
+            };
+          });
+          setCart(newCart as any);
+        }
+      } catch (e: any) {
+        toast.error("Error al cargar la cotización: " + e.message);
+      }
+    };
+    fetchQuote();
+  }, [id, cloneId]);
+
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -350,11 +404,7 @@ export function NewQuote() {
       return;
     }
 
-    const usedStock = usedStockForProduct(selectedProduct.id);
-    if (usedStock + marginForm.quantity * marginForm.unitFactor > selectedProduct.stock) {
-      toast.error("No hay suficiente stock disponible");
-      return;
-    }
+    // Stock validation removed for quotes
 
     const costPerUnit = (Number(selectedProduct.costPrice) || 0) * marginForm.unitFactor;
     const cartId = `${selectedProduct.id}-${marginForm.unitType}`;
@@ -395,11 +445,7 @@ export function NewQuote() {
       return;
     }
 
-    const otherUsedStock = usedStockForProduct(item.id) - item.quantity * item.unitFactor;
-    if (otherUsedStock + qty * item.unitFactor > item.stock) {
-      toast.error("No hay suficiente stock disponible");
-      return;
-    }
+    // Stock validation removed for quotes
 
     const costPerUnit = (Number(item.costPrice) || 0) * item.unitFactor;
     setCart(cart.map(i => i.cartId === cartId ? {
@@ -775,7 +821,6 @@ export function NewQuote() {
                       onValueChange={v => setMarginForm({...marginForm, quantity: v || 1})}
                       className="h-12 text-lg font-black bg-[var(--bg)]"
                       min={1}
-                      max={Math.max(1, Math.floor((selectedProduct.stock - usedStockForProduct(selectedProduct.id)) / (marginForm.unitFactor || 1)))}
                     />
                   </div>
                 </div>
