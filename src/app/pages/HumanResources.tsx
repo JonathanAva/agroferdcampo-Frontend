@@ -783,7 +783,7 @@ export function HumanResources() {
               adminOnly: true,
             },
           ]
-            .filter((t) => !t.adminOnly || user?.roleId === 2)
+            .filter((t) => !t.adminOnly || user?.roleId === 1 || user?.roleId === 2)
             .map((tab) => (
               <TabsTrigger
                 key={tab.value}
