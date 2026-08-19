@@ -133,7 +133,7 @@ export function Caja() {
 
   const openConfirm = (ticket: PreSaleTicket) => {
     setSelectedTicket(ticket);
-    setPaymentMethod("EFECTIVO");
+    setPaymentMethod((ticket.paymentMethod as PaymentMethod) || "EFECTIVO");
     setDueDate("");
     setTransferReceiptUrl(null);
     setShowConfirmModal(true);
@@ -367,7 +367,7 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
             return (
               <div
                 key={ticket.id}
-                className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-4 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow"
+                className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-4 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow h-full"
               >
                 {/* Número y estado */}
                 <div className="flex items-center justify-between">
@@ -377,9 +377,16 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
 
                 {/* Info básica */}
                 <div className="space-y-1 text-sm">
-                  <div className="flex items-center gap-2 text-[var(--text-sec)]">
-                    <Clock size={13} />
-                    <span>{format(createdAt, "dd/MM/yyyy HH:mm", { locale: es })}</span>
+                  <div className="flex items-center justify-between text-[var(--text-sec)]">
+                    <div className="flex items-center gap-2">
+                      <Clock size={13} />
+                      <span>{format(createdAt, "dd/MM/yyyy HH:mm", { locale: es })}</span>
+                    </div>
+                    {ticket.paymentMethod && (
+                      <Badge variant="outline" className="text-[10px] font-bold bg-[var(--bg)] text-[var(--text-main)]">
+                        {METHOD_LABEL[ticket.paymentMethod as PaymentMethod] || ticket.paymentMethod}
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 text-[var(--text-sec)]">
                     <User size={13} />
@@ -410,29 +417,31 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
                   ))}
                 </div>
 
-                {/* Total */}
-                <div className="flex justify-between items-center font-black text-base border-t border-[var(--border)] pt-2">
-                  <span className="text-[var(--text-sec)]">TOTAL A COBRAR:</span>
-                  <span className="text-emerald-600 text-xl">${totalNum.toFixed(2)}</span>
-                </div>
+                <div className="mt-auto flex flex-col gap-3">
+                  {/* Total */}
+                  <div className="flex justify-between items-center font-black text-base border-t border-[var(--border)] pt-2">
+                    <span className="text-[var(--text-sec)]">TOTAL A COBRAR:</span>
+                    <span className="text-emerald-600 text-xl">${totalNum.toFixed(2)}</span>
+                  </div>
 
-                {/* Acciones */}
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openCancel(ticket)}
-                    className="flex-1 border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 font-bold"
-                  >
-                    <XCircle size={14} className="mr-1" /> Cancelar
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => openConfirm(ticket)}
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black"
-                  >
-                    <DollarSign size={14} className="mr-1" /> COBRAR
-                  </Button>
+                  {/* Acciones */}
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openCancel(ticket)}
+                      className="flex-1 border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 font-bold"
+                    >
+                      <XCircle size={14} className="mr-1" /> Cancelar
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => openConfirm(ticket)}
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black"
+                    >
+                      <DollarSign size={14} className="mr-1" /> COBRAR
+                    </Button>
+                  </div>
                 </div>
               </div>
             );

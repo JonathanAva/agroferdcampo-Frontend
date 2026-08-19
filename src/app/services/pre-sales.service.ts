@@ -15,6 +15,7 @@ export interface CreatePreSaleDto {
   totalAmount: number;
   taxAmount: number;
   description?: string;
+  paymentMethod?: string;
   items: PreSaleItemDto[];
 }
 

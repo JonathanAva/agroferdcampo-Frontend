@@ -1376,6 +1376,7 @@ export function POS() {
         totalAmount: total,
         taxAmount: iva,
         description: preSaleDescription || undefined,
+        paymentMethod: selectedPayment === "MIXTO" ? undefined : (selectedPayment as any),
         items: cart.flatMap((i) =>
           i.selections.map((s) => ({
             productId: i.id,
