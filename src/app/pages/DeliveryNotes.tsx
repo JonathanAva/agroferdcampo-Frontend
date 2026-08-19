@@ -91,6 +91,7 @@ function DeliveryNotesList() {
   const routeFilter = searchParams.get('route') || 'all';
   const transportQuery = searchParams.get('transport');
   const withTransportFilter = transportQuery === 'true' ? true : (transportQuery === 'false' ? false : 'all');
+  const showCancelled = searchParams.get('showCancelled') === 'true';
 
   const { vehicles } = useVehicles({ status: 'ALL' });
   const [routesList, setRoutesList] = useState<any[]>([]);
@@ -156,7 +157,8 @@ function DeliveryNotesList() {
     ]},
     { id: 'vehicle', label: 'Vehículo', type: 'category', options: Array.isArray(vehicles) ? vehicles.map((v: any) => ({ label: v.nickname ? `${v.plate} - ${v.nickname}` : v.plate, value: v.id.toString() })) : [] },
     { id: 'route', label: 'Ruta', type: 'category', options: Array.isArray(routesList) ? routesList.map((r: any) => ({ label: r.name, value: r.id.toString() })) : [] },
-    { id: 'date', label: 'Fecha Específica', type: 'date_range' }
+    { id: 'date', label: 'Fecha Específica', type: 'date_range' },
+    { id: 'showCancelled', label: 'Mostrar cancelados', type: 'boolean' }
   ], [vehicles, routesList]);
 
   useEffect(() => {
@@ -169,7 +171,7 @@ function DeliveryNotesList() {
       fetchStats();
     }, 300);
     return () => clearTimeout(timer);
-  }, [pagination.page, statusFilter, typeFilter, dateFilter, vehicleFilter, routeFilter, withTransportFilter]);
+  }, [pagination.page, statusFilter, typeFilter, dateFilter, vehicleFilter, routeFilter, withTransportFilter, showCancelled]);
 
   const fetchRoutes = async () => {
     try {
@@ -197,6 +199,7 @@ function DeliveryNotesList() {
     try {
       const filters: any = { page: pagination.page, limit: pagination.limit };
       if (statusFilter !== 'all') filters.status = statusFilter;
+      else if (!showCancelled) filters.excludeCancelled = true;
       if (typeFilter !== 'all') filters.type = typeFilter;
       if (dateFilter) filters.startDate = dateFilter;
       if (vehicleFilter !== 'all') filters.vehicleId = Number(vehicleFilter);

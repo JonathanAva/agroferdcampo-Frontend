@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import logo from '../../assets/logo.png';
 import {
-  Search, FileText, Eye, CheckCircle2, AlertCircle, Calendar as CalendarIcon, RefreshCcw, Filter, X,
+  Search, FileText, Eye, EyeOff, CheckCircle2, AlertCircle, Calendar as CalendarIcon, RefreshCcw, Filter, X,
   Mail, UserCog, Clock, Send, Plus, Banknote, CreditCard, Smartphone, Trash2, Truck as TruckIcon, Printer, PackageCheck, Edit3, Copy
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { quotesService, QuoteResponse } from '../services/quotes.service';
+import { cashRegistersService } from '../services/cash-registers.service';
+import { CashRegister } from '../services/cash-shifts.service';
 import { toast } from 'sonner';
 import { Button } from '../components/ui/button';
 import { cn } from '../components/ui/utils';
@@ -74,7 +76,8 @@ const quotesFilters: FilterConfig[] = [
     { label: 'Canceladas', value: 'CANCELADA' },
     { label: 'Expiradas', value: 'EXPIRADA' }
   ]},
-  { id: 'date', label: 'Fecha Específica', type: 'date_range' }
+  { id: 'date', label: 'Fecha Específica', type: 'date_range' },
+  { id: 'showCancelled', label: 'Mostrar canceladas', type: 'boolean' }
 ];
 export function Quotes() {
   const { user } = useAuth();
@@ -86,18 +89,22 @@ export function Quotes() {
   const statusFilter = searchParams.get('status') || 'all';
   const dateFilter = searchParams.get('date') || '';
   const searchTerm = searchParams.get('search') || '';
+  const showCancelled = searchParams.get('showCancelled') === 'true';
 
   const navigate = useNavigate();
 
   // Modales
   const [selectedQuote, setSelectedQuote] = useState<QuoteResponse | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [showMargin, setShowMargin] = useState(false);
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [cancelingId, setCancelingId] = useState<number | null>(null);
 
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [quoteToConfirm, setQuoteToConfirm] = useState<QuoteResponse | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('EFECTIVO');
+  const [cashRegisters, setCashRegisters] = useState<CashRegister[]>([]);
+  const [selectedCashRegisterId, setSelectedCashRegisterId] = useState<number | null>(null);
   const [transportData, setTransportData] = useState<TransportData | null>(null);
 
   // --- Estados para Crear Cotización ---
@@ -143,13 +150,14 @@ export function Quotes() {
       fetchQuotes();
     }, 300);
     return () => clearTimeout(timer);
-  }, [pagination.page, statusFilter, dateFilter, searchTerm]);
+  }, [pagination.page, statusFilter, dateFilter, searchTerm, showCancelled]);
 
   const fetchQuotes = async () => {
     setLoading(true);
     try {
       const filters: any = { page: pagination.page, limit: pagination.limit };
       if (statusFilter !== 'all') filters.status = statusFilter;
+      else if (!showCancelled) filters.excludeCancelled = true;
       if (dateFilter) filters.startDate = dateFilter;
       if (searchTerm) filters.search = searchTerm;
 
@@ -299,25 +307,40 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
     try {
       const fullQuote = await quotesService.getQuoteDetail(quote.id);
       setSelectedQuote(fullQuote);
+      setShowMargin(false);
       setDetailModalOpen(true);
     } catch (e) {
       toast.error('Error al cargar detalles de la cotización');
     }
   };
 
-  const handleOpenConfirmModal = (quote: QuoteResponse) => {
+  const handleOpenConfirmModal = async (quote: QuoteResponse) => {
     setQuoteToConfirm(quote);
     setSelectedPaymentMethod('EFECTIVO');
     setTransportData(null);
+    setSelectedCashRegisterId(null);
     setPaymentModalOpen(true);
+    try {
+      const registers = await cashRegistersService.findAll();
+      const active = registers.filter(r => r.isActive);
+      setCashRegisters(active);
+      if (active.length === 1) setSelectedCashRegisterId(active[0].id);
+    } catch (e) {
+      toast.error('Error al cargar las cajas disponibles');
+    }
   };
 
   const handleConfirmQuote = async () => {
     if (!quoteToConfirm) return;
+    if (!selectedCashRegisterId) {
+      toast.error('Selecciona la caja a la que se registrará el ingreso');
+      return;
+    }
     setConfirmingId(quoteToConfirm.id);
     try {
       await quotesService.confirmQuote(quoteToConfirm.id, {
         paymentMethod: selectedPaymentMethod,
+        cashRegisterId: selectedCashRegisterId,
         ...(transportData && transportData.requiresTransport ? {
           requiresTransport: true,
           vehicleId: transportData.vehicleId,
@@ -704,8 +727,8 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
       </div>
 
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
-        <DialogContent 
-          className="flex flex-col p-0 overflow-hidden bg-[var(--card)] border-[var(--border)] sm:max-w-4xl w-full"
+        <DialogContent
+          className="flex flex-col p-0 overflow-hidden bg-[var(--card)] border-[var(--border)] sm:max-w-4xl w-full max-h-[90vh]"
         >
           {selectedQuote && (
             <>
@@ -789,34 +812,53 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
                     </Table>
                   <div className="p-4 border-t border-[var(--border)] bg-[var(--bg)] flex flex-col md:flex-row justify-between items-end gap-4">
                     <div className="text-[var(--text-sec)]">
-                      {(() => {
-                        let totalCost = 0;
-                        selectedQuote.items?.forEach(i => {
-                          const cost = Number(i.costPrice) || Number(i.product?.costPrice) || 0;
-                          const factor = Number(i.unitFactor) || 1;
-                          totalCost += cost * factor * Number(i.quantity);
-                        });
-                        const estimatedGain = Number(selectedQuote.totalAmount) - totalCost;
-                        const gainPercent = totalCost > 0 ? (estimatedGain / totalCost) * 100 : 0;
-                        return (
-                          <div className="flex gap-4 text-xs font-bold bg-[var(--card)] border border-[var(--border)] p-3 rounded-xl shadow-sm">
-                            <div className="flex flex-col">
-                              <span className="uppercase text-[10px] tracking-wider mb-1">Costo Total</span>
-                              <span className="text-[var(--text-main)]">${totalCost.toFixed(4)}</span>
-                            </div>
-                            <div className="w-px bg-[var(--border)]"></div>
-                            <div className="flex flex-col">
-                              <span className="uppercase text-[10px] tracking-wider mb-1 text-emerald-600">Ganancia Estimada</span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-emerald-600">${estimatedGain.toFixed(4)}</span>
-                                <span className={cn("text-[10px] font-mono px-1.5 py-0.5 rounded-md border", gainPercent < 5 ? "text-rose-500 border-rose-500/30 bg-rose-500/10" : "text-emerald-600 border-emerald-500/30 bg-emerald-500/10")}>
-                                  {gainPercent.toFixed(1)}%
-                                </span>
+                      {showMargin ? (
+                        (() => {
+                          let totalCost = 0;
+                          selectedQuote.items?.forEach(i => {
+                            const cost = Number(i.costPrice) || Number(i.product?.costPrice) || 0;
+                            const factor = Number(i.unitFactor) || 1;
+                            totalCost += cost * factor * Number(i.quantity);
+                          });
+                          const estimatedGain = Number(selectedQuote.totalAmount) - totalCost;
+                          const gainPercent = totalCost > 0 ? (estimatedGain / totalCost) * 100 : 0;
+                          return (
+                            <div className="flex items-start gap-4 text-xs font-bold bg-[var(--card)] border border-[var(--border)] p-3 rounded-xl shadow-sm">
+                              <div className="flex flex-col">
+                                <span className="uppercase text-[10px] tracking-wider mb-1">Costo Total</span>
+                                <span className="text-[var(--text-main)]">${totalCost.toFixed(4)}</span>
                               </div>
+                              <div className="w-px self-stretch bg-[var(--border)]"></div>
+                              <div className="flex flex-col">
+                                <span className="uppercase text-[10px] tracking-wider mb-1 text-emerald-600">Ganancia Estimada</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-emerald-600">${estimatedGain.toFixed(4)}</span>
+                                  <span className={cn("text-[10px] font-mono px-1.5 py-0.5 rounded-md border", gainPercent < 5 ? "text-rose-500 border-rose-500/30 bg-rose-500/10" : "text-emerald-600 border-emerald-500/30 bg-emerald-500/10")}>
+                                    {gainPercent.toFixed(1)}%
+                                  </span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setShowMargin(false)}
+                                title="Ocultar márgenes"
+                                className="text-[var(--text-sec)]/40 hover:text-[var(--text-sec)] transition-colors -mt-0.5 -mr-0.5"
+                              >
+                                <EyeOff size={13} />
+                              </button>
                             </div>
-                          </div>
-                        );
-                      })()}
+                          );
+                        })()
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setShowMargin(true)}
+                          title="Mostrar márgenes"
+                          className="size-8 flex items-center justify-center rounded-full text-[var(--text-sec)]/25 hover:text-[var(--text-sec)] hover:bg-[var(--card)] transition-colors"
+                        >
+                          <Eye size={14} />
+                        </button>
+                      )}
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] font-bold text-[var(--text-sec)] uppercase tracking-wider mb-1">Total Cotización</p>
@@ -1093,6 +1135,24 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
                 </span>
               </div>
             )}
+            <div className="mt-4">
+              <Label className="text-xs font-bold uppercase text-[var(--text-sec)] mb-2 block">Caja de Destino</Label>
+              <Select
+                value={selectedCashRegisterId ? String(selectedCashRegisterId) : undefined}
+                onValueChange={(v) => setSelectedCashRegisterId(Number(v))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={cashRegisters.length === 0 ? "No hay cajas activas" : "Selecciona una caja..."} />
+                </SelectTrigger>
+                <SelectContent>
+                  {cashRegisters.map(r => (
+                    <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-[var(--text-sec)] mt-1.5">El ingreso de esta venta se registrará en la caja seleccionada.</p>
+            </div>
+
             {quoteToConfirm && (
               <div className="mt-6 p-4 rounded-lg bg-[var(--bg)]/50 border border-[var(--border)] flex justify-between items-center">
                 <span className="text-sm text-[var(--text-sec)] font-medium">Total a cobrar:</span>
@@ -1123,7 +1183,7 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
             <Button variant="outline" onClick={() => confirmExit(() => setPaymentModalOpen(false))}>Cancelar</Button>
             <Button
               onClick={handleConfirmQuote}
-              disabled={!!confirmingId}
+              disabled={!!confirmingId || !selectedCashRegisterId}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-2"
             >
               {confirmingId ? (

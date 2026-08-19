@@ -94,6 +94,7 @@ export interface QuoteFilters {
   startDate?: string;
   endDate?: string;
   search?: string;
+  excludeCancelled?: boolean;
 }
 
 export const quotesService = {
@@ -113,6 +114,7 @@ export const quotesService = {
     if (filters.startDate) params.set('startDate', filters.startDate);
     if (filters.endDate) params.set('endDate', filters.endDate);
     if (filters.search) params.set('search', filters.search);
+    if (filters.excludeCancelled) params.set('excludeCancelled', 'true');
 
     return await apiRequest<PaginatedQuotes>(`${BASE}?${params.toString()}`);
   },
@@ -128,7 +130,7 @@ export const quotesService = {
     });
   },
 
-  confirmQuote: async (id: number, payload: { paymentMethod?: string; requiresTransport?: boolean; vehicleId?: number; driverId?: number; deliveryAddress?: string; scheduledAt?: string }): Promise<any> => {
+  confirmQuote: async (id: number, payload: { paymentMethod?: string; cashRegisterId?: number; requiresTransport?: boolean; vehicleId?: number; driverId?: number; deliveryAddress?: string; scheduledAt?: string }): Promise<any> => {
     return await apiRequest(`${BASE}/${id}/confirm`, {
       method: 'POST',
       body: JSON.stringify(payload),

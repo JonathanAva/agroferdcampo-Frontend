@@ -101,6 +101,7 @@ export interface DeliveryNoteFilters {
   vehicleId?: number;
   routeId?: number;
   requiresTransport?: boolean;
+  excludeCancelled?: boolean;
 }
 
 export const deliveryNotesService = {
@@ -128,6 +129,7 @@ export const deliveryNotesService = {
     if (filters.requiresTransport !== undefined) {
       params.set('requiresTransport', String(filters.requiresTransport));
     }
+    if (filters.excludeCancelled) params.set('excludeCancelled', 'true');
     return await apiRequest<any>(`/delivery-notes?${params.toString()}`);
   },
 

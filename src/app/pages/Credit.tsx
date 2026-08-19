@@ -5,7 +5,7 @@ import {
   Hash, User, Package, Building2, X
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useSearchParams } from 'react-router';
+import { useSearchParams, useNavigate } from 'react-router';
 
 import { creditService, CreditSale, CreditSummary, CreditPayment, RegisterPaymentDto, CreateManualCreditDto, GroupedCreditCustomer } from '../services/credit.service';
 import { getSaleDetail } from '../services/sales.service';
@@ -30,8 +30,10 @@ const creditFilters: FilterConfig[] = [
   { id: 'status', label: 'Estado', type: 'category', options: [
     { label: 'Pendiente', value: 'PENDIENTE' },
     { label: 'Vencido', value: 'VENCIDO' },
-    { label: 'Pagado', value: 'PAGADO' }
-  ]}
+    { label: 'Pagado', value: 'PAGADO' },
+    { label: 'Anulado', value: 'ANULADO' }
+  ]},
+  { id: 'showCancelled', label: 'Mostrar anuladas', type: 'boolean' }
 ];
 
 let isAbonoSubmittingGlobal = false;
@@ -44,9 +46,11 @@ export function Credit() {
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
   
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const statusFilter = searchParams.get('status') || 'all';
   const searchFilter = searchParams.get('search') || '';
+  const showCancelled = searchParams.get('showCancelled') === 'true';
   
   // Modals
   const [selectedGroup, setSelectedGroup] = useState<GroupedCreditCustomer | null>(null);
@@ -104,7 +108,7 @@ export function Credit() {
       fetchCredits();
     }, 300);
     return () => clearTimeout(timer);
-  }, [pagination.page, statusFilter, searchFilter]);
+  }, [pagination.page, statusFilter, searchFilter, showCancelled]);
 
   const fetchSummary = async () => {
     try {
@@ -120,6 +124,7 @@ export function Credit() {
     try {
       const filters: any = { page: pagination.page, limit: pagination.limit };
       if (statusFilter !== 'all') filters.status = statusFilter;
+      else if (!showCancelled) filters.excludeCancelled = true;
       if (searchFilter) filters.search = searchFilter;
 
       const res = await creditService.getGroupedCredits(filters);
@@ -455,13 +460,22 @@ export function Credit() {
           <h1 className="text-3xl font-bold text-[var(--text-main)]">Cuentas por Cobrar (CxC)</h1>
           <p className="text-[var(--text-sec)]">Gestiona la cartera de créditos y abonos de clientes.</p>
         </div>
-        <Button
-          onClick={handleOpenCreateModal}
-          style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
-          className="font-bold"
-        >
-          <Plus size={16} className="mr-2" /> Crear Cuenta por Cobrar
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => navigate('/credit/payments')}
+            className="font-bold"
+          >
+            <History size={16} className="mr-2" /> Historial de Pagos
+          </Button>
+          <Button
+            onClick={handleOpenCreateModal}
+            style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
+            className="font-bold"
+          >
+            <Plus size={16} className="mr-2" /> Crear Cuenta por Cobrar
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -622,6 +636,7 @@ export function Credit() {
                           <SelectItem value="PENDIENTE">Pendiente</SelectItem>
                           <SelectItem value="VENCIDO">Vencido</SelectItem>
                           <SelectItem value="PAGADO">Pagado</SelectItem>
+                          <SelectItem value="ANULADO">Anulado</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

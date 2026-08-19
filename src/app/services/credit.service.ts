@@ -16,7 +16,9 @@ export interface CreditPayment {
   reference?: string;
   notes?: string;
   createdAt: string;
-  user?: { fullName: string };
+  user?: { id?: number; fullName: string };
+  customer?: { id: number; name: string };
+  creditSale?: { id: number; saleId?: number | null };
 }
 
 export interface CreditSale {
@@ -131,7 +133,7 @@ export const creditService = {
     return apiRequest<any>(`/credit?${query.toString()}`);
   },
 
-  getGroupedCredits: (params?: { page?: number; limit?: number; status?: string }) => {
+  getGroupedCredits: (params?: { page?: number; limit?: number; status?: string; excludeCancelled?: boolean }) => {
     const query = new URLSearchParams();
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
@@ -164,6 +166,18 @@ export const creditService = {
 
   getPayments: (id: number) => {
     return apiRequest<CreditPayment[]>(`/credit/${id}/payments`);
+  },
+
+  getAllPayments: (params?: { page?: number; limit?: number; customerId?: number; userId?: number; paymentMethod?: string; search?: string; startDate?: string; endDate?: string }) => {
+    const query = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== '') {
+          query.append(key, String(value));
+        }
+      });
+    }
+    return apiRequest<{ data: CreditPayment[]; total: number; page: number; limit: number; totalPages: number }>(`/credit/payments?${query.toString()}`);
   },
 
   registerPayment: (id: number, data: RegisterPaymentDto) => {

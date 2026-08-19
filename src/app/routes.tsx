@@ -27,6 +27,7 @@ import { NewQuote } from "./pages/NewQuote";
 import { Purchases } from "./pages/Purchases";
 import { DeliveryNotes } from "./pages/DeliveryNotes";
 import { Credit } from "./pages/Credit";
+import { CreditPayments } from "./pages/CreditPayments";
 import Vehicles from "./pages/Vehicles";
 import DeliveryRoutes from "./pages/DeliveryRoutes";
 import { Audit } from "./pages/Audit";
@@ -95,6 +96,7 @@ export const router = createBrowserRouter([
           { path: "caja", element: <Caja /> },
           { path: "sales", element: <SalesHistory /> },
           { path: "credit", element: <Credit /> },
+          { path: "credit/payments", element: <CreditPayments /> },
           { path: "finance", element: <Finance /> },
         ],
       },

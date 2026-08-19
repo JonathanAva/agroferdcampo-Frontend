@@ -2727,27 +2727,6 @@ ${paymentConditionHtml}
             </div>
           ) : (
             <div className="p-4 sm:p-6 pt-4 space-y-4 sm:space-y-6 overflow-y-auto flex-1">
-              {closeExpectedTotals && canCloseDirectly && (
-                <div className="bg-blue-500/5 p-4 sm:p-5 rounded-2xl border border-blue-500/20 grid grid-cols-1 sm:grid-cols-4 gap-4 sm:gap-6 shadow-sm text-center">
-                  <div className="flex flex-col items-center bg-[var(--bg)]/50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
-                    <span className="text-[10px] sm:text-xs text-blue-500 font-bold uppercase tracking-widest mb-1.5 opacity-80">Fondo Base</span>
-                    <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">${activeShift?.initialAmount ? Number(activeShift.initialAmount).toFixed(4) : "0.00"}</span>
-                  </div>
-                  <div className="flex flex-col items-center bg-[var(--bg)]/50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
-                    <span className="text-[10px] sm:text-xs text-blue-500 font-bold uppercase tracking-widest mb-1.5 opacity-80">Efectivo Esperado</span>
-                    <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">${closeExpectedTotals.expectedAmount.toFixed(4)}</span>
-                  </div>
-                  <div className="flex flex-col items-center bg-[var(--bg)]/50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
-                    <span className="text-[10px] sm:text-xs text-blue-500 font-bold uppercase tracking-widest mb-1.5 opacity-80">Tarjeta</span>
-                    <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">${closeExpectedTotals.expectedTarjeta.toFixed(4)}</span>
-                  </div>
-                  <div className="flex flex-col items-center bg-[var(--bg)]/50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
-                    <span className="text-[10px] sm:text-xs text-blue-500 font-bold uppercase tracking-widest mb-1.5 opacity-80">Transferencia</span>
-                    <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">${closeExpectedTotals.expectedTransferencia.toFixed(4)}</span>
-                  </div>
-                </div>
-              )}
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                 {/* BILLETES */}
                 <div className="bg-[var(--card)] p-5 rounded-2xl border border-[var(--border)] shadow-sm hover:shadow-md transition-shadow">
@@ -2826,6 +2805,28 @@ ${paymentConditionHtml}
                 </div>
               </div>
 
+              {/* Resumen esperado (Fondo Base / Efectivo Esperado / Tarjeta / Transferencia) */}
+              {closeExpectedTotals && canCloseDirectly && (
+                <div className="bg-blue-500/5 p-4 sm:p-5 rounded-2xl border border-blue-500/20 grid grid-cols-1 sm:grid-cols-4 gap-4 sm:gap-6 shadow-sm text-center">
+                  <div className="flex flex-col items-center bg-[var(--bg)]/50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
+                    <span className="text-[10px] sm:text-xs text-blue-500 font-bold uppercase tracking-widest mb-1.5 opacity-80">Fondo Base</span>
+                    <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">${activeShift?.initialAmount ? Number(activeShift.initialAmount).toFixed(4) : "0.00"}</span>
+                  </div>
+                  <div className="flex flex-col items-center bg-[var(--bg)]/50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
+                    <span className="text-[10px] sm:text-xs text-blue-500 font-bold uppercase tracking-widest mb-1.5 opacity-80">Efectivo Esperado</span>
+                    <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">${closeExpectedTotals.expectedAmount.toFixed(4)}</span>
+                  </div>
+                  <div className="flex flex-col items-center bg-[var(--bg)]/50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
+                    <span className="text-[10px] sm:text-xs text-blue-500 font-bold uppercase tracking-widest mb-1.5 opacity-80">Tarjeta</span>
+                    <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">${closeExpectedTotals.expectedTarjeta.toFixed(4)}</span>
+                  </div>
+                  <div className="flex flex-col items-center bg-[var(--bg)]/50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
+                    <span className="text-[10px] sm:text-xs text-blue-500 font-bold uppercase tracking-widest mb-1.5 opacity-80">Transferencia</span>
+                    <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">${closeExpectedTotals.expectedTransferencia.toFixed(4)}</span>
+                  </div>
+                </div>
+              )}
+
               {/* Total y Observaciones */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 items-end">
                 <div className="space-y-2 h-full flex flex-col justify-end">
@@ -2844,6 +2845,44 @@ ${paymentConditionHtml}
                   </span>
                 </div>
               </div>
+
+              {/* Diferencia (Total Contado - Efectivo Esperado) */}
+              {closeExpectedTotals && canCloseDirectly && (() => {
+                const totalContado = calcBreakdownTotal(closeBills, closeCoins);
+                const efectivoEsperado = closeExpectedTotals.expectedAmount;
+                const diferencia = totalContado - efectivoEsperado;
+                const isMatch = Math.abs(diferencia) < 0.005;
+                const isSurplus = diferencia > 0.005;
+                const statusLabel = isMatch ? "Efectivo Correcto" : isSurplus ? "Efectivo Sobrante" : "Efectivo Faltante";
+                const statusClasses = isMatch
+                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-500"
+                  : isSurplus
+                  ? "bg-amber-500/10 border-amber-500/30 text-amber-500"
+                  : "bg-red-500/10 border-red-500/30 text-red-500";
+                const diffTextClass = isMatch ? "text-emerald-500" : isSurplus ? "text-amber-500" : "text-red-500";
+
+                return (
+                  <div className="bg-[var(--card)] p-4 sm:p-5 rounded-2xl border border-[var(--border)] shadow-sm space-y-3">
+                    <div className="flex justify-between items-center text-sm sm:text-base">
+                      <span className="text-[var(--text-sec)] font-medium">Total Contado:</span>
+                      <span className="font-bold text-lg text-[var(--text-main)]">${totalContado.toFixed(4)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm sm:text-base">
+                      <span className="text-[var(--text-sec)] font-medium">Efectivo Esperado:</span>
+                      <span className="font-bold text-lg text-[var(--text-main)]">${efectivoEsperado.toFixed(4)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm sm:text-base pt-3 border-t border-[var(--border)]">
+                      <span className="font-bold text-[var(--text-main)]">Diferencia:</span>
+                      <span className={cn("font-black text-xl", diffTextClass)}>
+                        {diferencia > 0 ? "+" : ""}${diferencia.toFixed(4)}
+                      </span>
+                    </div>
+                    <div className={cn("flex items-center justify-center rounded-xl border-2 py-2.5 font-black uppercase tracking-widest text-sm sm:text-base", statusClasses)}>
+                      {statusLabel}
+                    </div>
+                  </div>
+                );
+              })()}
 
               <DialogFooter className="mt-4 sm:mt-6 p-4 sm:p-6 pt-0 bg-[var(--bg)]/50 flex flex-col sm:flex-row gap-3">
                   <Button
