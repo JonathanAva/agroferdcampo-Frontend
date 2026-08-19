@@ -158,7 +158,7 @@ function DeliveryNotesList() {
     { id: 'vehicle', label: 'Vehículo', type: 'category', options: Array.isArray(vehicles) ? vehicles.map((v: any) => ({ label: v.nickname ? `${v.plate} - ${v.nickname}` : v.plate, value: v.id.toString() })) : [] },
     { id: 'route', label: 'Ruta', type: 'category', options: Array.isArray(routesList) ? routesList.map((r: any) => ({ label: r.name, value: r.id.toString() })) : [] },
     { id: 'date', label: 'Fecha Específica', type: 'date_range' },
-    { id: 'showCancelled', label: 'Mostrar cancelados', type: 'boolean' }
+    { id: 'showCancelled', label: 'Solo cancelados', type: 'boolean' }
   ], [vehicles, routesList]);
 
   useEffect(() => {
@@ -199,7 +199,8 @@ function DeliveryNotesList() {
     try {
       const filters: any = { page: pagination.page, limit: pagination.limit };
       if (statusFilter !== 'all') filters.status = statusFilter;
-      else if (!showCancelled) filters.excludeCancelled = true;
+      else if (showCancelled) filters.status = 'CANCELADO';
+      else filters.excludeCancelled = true;
       if (typeFilter !== 'all') filters.type = typeFilter;
       if (dateFilter) filters.startDate = dateFilter;
       if (vehicleFilter !== 'all') filters.vehicleId = Number(vehicleFilter);

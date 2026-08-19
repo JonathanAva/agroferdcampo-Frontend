@@ -77,7 +77,7 @@ const quotesFilters: FilterConfig[] = [
     { label: 'Expiradas', value: 'EXPIRADA' }
   ]},
   { id: 'date', label: 'Fecha Específica', type: 'date_range' },
-  { id: 'showCancelled', label: 'Mostrar canceladas', type: 'boolean' }
+  { id: 'showCancelled', label: 'Solo canceladas', type: 'boolean' }
 ];
 export function Quotes() {
   const { user } = useAuth();
@@ -157,7 +157,8 @@ export function Quotes() {
     try {
       const filters: any = { page: pagination.page, limit: pagination.limit };
       if (statusFilter !== 'all') filters.status = statusFilter;
-      else if (!showCancelled) filters.excludeCancelled = true;
+      else if (showCancelled) filters.status = 'CANCELADA';
+      else filters.excludeCancelled = true;
       if (dateFilter) filters.startDate = dateFilter;
       if (searchTerm) filters.search = searchTerm;
 

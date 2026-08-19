@@ -33,7 +33,7 @@ const creditFilters: FilterConfig[] = [
     { label: 'Pagado', value: 'PAGADO' },
     { label: 'Anulado', value: 'ANULADO' }
   ]},
-  { id: 'showCancelled', label: 'Mostrar anuladas', type: 'boolean' }
+  { id: 'showCancelled', label: 'Solo anuladas', type: 'boolean' }
 ];
 
 let isAbonoSubmittingGlobal = false;
@@ -124,7 +124,8 @@ export function Credit() {
     try {
       const filters: any = { page: pagination.page, limit: pagination.limit };
       if (statusFilter !== 'all') filters.status = statusFilter;
-      else if (!showCancelled) filters.excludeCancelled = true;
+      else if (showCancelled) filters.status = 'ANULADO';
+      else filters.excludeCancelled = true;
       if (searchFilter) filters.search = searchFilter;
 
       const res = await creditService.getGroupedCredits(filters);
