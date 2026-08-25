@@ -275,6 +275,8 @@ export function HumanResources() {
   const [isConfigModalOpen, setIsConfigModalOpen] = useState<{
     type: "dept" | "pos" | "sch" | "lvType";
     open: boolean;
+    editId?: number;
+    editData?: any;
   }>({ type: "dept", open: false });
   const [formLoading, setFormLoading] = useState(false);
 
@@ -658,27 +660,28 @@ export function HumanResources() {
     setFormLoading(true);
     const formData = new FormData(e.currentTarget);
     const type = isConfigModalOpen.type;
+    const isEditing = !!isConfigModalOpen.editId;
 
     let endpoint = "";
-    let body = {};
+    let body: any = {};
 
     if (type === "dept") {
-      endpoint = "/departments";
+      endpoint = isEditing ? `/departments/${isConfigModalOpen.editId}` : "/departments";
       body = {
         name: formData.get("name"),
-        description: formData.get("description"),
+        description: formData.get("description") || undefined,
       };
     } else if (type === "pos") {
-      endpoint = "/positions";
+      endpoint = isEditing ? `/positions/${isConfigModalOpen.editId}` : "/positions";
       body = {
         title: formData.get("title"),
-        description: formData.get("description"),
-        departmentId: formData.get("departmentId")
+        description: formData.get("description") || undefined,
+        departmentId: formData.get("departmentId") && formData.get("departmentId") !== "none"
           ? Number(formData.get("departmentId"))
           : undefined,
       };
     } else if (type === "sch") {
-      endpoint = "/work-schedules";
+      endpoint = isEditing ? `/work-schedules/${isConfigModalOpen.editId}` : "/work-schedules";
       body = {
         name: formData.get("name"),
         entryTime: formData.get("entryTime"),
@@ -687,7 +690,7 @@ export function HumanResources() {
         workDays: ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES"],
       };
     } else if (type === "lvType") {
-      endpoint = "/leave-types";
+      endpoint = isEditing ? `/leave-types/${isConfigModalOpen.editId}` : "/leave-types";
       body = {
         name: formData.get("name"),
         isPaid: formData.get("isPaid") === "true",
@@ -696,14 +699,14 @@ export function HumanResources() {
 
     try {
       await apiRequest(endpoint, {
-        method: "POST",
+        method: isEditing ? "PATCH" : "POST",
         body: JSON.stringify(body),
       });
-      toast.success("Creado exitosamente");
-      setIsConfigModalOpen({ ...isConfigModalOpen, open: false });
+      toast.success(isEditing ? "Actualizado exitosamente" : "Creado exitosamente");
+      setIsConfigModalOpen({ ...isConfigModalOpen, open: false, editId: undefined, editData: undefined });
       loadConfigData();
     } catch (error: any) {
-      toast.error(error.message || "Error al crear");
+      toast.error(error.message || (isEditing ? "Error al actualizar" : "Error al crear"));
     } finally {
       setFormLoading(false);
     }
@@ -1445,14 +1448,24 @@ export function HumanResources() {
                     <span className="text-sm font-bold text-[var(--text-main)]">
                       {d.name}
                     </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDeleteConfig("dept", d.id)}
-                      className="h-8 w-8 text-red-500 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                    >
-                      <Trash2 size={14} />
-                    </Button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setIsConfigModalOpen({ type: "dept", open: true, editId: d.id, editData: d })}
+                          className="h-8 w-8 text-blue-500 hover:bg-blue-500/10 rounded-lg"
+                        >
+                          <Edit size={14} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteConfig("dept", d.id)}
+                          className="h-8 w-8 text-red-500 hover:bg-red-500/10 rounded-lg"
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      </div>
                   </div>
                 ))}
                 {departments.length === 0 && (
@@ -1498,14 +1511,24 @@ export function HumanResources() {
                           ?.name || "General"}
                       </p>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDeleteConfig("pos", p.id)}
-                      className="h-8 w-8 text-red-500 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                    >
-                      <Trash2 size={14} />
-                    </Button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setIsConfigModalOpen({ type: "pos", open: true, editId: p.id, editData: p })}
+                          className="h-8 w-8 text-blue-500 hover:bg-blue-500/10 rounded-lg"
+                        >
+                          <Edit size={14} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteConfig("pos", p.id)}
+                          className="h-8 w-8 text-red-500 hover:bg-red-500/10 rounded-lg"
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      </div>
                   </div>
                 ))}
                 {positions.length === 0 && (
@@ -1549,14 +1572,24 @@ export function HumanResources() {
                         {s.entryTime} - {s.exitTime}
                       </p>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDeleteConfig("sch", s.id)}
-                      className="h-8 w-8 text-red-500 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                    >
-                      <Trash2 size={14} />
-                    </Button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setIsConfigModalOpen({ type: "sch", open: true, editId: s.id, editData: s })}
+                          className="h-8 w-8 text-blue-500 hover:bg-blue-500/10 rounded-lg"
+                        >
+                          <Edit size={14} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteConfig("sch", s.id)}
+                          className="h-8 w-8 text-red-500 hover:bg-red-500/10 rounded-lg"
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      </div>
                   </div>
                 ))}
                 {schedules.length === 0 && (
@@ -1598,14 +1631,24 @@ export function HumanResources() {
                         {lt.isPaid ? "Pagado" : "No Pagado"}
                       </p>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDeleteConfig("lvType", lt.id)}
-                      className="h-8 w-8 text-red-500 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                    >
-                      <Trash2 size={14} />
-                    </Button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setIsConfigModalOpen({ type: "lvType", open: true, editId: lt.id, editData: lt })}
+                          className="h-8 w-8 text-blue-500 hover:bg-blue-500/10 rounded-lg"
+                        >
+                          <Edit size={14} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteConfig("lvType", lt.id)}
+                          className="h-8 w-8 text-red-500 hover:bg-red-500/10 rounded-lg"
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      </div>
                   </div>
                 ))}
                 {leaveTypes.length === 0 && (
@@ -2194,13 +2237,14 @@ export function HumanResources() {
         <DialogContent className="max-w-md border-[var(--border)] bg-[var(--card)] shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-black uppercase tracking-tight text-[var(--text-main)]">
+              {isConfigModalOpen.editId ? "Editar " : "Nuevo "}
               {isConfigModalOpen.type === "dept"
-                ? "Nuevo Departamento"
+                ? "Departamento"
                 : isConfigModalOpen.type === "pos"
-                  ? "Nuevo Cargo / Puesto"
+                  ? "Cargo / Puesto"
                   : isConfigModalOpen.type === "sch"
-                    ? "Nuevo Horario Laboral"
-                    : "Nuevo Tipo de Permiso"}
+                    ? "Horario Laboral"
+                    : "Tipo de Permiso"}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCreateConfig} className="space-y-5 pt-4">
@@ -2209,11 +2253,12 @@ export function HumanResources() {
                 Nombre / Título
               </Label>
               <Input
-                name={isConfigModalOpen.type === "pos" ? "title" : "name"}
-                required
-                placeholder={isConfigModalOpen.type === "lvType" ? "Ej: Vacaciones, Enfermedad..." : ""}
-                className="bg-[var(--bg)] border-[var(--border)] font-bold"
-              />
+                  name={isConfigModalOpen.type === "pos" ? "title" : "name"}
+                  required
+                  placeholder={isConfigModalOpen.type === "lvType" ? "Ej: Vacaciones, Enfermedad..." : ""}
+                  defaultValue={isConfigModalOpen.editData?.name || isConfigModalOpen.editData?.title || ""}
+                  className="bg-[var(--bg)] border-[var(--border)] font-bold"
+                />
             </div>
 
             {isConfigModalOpen.type === "sch" ? (
@@ -2223,22 +2268,24 @@ export function HumanResources() {
                     Entrada
                   </Label>
                   <Input
-                    name="entryTime"
-                    type="time"
-                    required
-                    className="bg-[var(--bg)] border-[var(--border)] font-bold font-mono"
-                  />
+                      name="entryTime"
+                      type="time"
+                      required
+                      defaultValue={isConfigModalOpen.editData?.entryTime?.substring(0, 5) || ""}
+                      className="bg-[var(--bg)] border-[var(--border)] font-bold font-mono"
+                    />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[10px] uppercase font-black opacity-60 tracking-widest">
                     Salida
                   </Label>
                   <Input
-                    name="exitTime"
-                    type="time"
-                    required
-                    className="bg-[var(--bg)] border-[var(--border)] font-bold font-mono"
-                  />
+                      name="exitTime"
+                      type="time"
+                      required
+                      defaultValue={isConfigModalOpen.editData?.exitTime?.substring(0, 5) || ""}
+                      className="bg-[var(--bg)] border-[var(--border)] font-bold font-mono"
+                    />
                 </div>
                 <div className="col-span-2 space-y-2">
                   <Label className="text-[10px] uppercase font-black opacity-60 tracking-widest">
