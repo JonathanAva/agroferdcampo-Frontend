@@ -25,6 +25,8 @@ import {
   Upload,
   ImageIcon,
   Layers,
+  Check,
+  PlusCircle,
 } from "lucide-react";
 import { usePOSTabs } from "../hooks/usePOSTabs";
 import { format } from "date-fns";
@@ -338,8 +340,8 @@ export function POS() {
     toast.success("Servicio agregado al carrito");
   };
   const [categories, setCategories] = useState<POSCategory[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
-  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<number | null>(null);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
+  const [selectedSubcategoryIds, setSelectedSubcategoryIds] = useState<number[]>([]);
   const [showExpiringSoonOnly, setShowExpiringSoonOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -781,7 +783,7 @@ export function POS() {
   // Volver a la página 1 cada vez que cambia el término de búsqueda o los filtros de categoría
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, selectedCategoryId, selectedSubcategoryId]);
+  }, [searchTerm, selectedCategoryIds, selectedSubcategoryIds]);
 
   // Debounce product search (también re-busca al cambiar filtros de categoría/subcategoría/página)
   useEffect(() => {
@@ -794,7 +796,7 @@ export function POS() {
     }, 300);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [searchTerm, selectedCategoryId, selectedSubcategoryId, page]);
+  }, [searchTerm, selectedCategoryIds, selectedSubcategoryIds, page]);
 
   // Debounce customer search
   useEffect(() => {
@@ -822,8 +824,12 @@ export function POS() {
         params.set("limit", "30");
         params.set("page", String(page));
       }
-      if (selectedCategoryId) params.set("categoryId", String(selectedCategoryId));
-      if (selectedSubcategoryId) params.set("subcategoryId", String(selectedSubcategoryId));
+      if (selectedCategoryIds.length > 0) {
+        selectedCategoryIds.forEach(id => params.append("categoryIds", String(id)));
+      }
+      if (selectedSubcategoryIds.length > 0) {
+        selectedSubcategoryIds.forEach(id => params.append("subcategoryIds", String(id)));
+      }
 
       const endpoint = isSearch
         ? `/catalog/products/search?${params.toString()}`
@@ -1757,83 +1763,131 @@ ${paymentConditionHtml}
               {loading && <div className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin h-4 w-4 border-2 border-[var(--primary)] border-t-transparent rounded-full" />}
             </div>
 
-            {/* Filtro visual por Categoría / Subcategoría */}
+            {/* Filtro visual por Categoría / Subcategoría - MULTI SELECT */}
             {categories.length > 0 && (
-              <div className="flex flex-col gap-1.5 mt-2">
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => { setSelectedCategoryId(null); setSelectedSubcategoryId(null); }}
-                    className={cn(
-                      "px-2.5 py-1 rounded-full text-[10px] font-bold border transition-colors",
-                      selectedCategoryId === null
-                        ? "bg-[var(--primary)] text-white border-[var(--primary)]"
-                        : "bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-[var(--primary)]"
-                    )}
-                  >
-                    Todas
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowExpiringSoonOnly((v) => !v)}
-                    className={cn(
-                      "px-2.5 py-1 rounded-full text-[10px] font-bold border transition-colors flex items-center gap-1",
-                      showExpiringSoonOnly
-                        ? "bg-amber-500 text-white border-amber-500"
-                        : "bg-transparent border-amber-300 text-amber-500 hover:border-amber-500"
-                    )}
-                  >
-                    <CalendarIcon size={10} />
-                    Por Vencer
-                  </button>
-                  {categories.map((cat) => (
-                    <button
-                      type="button"
-                      key={cat.id}
-                      onClick={() => {
-                        setSelectedCategoryId(selectedCategoryId === cat.id ? null : cat.id);
-                        setSelectedSubcategoryId(null);
-                      }}
-                      className={cn(
-                        "px-2.5 py-1 rounded-full text-[10px] font-bold border transition-colors",
-                        selectedCategoryId === cat.id
-                          ? "bg-[var(--primary)] text-white border-[var(--primary)]"
-                          : "bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-[var(--primary)]"
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                
+                {/* Categorías Multi Select */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="border-dashed h-9 bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-[var(--primary)] text-xs rounded-xl">
+                      <PlusCircle className="mr-2 h-4 w-4 text-emerald-500" />
+                      Categorías
+                      {selectedCategoryIds.length > 0 && (
+                        <>
+                          <div className="mx-2 h-4 w-[1px] bg-[var(--border)]" />
+                          <Badge variant="secondary" className="rounded-sm px-1 font-normal bg-emerald-500 text-white">
+                            {selectedCategoryIds.length} sel.
+                          </Badge>
+                        </>
                       )}
-                    >
-                      {cat.name}
-                    </button>
-                  ))}
-                </div>
-                {selectedCategoryId !== null &&
-                  (categories.find((c) => c.id === selectedCategoryId)?.subcategories?.length || 0) > 0 && (
-                    <div className="flex flex-wrap gap-1.5 pl-2">
-                      {categories
-                        .find((c) => c.id === selectedCategoryId)!
-                        .subcategories!.map((sub) => (
-                          <button
-                            type="button"
-                            key={sub.id}
-                            onClick={() =>
-                              setSelectedSubcategoryId(selectedSubcategoryId === sub.id ? null : sub.id)
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-0 bg-[var(--card)] border-[var(--border)]" style={{ width: 'max-content', minWidth: '200px', maxWidth: '350px' }} align="start">
+                    <div className="p-2 space-y-1">
+                      {categories.map(cat => (
+                        <Button
+                          key={cat.id}
+                          variant="ghost"
+                          className="w-full justify-start font-normal h-8 px-2 gap-3 hover:bg-[var(--bg)]"
+                          onClick={() => {
+                            setSelectedCategoryIds(prev => 
+                              prev.includes(cat.id) ? prev.filter(id => id !== cat.id) : [...prev, cat.id]
+                            );
+                            // Clear subcategories if its parent category is unchecked
+                            if (selectedCategoryIds.includes(cat.id)) {
+                               const subIds = cat.subcategories?.map(s => s.id) || [];
+                               setSelectedSubcategoryIds(prev => prev.filter(id => !subIds.includes(id)));
                             }
-                            className={cn(
-                              "px-2 py-0.5 rounded-full text-[9px] font-bold border transition-colors",
-                              selectedSubcategoryId === sub.id
-                                ? "bg-[var(--primary)]/20 text-[var(--primary)] border-[var(--primary)]"
-                                : "bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-[var(--primary)]"
-                            )}
-                          >
-                            {sub.name}
-                          </button>
-                        ))}
+                          }}
+                        >
+                          <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0", selectedCategoryIds.includes(cat.id) ? "bg-emerald-500 border-emerald-500 text-white" : "border-input")}>
+                            {selectedCategoryIds.includes(cat.id) && <Check className="h-3 w-3" />}
+                          </div>
+                          <span className="truncate text-left text-[var(--text-main)] text-sm">{cat.name}</span>
+                        </Button>
+                      ))}
+                      {selectedCategoryIds.length > 0 && (
+                        <div className="pt-2 mt-2 border-t border-[var(--border)]">
+                          <Button variant="ghost" size="sm" className="w-full h-8 text-xs text-[var(--text-sec)]" onClick={() => { setSelectedCategoryIds([]); setSelectedSubcategoryIds([]); }}>
+                            Limpiar
+                          </Button>
+                        </div>
+                      )}
                     </div>
+                  </PopoverContent>
+                </Popover>
+
+                {/* Subcategorías Multi Select (Only visible if a category with subcategories is selected) */}
+                {selectedCategoryIds.length > 0 && categories.some(c => selectedCategoryIds.includes(c.id) && c.subcategories && c.subcategories.length > 0) && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="border-dashed h-9 bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-[var(--primary)] text-xs rounded-xl">
+                        <PlusCircle className="mr-2 h-4 w-4 text-emerald-500" />
+                        Subcategorías
+                        {selectedSubcategoryIds.length > 0 && (
+                          <>
+                            <div className="mx-2 h-4 w-[1px] bg-[var(--border)]" />
+                            <Badge variant="secondary" className="rounded-sm px-1 font-normal bg-emerald-500 text-white">
+                              {selectedSubcategoryIds.length} sel.
+                            </Badge>
+                          </>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0 bg-[var(--card)] border-[var(--border)]" style={{ width: 'max-content', minWidth: '200px', maxWidth: '350px' }} align="start">
+                      <div className="p-2 space-y-1">
+                        {categories
+                          .filter(c => selectedCategoryIds.includes(c.id))
+                          .flatMap(c => c.subcategories || [])
+                          .map(sub => (
+                          <Button
+                            key={sub.id}
+                            variant="ghost"
+                            className="w-full justify-start font-normal h-8 px-2 gap-3 hover:bg-[var(--bg)]"
+                            onClick={() => {
+                              setSelectedSubcategoryIds(prev => 
+                                prev.includes(sub.id) ? prev.filter(id => id !== sub.id) : [...prev, sub.id]
+                              );
+                            }}
+                          >
+                            <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0", selectedSubcategoryIds.includes(sub.id) ? "bg-emerald-500 border-emerald-500 text-white" : "border-input")}>
+                              {selectedSubcategoryIds.includes(sub.id) && <Check className="h-3 w-3" />}
+                            </div>
+                            <span className="truncate text-left text-[var(--text-main)] text-sm">{sub.name}</span>
+                          </Button>
+                        ))}
+                        {selectedSubcategoryIds.length > 0 && (
+                          <div className="pt-2 mt-2 border-t border-[var(--border)]">
+                            <Button variant="ghost" size="sm" className="w-full h-8 text-xs text-[var(--text-sec)]" onClick={() => setSelectedSubcategoryIds([])}>
+                              Limpiar
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+
+                {/* Por Vencer Toggle (keeping this one as a simple button but styling it consistent) */}
+                <button
+                  type="button"
+                  onClick={() => setShowExpiringSoonOnly((v) => !v)}
+                  className={cn(
+                    "px-3 h-9 rounded-xl text-xs font-medium border transition-colors flex items-center gap-1.5",
+                    showExpiringSoonOnly
+                      ? "bg-amber-500 text-white border-amber-500"
+                      : "bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-amber-500"
                   )}
+                >
+                  <CalendarIcon size={14} className={showExpiringSoonOnly ? "text-white" : "text-amber-500"} />
+                  Por Vencer
+                </button>
               </div>
             )}
           </div>
-
-          {/* Grid Compacto */}
+          
+{/* Grid Compacto */}
           <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
               {universalProduct && (
