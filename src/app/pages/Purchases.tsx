@@ -1,8 +1,8 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, FileText, CheckCircle2, AlertCircle, Eye, Plus, 
   Trash2, RefreshCcw, Filter, Calendar as CalendarIcon, Store, Package, Download, X,
-  ArrowDownToLine, DollarSign, Printer
+  ArrowDownToLine, DollarSign, Printer, Check, ChevronsUpDown
 } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { SupplierManager } from '../components/suppliers/SupplierManager';
@@ -17,6 +17,8 @@ import { NumberInput } from '../components/ui/number-input';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../components/ui/command';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
@@ -56,6 +58,7 @@ export function Purchases() {
 
   // Nueva Compra
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [supplierOpen, setSupplierOpen] = useState(false);
   const [newPurchase, setNewPurchase] = useState<Partial<CreatePurchaseDto>>({ items: [] });
   const [productSearch, setProductSearch] = useState("");
   const [productResults, setProductResults] = useState<any[]>([]);
@@ -937,14 +940,51 @@ export function Purchases() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label>Proveedor</Label>
-                <Select value={newPurchase.supplierId?.toString()} onValueChange={(v) => setNewPurchase({...newPurchase, supplierId: Number(v)})}>
-                  <SelectTrigger className="bg-[var(--card)]"><SelectValue placeholder="Seleccione proveedor" /></SelectTrigger>
-                  <SelectContent>
-                    {suppliers.map(s => (
-                      <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={supplierOpen} onOpenChange={setSupplierOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={supplierOpen}
+                      className="w-full justify-between bg-[var(--card)] font-normal border-input hover:bg-[var(--card)] text-left px-3 h-10"
+                    >
+                      <span className="truncate">
+                        {newPurchase.supplierId
+                          ? suppliers.find((s) => s.id === newPurchase.supplierId)?.name
+                          : "Seleccione proveedor..."}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full min-w-[300px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Buscar proveedor..." />
+                      <CommandList>
+                        <CommandEmpty>No se encontró el proveedor.</CommandEmpty>
+                        <CommandGroup>
+                          {suppliers.map((s) => (
+                            <CommandItem
+                              key={s.id}
+                              value={s.name}
+                              onSelect={() => {
+                                setNewPurchase({ ...newPurchase, supplierId: s.id });
+                                setSupplierOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  newPurchase.supplierId === s.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {s.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="space-y-2">
                 <Label>Documento Referencia (Opcional)</Label>
