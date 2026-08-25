@@ -456,6 +456,22 @@ export function NewQuote() {
     } : i));
   };
 
+  const updateCartPrice = (cartId: string, newPrice: number) => {
+    const item = cart.find(i => i.cartId === cartId);
+    if (!item) return;
+    
+    const costPerUnit = (Number(item.costPrice) || 0) * item.unitFactor;
+    const marginPercent = newPrice > 0 ? ((newPrice - costPerUnit) / newPrice) * 100 : 0;
+    
+    setCart(cart.map(i => i.cartId === cartId ? {
+      ...i,
+      unitPrice: newPrice,
+      subtotal: i.quantity * newPrice,
+      marginPercent: marginPercent
+    } : i));
+  };
+
+
   const cartTotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
   const cartCost = cart.reduce((sum, item) => sum + item.costTotal, 0);
   const estimatedProfit = cartTotal - cartCost;
@@ -707,10 +723,20 @@ export function NewQuote() {
                         <div className="w-10 text-center text-xs font-black bg-[var(--bg)]/50 h-full flex items-center justify-center border-x border-[var(--border)]">{item.quantity}</div>
                         <Button variant="ghost" size="icon" className="w-7 h-7 rounded-none hover:bg-[var(--primary)]/10 hover:text-[var(--primary)]" onClick={() => updateCartQuantity(item.cartId, item.quantity + 1)}><Plus size={12} /></Button>
                       </div>
-                      <div className="text-right">
-                        <p className="text-xs text-[var(--text-sec)] font-mono">${item.unitPrice.toFixed(4)}</p>
-                        <p className="text-sm font-black text-[var(--primary)]">${item.subtotal.toFixed(4)}</p>
-                      </div>
+                      <div className="flex flex-col items-end gap-0.5">
+                          <div className="flex items-center gap-1 group/price relative bg-[var(--card)] border border-[var(--border)] rounded-md overflow-hidden focus-within:border-[var(--primary)] transition-colors pr-1 pl-2">
+                            <span className="text-[10px] text-[var(--text-sec)] font-bold">$</span>
+                            <input
+                              type="number"
+                              value={item.unitPrice}
+                              onChange={(e) => updateCartPrice(item.cartId, Number(e.target.value))}
+                              className="w-16 h-6 px-1 py-0 text-right text-xs font-mono bg-transparent outline-none text-[var(--text-sec)] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                              step="0.01"
+                              min="0"
+                            />
+                          </div>
+                          <p className="text-sm font-black text-[var(--primary)] mt-1">${item.subtotal.toFixed(4)}</p>
+                        </div>
                     </div>
                     {item.marginPercent < 5 && item.marginPercent >= 0 && (
                       <p className="text-[10px] font-bold text-rose-500 mt-1">Margen bajo: {item.marginPercent.toFixed(1)}%</p>
