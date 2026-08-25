@@ -3,6 +3,7 @@ import logo from '../../assets/logo.png';
 import {
   Search, FileText, Eye, EyeOff, CheckCircle2, AlertCircle, Calendar as CalendarIcon, RefreshCcw, Filter, X,
   Mail, UserCog, Clock, Send, Plus, Banknote, CreditCard, Smartphone, Trash2, Truck as TruckIcon, Printer, PackageCheck, Edit3, Copy
+, Store
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { quotesService, QuoteResponse } from '../services/quotes.service';
@@ -101,6 +102,7 @@ export function Quotes() {
   const [cancelingId, setCancelingId] = useState<number | null>(null);
 
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [deliveryWarningOpen, setDeliveryWarningOpen] = useState(false);
   const [quoteToConfirm, setQuoteToConfirm] = useState<QuoteResponse | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('EFECTIVO');
   const [cashRegisters, setCashRegisters] = useState<CashRegister[]>([]);
@@ -318,7 +320,12 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
   const handleOpenConfirmModal = async (quote: QuoteResponse) => {
     setQuoteToConfirm(quote);
     setSelectedPaymentMethod('EFECTIVO');
-    setTransportData(null);
+    setTransportData(quote.requiresTransport ? {
+      requiresTransport: true,
+      deliveryAddress: quote.deliveryAddress || (quote.customer as any)?.address || '',
+      vehicleId: quote.vehicleId || undefined,
+      driverId: undefined
+    } : null);
     setSelectedCashRegisterId(null);
     setPaymentModalOpen(true);
     try {
@@ -360,7 +367,26 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
     }
   };
 
-  const handleCancelQuote = async (quote: QuoteResponse) => {
+  
+  const handlePreConfirmQuote = () => {
+    if (!transportData?.requiresTransport && !quoteToConfirm?.requiresTransport) {
+      setDeliveryWarningOpen(true);
+    } else {
+      handleConfirmQuote();
+    }
+  };
+
+  const handleConfirmWithDelivery = () => {
+    setDeliveryWarningOpen(false);
+    setTransportData({ requiresTransport: true, deliveryAddress: (quoteToConfirm?.customer as any)?.address || '' });
+    toast.info("Por favor, complete la dirección de entrega antes de confirmar la venta.");
+  };
+
+  const handleConfirmStorePickup = () => {
+    setDeliveryWarningOpen(false);
+    handleConfirmQuote();
+  };
+const handleCancelQuote = async (quote: QuoteResponse) => {
     setCancelingId(quote.id);
     try {
       await quotesService.cancelQuote(quote.id);
@@ -787,6 +813,20 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
                   </div>
                 </div>
 
+                {selectedQuote.requiresTransport && (
+                  <div className="bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-200 dark:border-blue-800/30 flex flex-col md:flex-row md:items-center gap-4">
+                    <div className="size-10 rounded-full bg-blue-100 dark:bg-blue-800/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                      <TruckIcon size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-blue-900 dark:text-blue-300">Entrega a Domicilio Solicitada</p>
+                      <p className="text-xs text-blue-700 dark:text-blue-400 mt-0.5">
+                        <span className="font-semibold">Dirección:</span> {selectedQuote.deliveryAddress || 'No especificada'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="rounded-xl border border-[var(--border)] overflow-hidden">
                   <Table>
                     <TableHeader className="bg-[var(--bg)]">
@@ -918,6 +958,317 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
               )}
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG DE EDITAR CLIENTE (PATCH) */}
+      <Dialog open={editCustomerModalOpen} onOpenChange={(o) => o ? setEditCustomerModalOpen(true) : confirmExit(() => setEditCustomerModalOpen(false))}>
+        <DialogContent className="sm:max-w-2xl bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCog className="text-amber-500" size={20} />
+              Editar Cliente de Cotización
+            </DialogTitle>
+            <DialogDescription>
+              Asocia un cliente de la base de datos a la cotización #{editingQuote?.id}.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase text-[var(--text-sec)]">Buscar Cliente</Label>
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-sec)]" />
+                <Input 
+                  placeholder="Escribe el nombre o documento..." 
+                  value={customerSearchQuery}
+                  onChange={e => setCustomerSearchQuery(e.target.value)}
+                  className="pl-9 bg-[var(--bg)]"
+                />
+              </div>
+              {searchingCustomers && (
+                <p className="text-xs text-[var(--text-sec)] animate-pulse">Buscando clientes...</p>
+              )}
+            </div>
+
+            {customerResults.length > 0 ? (
+              <div className="max-h-48 overflow-y-auto border rounded-lg divide-y bg-[var(--bg)]/10">
+                {customerResults.map(cust => (
+                  <div 
+                    key={cust.id} 
+                    onClick={() => setSelectedCustomerId(cust.id)}
+                    className={cn(
+                      "p-3 text-sm cursor-pointer transition-colors flex items-center justify-between",
+                      selectedCustomerId === cust.id 
+                        ? "bg-[var(--primary)]/10 font-bold border-l-4 border-[var(--primary)]" 
+                        : "hover:bg-[var(--bg)]/40"
+                    )}
+                  >
+                    <div>
+                      <p className="text-[var(--text-main)] font-semibold">{cust.name}</p>
+                      <p className="text-xs text-[var(--text-sec)]">{cust.documentNumber || cust.nit || 'Sin Documento'}</p>
+                    </div>
+                    {selectedCustomerId === cust.id && (
+                      <CheckCircle2 size={16} className="text-[var(--primary)]" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : customerSearchQuery.trim().length >= 2 ? (
+              <p className="text-sm text-[var(--text-sec)] text-center py-4">No se encontraron clientes</p>
+            ) : null}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => confirmExit(() => setEditCustomerModalOpen(false))}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleUpdateCustomer}
+              disabled={updatingCustomer || !selectedCustomerId}
+              style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
+              className="font-bold"
+            >
+              {updatingCustomer ? 'Guardando...' : 'Asociar Cliente'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG DE ENVIAR CORREO (resend-email) */}
+      <Dialog open={emailModalOpen} onOpenChange={(o) => o ? setEmailModalOpen(true) : confirmExit(() => setEmailModalOpen(false))}>
+        <DialogContent className="max-w-md bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="text-indigo-500" size={20} />
+              Enviar Cotización por Correo
+            </DialogTitle>
+            <DialogDescription>
+              La cotización se enviará como un reporte al correo especificado.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase text-[var(--text-sec)]">Correo Destinatario</Label>
+              <div className="relative">
+                <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-sec)]" />
+                <Input 
+                  type="email"
+                  placeholder="ejemplo@correo.com" 
+                  value={destinationEmail}
+                  onChange={e => setDestinationEmail(e.target.value)}
+                  className="pl-9 bg-[var(--bg)]"
+                />
+              </div>
+              {emailQuote?.customer && !emailQuote.customer.email && (
+                <p className="text-xs text-rose-500 font-bold flex items-center gap-1 mt-1">
+                  <AlertCircle size={12} /> El cliente asociado no tiene un correo registrado.
+                </p>
+              )}
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => confirmExit(() => setEmailModalOpen(false))}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSendEmail}
+              disabled={sendingEmail || !destinationEmail}
+              style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
+              className="font-bold flex items-center gap-2"
+            >
+              {sendingEmail ? (
+                <>Enviando...</>
+              ) : (
+                <>
+                  <Send size={14} /> Enviar Correo
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG CONFIRMAR VENTA Y MÉTODO DE PAGO */}
+      <Dialog open={paymentModalOpen} onOpenChange={(o) => o ? setPaymentModalOpen(true) : confirmExit(() => setPaymentModalOpen(false))}>
+        <DialogContent className="max-w-xl bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-600">
+              <CheckCircle2 size={20} />
+              Confirmar Venta
+            </DialogTitle>
+            <DialogDescription>
+              Seleccione el método de pago con el que el cliente pagará la cotización. Esta venta se sumará a su caja actual.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            <Label className="text-xs font-bold uppercase text-[var(--text-sec)] mb-3 block">Método de Pago</Label>
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+              <div
+                onClick={() => setSelectedPaymentMethod('EFECTIVO')}
+                className={cn(
+                  "border rounded-xl p-3 flex flex-col items-center gap-2 cursor-pointer transition-all",
+                  selectedPaymentMethod === 'EFECTIVO' 
+                    ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold" 
+                    : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]/50"
+                )}
+              >
+                <Banknote size={24} />
+                <span className="text-sm">Efectivo</span>
+              </div>
+              <div 
+                onClick={() => setSelectedPaymentMethod('TRANSFERENCIA')}
+                className={cn(
+                  "border rounded-xl p-3 flex flex-col items-center gap-2 cursor-pointer transition-all",
+                  selectedPaymentMethod === 'TRANSFERENCIA' 
+                    ? "border-sky-500 bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold" 
+                    : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]/50"
+                )}
+              >
+                <Smartphone size={24} />
+                <span className="text-sm">Transf.</span>
+              </div>
+              <div 
+                onClick={() => setSelectedPaymentMethod('TARJETA')}
+                className={cn(
+                  "border rounded-xl p-3 flex flex-col items-center gap-2 cursor-pointer transition-all",
+                  selectedPaymentMethod === 'TARJETA' 
+                    ? "border-indigo-500 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold" 
+                    : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]/50"
+                )}
+              >
+                <CreditCard size={24} />
+                <span className="text-sm">Tarjeta</span>
+              </div>
+              <div 
+                onClick={() => setSelectedPaymentMethod('CREDITO')}
+                className={cn(
+                  "border rounded-xl p-3 flex flex-col items-center gap-2 cursor-pointer transition-all",
+                  selectedPaymentMethod === 'CREDITO' 
+                    ? "border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400 font-bold" 
+                    : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]/50"
+                )}
+              >
+                <Clock size={24} />
+                <span className="text-sm">Crédito</span>
+              </div>
+              <div
+                onClick={() => setSelectedPaymentMethod('CONTRAENTREGA')}
+                className={cn(
+                  "border rounded-xl p-3 flex flex-col items-center gap-2 cursor-pointer transition-all",
+                  selectedPaymentMethod === 'CONTRAENTREGA'
+                    ? "border-purple-500 bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold"
+                    : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]/50"
+                )}
+              >
+                <PackageCheck size={24} />
+                <span className="text-sm">Contraentrega</span>
+              </div>
+            </div>
+            {selectedPaymentMethod === 'CONTRAENTREGA' && (
+              <div className="mt-4 p-3 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 text-sm flex items-center gap-2">
+                <Clock size={16} className="text-purple-600 shrink-0" />
+                <span className="text-purple-800 dark:text-purple-300 font-medium">
+                  Se registrará como pago pendiente con vencimiento fijo de 2 días. Requiere un cliente registrado.
+                </span>
+              </div>
+            )}
+            <div className="mt-4">
+              <Label className="text-xs font-bold uppercase text-[var(--text-sec)] mb-2 block">Caja de Destino</Label>
+              <Select
+                value={selectedCashRegisterId ? String(selectedCashRegisterId) : undefined}
+                onValueChange={(v) => setSelectedCashRegisterId(Number(v))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={cashRegisters.length === 0 ? "No hay cajas activas" : "Selecciona una caja..."} />
+                </SelectTrigger>
+                <SelectContent>
+                  {cashRegisters.map(r => (
+                    <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-[var(--text-sec)] mt-1.5">El ingreso de esta venta se registrará en la caja seleccionada.</p>
+            </div>
+
+            {quoteToConfirm && (
+              <div className="mt-6 p-4 rounded-lg bg-[var(--bg)]/50 border border-[var(--border)] flex justify-between items-center">
+                <span className="text-sm text-[var(--text-sec)] font-medium">Total a cobrar:</span>
+                <span className="text-xl font-black text-[var(--text-main)]">${Number(quoteToConfirm.totalAmount).toFixed(4)}</span>
+              </div>
+            )}
+
+            {quoteToConfirm?.requiresTransport && (
+              <div className="mt-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 text-sm flex items-center gap-2">
+                <TruckIcon size={16} className="text-blue-600" />
+                <span className="text-blue-800 dark:text-blue-300 font-medium">
+                  Esta cotización incluye entrega a domicilio. Se generará un albarán automáticamente al confirmar.
+                </span>
+              </div>
+            )}
+
+            <div className="mt-4">
+              <TransportSelector
+                customerId={quoteToConfirm?.customerId}
+                value={transportData}
+                onChange={setTransportData}
+                disabled={!!confirmingId}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => confirmExit(() => setPaymentModalOpen(false))}>Cancelar</Button>
+            <Button
+              onClick={handlePreConfirmQuote}
+              disabled={!!confirmingId || !selectedCashRegisterId}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-2"
+            >
+              {confirmingId ? (
+                <><RefreshCcw size={16} className="animate-spin" /> Procesando...</>
+              ) : (
+                <><CheckCircle2 size={16} /> Confirmar Venta</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AVISO DE ENTREGA / DOMICILIO */}
+      <Dialog open={deliveryWarningOpen} onOpenChange={setDeliveryWarningOpen}>
+        <DialogContent className="sm:max-w-md bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-500">
+              <AlertCircle size={20} />
+              Aviso de Entrega
+            </DialogTitle>
+            <DialogDescription className="text-base text-[var(--text-main)] font-medium mt-2">
+              Los productos serán retirados en tienda, ¿O le gustaría agregar entrega a domicilio?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 mt-4">
+            <Button
+              onClick={handleConfirmWithDelivery}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold"
+            >
+              <TruckIcon size={16} className="mr-2" /> Confirmar a Domicilio
+            </Button>
+            <Button
+              onClick={handleConfirmStorePickup}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+            >
+              <Store size={16} className="mr-2" /> Confirmar Retirar en Tienda
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setDeliveryWarningOpen(false)}
+            >
+              Cancelar
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1183,7 +1534,7 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
           <DialogFooter>
             <Button variant="outline" onClick={() => confirmExit(() => setPaymentModalOpen(false))}>Cancelar</Button>
             <Button
-              onClick={handleConfirmQuote}
+              onClick={handlePreConfirmQuote}
               disabled={!!confirmingId || !selectedCashRegisterId}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-2"
             >
@@ -1196,6 +1547,42 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* AVISO DE ENTREGA / DOMICILIO */}
+      <Dialog open={deliveryWarningOpen} onOpenChange={setDeliveryWarningOpen}>
+        <DialogContent className="sm:max-w-md bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-500">
+              <AlertCircle size={20} />
+              Aviso de Entrega
+            </DialogTitle>
+            <DialogDescription className="text-base text-[var(--text-main)] font-medium mt-2">
+              Los productos serán retirados en tienda, ¿O le gustaría agregar entrega a domicilio?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 mt-4">
+            <Button
+              onClick={handleConfirmWithDelivery}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold"
+            >
+              <TruckIcon size={16} className="mr-2" /> Confirmar a Domicilio
+            </Button>
+            <Button
+              onClick={handleConfirmStorePickup}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+            >
+              <Store size={16} className="mr-2" /> Confirmar Retirar en Tienda
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setDeliveryWarningOpen(false)}
+            >
+              Cancelar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* MODAL CREAR COTIZACIÓN */}
       <Dialog open={createQuoteModalOpen} onOpenChange={setCreateQuoteModalOpen}>
         <DialogContent className="w-full sm:max-w-4xl md:max-w-5xl max-h-[90vh] flex flex-col p-0 bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
