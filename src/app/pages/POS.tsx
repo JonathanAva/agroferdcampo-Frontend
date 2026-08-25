@@ -355,7 +355,7 @@ export function POS() {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<
-    "EFECTIVO" | "TARJETA" | "TRANSFERENCIA" | "CREDITO"
+    "EFECTIVO" | "TARJETA" | "TRANSFERENCIA" | "CREDITO" | "MIXTO"
   >("EFECTIVO");
   
   // System Config
@@ -2668,7 +2668,7 @@ ${paymentConditionHtml}
       </Dialog>
 
       <Dialog open={showCloseShiftModal} onOpenChange={(open) => !loadingShift && setShowCloseShiftModal(open)}>
-        <DialogContent className="sm:max-w-3xl p-0 max-h-[90vh] flex flex-col">
+        <DialogContent className="sm:max-w-4xl p-0 max-h-[90vh] flex flex-col">
           <div className="p-4 sm:p-6 pb-4 border-b border-[var(--border)] bg-[var(--bg)]/50 shrink-0">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-3 text-xl sm:text-2xl font-black text-rose-500">
@@ -2766,80 +2766,83 @@ ${paymentConditionHtml}
                   </div>
                 </div>
 
-                {/* MONEDAS */}
-                <div className="bg-[var(--card)] p-5 rounded-2xl border border-[var(--border)] shadow-sm hover:shadow-md transition-shadow flex flex-col">
-                  <div className="flex items-center gap-3 mb-5 border-b border-[var(--border)] pb-3">
-                    <div className="p-1.5 bg-amber-50 text-amber-600 rounded-lg">
-                      <div className="w-5 h-5 rounded-full border-[2.5px] border-amber-500 flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-amber-500" />
+                {/* MONEDAS Y OBSERVACIONES */}
+                <div className="flex flex-col gap-6 h-full">
+                  <div className="bg-[var(--card)] p-5 rounded-2xl border border-[var(--border)] shadow-sm hover:shadow-md transition-shadow flex flex-col">
+                    <div className="flex items-center gap-3 mb-5 border-b border-[var(--border)] pb-3">
+                      <div className="p-1.5 bg-amber-50 text-amber-600 rounded-lg">
+                        <div className="w-5 h-5 rounded-full border-[2.5px] border-amber-500 flex items-center justify-center">
+                          <div className="w-2 h-2 rounded-full bg-amber-500" />
+                        </div>
                       </div>
+                      <h3 className="font-bold text-lg text-[var(--text-main)]">Monedas</h3>
                     </div>
-                    <h3 className="font-bold text-lg text-[var(--text-main)]">Monedas</h3>
+                    <div className="grid grid-cols-2 gap-4 flex-1 content-start">
+                      {[
+                        { key: 'c25', label: '$0.25', value: 0.25 },
+                        { key: 'c10', label: '$0.10', value: 0.10 },
+                        { key: 'c5',  label: '$0.05', value: 0.05 },
+                        { key: 'c1',  label: '$0.01', value: 0.01 },
+                      ].map(({ key, label, value }) => (
+                        <div key={key} className="space-y-1.5 group">
+                          <label className="text-xs font-bold text-[var(--text-sec)] tracking-wider">{label}</label>
+                          <NumberInput
+                            value={closeCoins[key as keyof CoinsBreakdown]}
+                            onValueChange={(val) =>
+                              setCloseCoins(prev => ({ ...prev, [key]: val ?? 0 }))
+                            }
+                            min={0}
+                            max={2000}
+                            step={1}
+                            placeholder="0"
+                            className="font-bold text-lg group-focus-within:border-[var(--primary)] transition-colors h-11"
+                          />
+                          <p className="text-xs font-bold text-[var(--text-sec)] text-right">
+                            = ${(closeCoins[key as keyof CoinsBreakdown] * value).toFixed(2)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4 flex-1 content-start">
-                    {[
-                      { key: 'c25', label: '$0.25', value: 0.25 },
-                      { key: 'c10', label: '$0.10', value: 0.10 },
-                      { key: 'c5',  label: '$0.05', value: 0.05 },
-                      { key: 'c1',  label: '$0.01', value: 0.01 },
-                    ].map(({ key, label, value }) => (
-                      <div key={key} className="space-y-1.5 group">
-                        <label className="text-xs font-bold text-[var(--text-sec)] tracking-wider">{label}</label>
-                        <NumberInput
-                          value={closeCoins[key as keyof CoinsBreakdown]}
-                          onValueChange={(val) =>
-                            setCloseCoins(prev => ({ ...prev, [key]: val ?? 0 }))
-                          }
-                          min={0}
-                          max={2000}
-                          step={1}
-                          placeholder="0"
-                          className="font-bold text-lg group-focus-within:border-[var(--primary)] transition-colors h-11"
-                        />
-                        <p className="text-xs font-bold text-[var(--text-sec)] text-right">
-                          = ${(closeCoins[key as keyof CoinsBreakdown] * value).toFixed(2)}
-                        </p>
-                      </div>
-                    ))}
+                  
+                  {/* Observaciones (Movido bajo monedas) */}
+                  <div className="space-y-2 flex-1 flex flex-col justify-end">
+                    <label className="text-xs sm:text-sm font-bold text-[var(--text-sec)] uppercase tracking-widest">Observaciones (Opcional)</label>
+                    <Input
+                      value={closeNotes}
+                      onChange={(e) => setCloseNotes(e.target.value)}
+                      placeholder="Ej. Billete roto..."
+                      className="h-12 sm:h-16 rounded-xl sm:rounded-2xl text-sm sm:text-base px-4 bg-[var(--card)] border-[var(--border)] shadow-sm"
+                    />
                   </div>
                 </div>
               </div>
 
-              {/* Resumen esperado (Fondo Base / Efectivo Esperado / Tarjeta / Transferencia) */}
-              {closeExpectedTotals && canCloseDirectly && (
-                <div className="bg-blue-500/5 p-4 sm:p-5 rounded-2xl border border-blue-500/20 grid grid-cols-1 sm:grid-cols-4 gap-4 sm:gap-6 shadow-sm text-center">
-                  <div className="flex flex-col items-center bg-[var(--bg)]/50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
-                    <span className="text-[10px] sm:text-xs text-blue-500 font-bold uppercase tracking-widest mb-1.5 opacity-80">Fondo Base</span>
-                    <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">${activeShift?.initialAmount ? Number(activeShift.initialAmount).toFixed(4) : "0.00"}</span>
+              {/* Resumen esperado y Total Contado a la par */}
+              <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 items-stretch w-full justify-end">
+                {closeExpectedTotals && canCloseDirectly && (
+                  <div className="flex-1 bg-blue-500/5 p-3 sm:p-4 rounded-2xl border border-blue-500/20 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 shadow-sm text-center">
+                    <div className="flex flex-col items-center justify-center bg-[var(--bg)]/50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
+                      <span className="text-[10px] sm:text-xs text-blue-500 font-bold uppercase tracking-widest mb-1 opacity-80">Fondo Base</span>
+                      <span className="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400">${activeShift?.initialAmount ? Number(activeShift.initialAmount).toFixed(4) : "0.00"}</span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center bg-[var(--bg)]/50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
+                      <span className="text-[10px] sm:text-xs text-blue-500 font-bold uppercase tracking-widest mb-1 opacity-80">Efectivo Esp.</span>
+                      <span className="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400">${closeExpectedTotals.expectedAmount.toFixed(4)}</span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center bg-[var(--bg)]/50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
+                      <span className="text-[10px] sm:text-xs text-blue-500 font-bold uppercase tracking-widest mb-1 opacity-80">Tarjeta</span>
+                      <span className="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400">${closeExpectedTotals.expectedTarjeta.toFixed(4)}</span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center bg-[var(--bg)]/50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
+                      <span className="text-[10px] sm:text-xs text-blue-500 font-bold uppercase tracking-widest mb-1 opacity-80">Transf.</span>
+                      <span className="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400">${closeExpectedTotals.expectedTransferencia.toFixed(4)}</span>
+                    </div>
                   </div>
-                  <div className="flex flex-col items-center bg-[var(--bg)]/50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
-                    <span className="text-[10px] sm:text-xs text-blue-500 font-bold uppercase tracking-widest mb-1.5 opacity-80">Efectivo Esperado</span>
-                    <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">${closeExpectedTotals.expectedAmount.toFixed(4)}</span>
-                  </div>
-                  <div className="flex flex-col items-center bg-[var(--bg)]/50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
-                    <span className="text-[10px] sm:text-xs text-blue-500 font-bold uppercase tracking-widest mb-1.5 opacity-80">Tarjeta</span>
-                    <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">${closeExpectedTotals.expectedTarjeta.toFixed(4)}</span>
-                  </div>
-                  <div className="flex flex-col items-center bg-[var(--bg)]/50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
-                    <span className="text-[10px] sm:text-xs text-blue-500 font-bold uppercase tracking-widest mb-1.5 opacity-80">Transferencia</span>
-                    <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">${closeExpectedTotals.expectedTransferencia.toFixed(4)}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Total y Observaciones */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 items-end">
-                <div className="space-y-2 h-full flex flex-col justify-end">
-                  <label className="text-xs sm:text-sm font-bold text-[var(--text-sec)] uppercase tracking-widest">Observaciones (Opcional)</label>
-                  <Input
-                    value={closeNotes}
-                    onChange={(e) => setCloseNotes(e.target.value)}
-                    placeholder="Ej. Billete roto..."
-                    className="h-12 sm:h-[72px] rounded-xl sm:rounded-2xl text-sm sm:text-base px-4"
-                  />
-                </div>
-                <div className="flex flex-col sm:flex-row justify-center sm:justify-between items-center rounded-xl sm:rounded-2xl border-2 border-rose-500/20 bg-rose-500/5 px-4 sm:px-6 py-3 sm:py-0 sm:h-[72px] shadow-inner gap-1 sm:gap-0">
-                  <span className="text-[10px] sm:text-sm font-bold text-rose-500 uppercase tracking-widest opacity-80">Total Contado</span>
+                )}
+                
+                <div className="flex flex-col justify-center items-center rounded-2xl border-2 border-rose-500/20 bg-rose-500/5 px-6 py-4 shadow-inner min-w-[240px]">
+                  <span className="text-[10px] sm:text-sm font-bold text-rose-500 uppercase tracking-widest opacity-80 mb-1">Total Contado</span>
                   <span className="text-3xl sm:text-4xl font-black text-rose-500 tracking-tight">
                     ${calcBreakdownTotal(closeBills, closeCoins).toFixed(4)}
                   </span>
