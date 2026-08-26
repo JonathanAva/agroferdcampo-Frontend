@@ -15,6 +15,7 @@ export interface CreditPayment {
   paymentMethod: string;
   reference?: string;
   notes?: string;
+  receiptUrl?: string;
   createdAt: string;
   user?: { id?: number; fullName: string };
   customer?: { id: number; name: string };

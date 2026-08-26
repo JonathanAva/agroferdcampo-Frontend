@@ -84,6 +84,7 @@ export function Credit() {
     reference: '',
     notes: ''
   });
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [savingPayment, setSavingPayment] = useState(false);
 
   // Crear Cuenta por Cobrar Manual
@@ -183,6 +184,7 @@ export function Credit() {
       reference: '',
       notes: ''
     });
+    setReceiptFile(null);
     setPaymentModalOpen(true);
   };
 
@@ -261,9 +263,31 @@ export function Credit() {
     
     setSavingPayment(true);
     try {
+      let receiptUrl = paymentForm.receiptUrl;
+      if (receiptFile && (paymentForm.paymentMethod === 'TARJETA' || paymentForm.paymentMethod === 'TRANSFERENCIA')) {
+        const formData = new FormData();
+        formData.append('file', receiptFile);
+        // Utilizar el endpoint de subidas del backend
+        const uploadRes = await fetch(import.meta.env.VITE_API_URL + '/uploads/receipt', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('agro-token')}`
+          },
+          body: formData
+        });
+        
+        if (!uploadRes.ok) {
+           throw new Error('Error al subir el comprobante');
+        }
+        
+        const uploadData = await uploadRes.json();
+        receiptUrl = uploadData.url;
+      }
+      
       await creditService.registerPayment(selectedCreditForPayment.id, {
         ...paymentForm,
         amount,
+        receiptUrl,
       });
       toast.success('Abono registrado correctamente');
       setPaymentModalOpen(false);
@@ -780,13 +804,32 @@ export function Credit() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Notas (Opcional)</Label>
-              <Input 
-                placeholder="Detalles adicionales..." 
-                value={paymentForm.notes}
-                onChange={e => setPaymentForm({...paymentForm, notes: e.target.value})}
-              />
-            </div>
+                <Label>Notas (Opcional)</Label>
+                <Input 
+                  placeholder="Detalles adicionales..." 
+                  value={paymentForm.notes}
+                  onChange={e => setPaymentForm({...paymentForm, notes: e.target.value})}
+                />
+              </div>
+              
+              {(paymentForm.paymentMethod === 'TARJETA' || paymentForm.paymentMethod === 'TRANSFERENCIA') && (
+                <div className="space-y-2">
+                  <Label>Comprobante / Recibo (Opcional)</Label>
+                  <Input 
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={e => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        setReceiptFile(e.target.files[0]);
+                      } else {
+                        setReceiptFile(null);
+                      }
+                    }}
+                    className="cursor-pointer file:cursor-pointer file:bg-[var(--primary)] file:text-white file:border-0 file:rounded-md file:px-3 file:py-1 file:text-xs file:font-bold file:mr-3 hover:file:bg-[var(--primary)]/90"
+                  />
+                  {receiptFile && <p className="text-xs text-[var(--primary)] font-medium">Archivo: {receiptFile.name}</p>}
+                </div>
+              )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => confirmExit(() => setPaymentModalOpen(false))}>Cancelar</Button>
