@@ -44,11 +44,22 @@ const financeFilters: FilterConfig[] = [
 
 export function Finance() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'general' | 'petty' | 'shifts'>('general');
+  const [cashRegisters, setCashRegisters] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<string>('general');
 
   // --- SHIFT STATE ---
   const [hasActiveShift, setHasActiveShift] = useState(false);
   const [checkingShift, setCheckingShift] = useState(true);
+
+  useEffect(() => {
+    const fetchCashRegisters = async () => {
+      try {
+        const data = await apiRequest('/cash-registers');
+        setCashRegisters(data);
+      } catch (e) {}
+    };
+    fetchCashRegisters();
+  }, []);
 
   useEffect(() => {
     const checkShift = async () => {
@@ -125,7 +136,7 @@ export function Finance() {
   const [adminCloseNotes, setAdminCloseNotes] = useState("");
 
   useEffect(() => {
-    if (activeTab === 'general') {
+    if (activeTab === 'general' || activeTab.startsWith('register_')) {
       fetchGeneralCash();
     } else if (activeTab === 'petty') {
       fetchPettyCash();
@@ -136,7 +147,7 @@ export function Finance() {
 
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab === 'shifts' || tab === 'petty' || tab === 'general') {
+    if (tab === 'shifts' || tab === 'petty' || tab === 'general' || tab?.startsWith('register_')) {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -160,9 +171,11 @@ export function Finance() {
   const fetchGeneralCash = async () => {
     setGeneralLoading(true);
     try {
+      const registerIdParam = activeTab === 'general' ? 'null' : activeTab.startsWith('register_') ? activeTab.replace('register_', '') : undefined;
       const summary = await generalCashService.getSummary(
         startDateFilter || undefined, 
-        endDateFilter || undefined
+        endDateFilter || undefined,
+        registerIdParam
       );
       setGeneralSummary(summary);
 
@@ -171,6 +184,11 @@ export function Finance() {
       if (categoryFilter !== 'all') filters.category = categoryFilter;
       if (startDateFilter) filters.startDate = startDateFilter;
       if (endDateFilter) filters.endDate = endDateFilter;
+      if (activeTab === 'general') {
+        filters.cashRegisterId = 'null';
+      } else if (activeTab.startsWith('register_')) {
+        filters.cashRegisterId = activeTab.replace('register_', '');
+      }
 
       const res = await generalCashService.findAll(filters);
       setGeneralMovements(res.data);
@@ -198,6 +216,7 @@ export function Finance() {
         description: newGeneralEntry.description,
         reference: newGeneralEntry.reference,
         ...(newGeneralEntry.purchaseId ? { purchaseId: Number(newGeneralEntry.purchaseId) } : {}),
+        cashRegisterId: activeTab.startsWith('register_') ? Number(activeTab.replace('register_', '')) : null,
       });
       toast.success('Movimiento registrado exitosamente');
       setShowAddGeneralModal(false);
@@ -477,6 +496,22 @@ export function Finance() {
         >
           Caja Fuerte
         </button>
+        {cashRegisters.map(register => {
+          const isCajaChica = register.name.toLowerCase() === 'caja chica';
+          const isAdmin = user?.roleId === 1 || user?.roleId === 2;
+          if (isCajaChica && !isAdmin) return null;
+          return (
+            <button
+              key={register.id}
+              onClick={() => setActiveTab(`register_${register.id}`)}
+              className={`px-6 py-3 font-bold text-sm transition-all border-b-2 -mb-[2px] cursor-pointer ${
+                activeTab === `register_${register.id}` ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--text-sec)]'
+              }`}
+            >
+              {register.name}
+            </button>
+          );
+        })}
         <button
           onClick={() => setActiveTab('shifts')}
           className={`px-6 py-3 font-bold text-sm transition-all border-b-2 -mb-[2px] cursor-pointer ${
@@ -487,7 +522,7 @@ export function Finance() {
         </button>
       </div>
 
-      {activeTab === 'general' && (
+      {(activeTab === 'general' || activeTab.startsWith('register_')) && (
         <div className="flex flex-col gap-6">
           {/* STATS GENERAL */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -496,7 +531,7 @@ export function Finance() {
                 <div className="p-2 rounded-lg bg-[var(--primary)]/10">
                   <Wallet size={20} className="text-[var(--primary)]" />
                 </div>
-                <h3 className="text-sm font-bold text-[var(--text-sec)]">Saldo Caja General</h3>
+                <h3 className="text-sm font-bold text-[var(--text-sec)]">{activeTab === 'general' ? 'Saldo Caja General' : cashRegisters.find(r => r.id.toString() === activeTab.replace('register_', ''))?.name || 'Saldo'}</h3>
               </div>
               <p className={`text-3xl font-black ${generalSummary && generalSummary.balance >= 0 ? 'text-[var(--primary)]' : 'text-red-500'}`}>
                 ${generalSummary?.balance?.toFixed(4) || '0.00'}
@@ -549,10 +584,11 @@ export function Finance() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Fecha</TableHead>
-                  <TableHead>Tipo</TableHead>
                   <TableHead>Categoría</TableHead>
                   <TableHead>Descripción</TableHead>
-                  <TableHead className="text-right">Monto</TableHead>
+                  <TableHead className="text-right">Saldo Anterior</TableHead>
+                  <TableHead className="text-right">Ajuste</TableHead>
+                  <TableHead className="text-right">Saldo Nuevo</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -564,17 +600,16 @@ export function Finance() {
                   generalMovements.map(m => (
                     <TableRow key={m.id}>
                       <TableCell>{new Date(m.date || m.createdAt).toLocaleString()}</TableCell>
-                      <TableCell>
-                        <Badge variant={m.type === 'INGRESO' ? 'success' : 'destructive'}>{m.type}</Badge>
-                      </TableCell>
                       <TableCell>{m.category}</TableCell>
                       <TableCell>
                         <p className="font-medium text-[var(--text-main)]">{m.description}</p>
                         {m.reference && <p className="text-xs text-[var(--text-sec)]">Ref: {m.reference}</p>}
                       </TableCell>
+                      <TableCell className="text-right font-mono text-[var(--text-sec)]">${Number(m.previousBalance || 0).toFixed(4)}</TableCell>
                       <TableCell className={`text-right font-bold ${m.type === 'INGRESO' ? 'text-emerald-600' : 'text-rose-600'}`}>
                         {m.type === 'INGRESO' ? '+' : '-'}${Number(m.amount).toFixed(4)}
                       </TableCell>
+                      <TableCell className="text-right font-mono font-bold text-[var(--primary)]">${Number(m.newBalance || 0).toFixed(4)}</TableCell>
                     </TableRow>
                   ))
                 )}
@@ -639,7 +674,9 @@ export function Finance() {
                         <TableRow>
                           <TableHead>Fecha</TableHead>
                           <TableHead>Descripción</TableHead>
-                          <TableHead className="text-right">Monto</TableHead>
+                          <TableHead className="text-right">Saldo Anterior</TableHead>
+                          <TableHead className="text-right">Ajuste</TableHead>
+                          <TableHead className="text-right">Saldo Nuevo</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -652,9 +689,11 @@ export function Finance() {
                                 {m.type === 'INGRESO' ? 'Reposición' : 'Gasto'}
                               </span>
                             </TableCell>
+                            <TableCell className="text-right font-mono text-[var(--text-sec)]">${Number(m.previousBalance || 0).toFixed(4)}</TableCell>
                             <TableCell className={`text-right font-bold ${m.type === 'INGRESO' ? 'text-emerald-600' : 'text-rose-600'}`}>
                               {m.type === 'INGRESO' ? '+' : '-'}${Number(m.amount).toFixed(4)}
                             </TableCell>
+                            <TableCell className="text-right font-mono font-bold text-[var(--primary)]">${Number(m.newBalance || 0).toFixed(4)}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -822,7 +861,7 @@ export function Finance() {
       <Dialog open={showAddGeneralModal} onOpenChange={(o) => o ? setShowAddGeneralModal(true) : confirmExit(() => setShowAddGeneralModal(false))}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Registrar Movimiento - Caja General</DialogTitle>
+            <DialogTitle>Registrar Movimiento - {activeTab === 'general' ? 'Caja General' : cashRegisters.find(r => r.id.toString() === activeTab.replace('register_', ''))?.name || 'Caja'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">

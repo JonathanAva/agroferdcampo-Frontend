@@ -139,7 +139,8 @@ export function CashRegisters() {
 
   const filteredRegisters = registers.filter(
     (r) =>
-      r.name.toLowerCase().includes(searchTerm.toLowerCase())
+      r.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+      r.name.toLowerCase() !== "caja chica"
   );
 
   if (loading) {
