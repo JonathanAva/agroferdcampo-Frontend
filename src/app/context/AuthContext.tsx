@@ -94,6 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (backendUser && user) {
+          const resolvedBranchId = decodedBranchId || user.branchId;
           setUser({
             ...user, // Conserva role y branch persistidos
             id: backendUser.id.toString(),
@@ -101,9 +102,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: backendUser.email,
             phone: backendUser.phone,
             dui: backendUser.dui,
-            branchId: decodedBranchId || user.branchId,
+            branchId: resolvedBranchId,
             roleId: user.roleId,
           });
+
+          // Compatibilidad con sesiones existentes: si por un login anterior nunca
+          // se guardó el listado de sucursales disponibles (ver fix en login()),
+          // lo reconstruimos aquí con los datos mínimos que sí tenemos persistidos,
+          // para que BranchContext pueda resolver selectedBranch sin pedir reingresar.
+          if (availableBranches.length === 0 && resolvedBranchId && user.branch) {
+            const fallbackBranches: Branch[] = [
+              { id: resolvedBranchId, name: user.branch, role: user.role || "" },
+            ];
+            setAvailableBranches(fallbackBranches);
+            localStorage.setItem("agro-available-branches", JSON.stringify(fallbackBranches));
+          }
         }
       } catch (error) {
         console.error("Sesión inválida o expirada:", error);
@@ -128,6 +141,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (data.accessToken && !data.requireBranchSelection) {
         const primaryBranch = data.branches?.[0];
+        // Persistimos también el listado de sucursales disponibles (aunque sea una sola),
+        // ya que BranchContext depende de esta lista para resolver "selectedBranch".
+        // Sin esto, en negocios de una sola sucursal, selectedBranch nunca se completaba
+        // y las pantallas que dependen de ella (ej. Recursos Humanos) no cargaban nada.
+        if (data.branches && data.branches.length > 0) {
+          setAvailableBranches(data.branches);
+          localStorage.setItem("agro-available-branches", JSON.stringify(data.branches));
+        }
         handleAuthSuccess(
           data.accessToken,
           data.user!,
