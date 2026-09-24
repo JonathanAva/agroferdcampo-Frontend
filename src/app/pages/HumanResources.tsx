@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Users2,
   UserPlus,
@@ -254,6 +254,7 @@ export function HumanResources() {
   // State
   const [stats, setStats] = useState<HRStats | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [onLeaveEmployees, setOnLeaveEmployees] = useState<Employee[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [historyDate, setHistoryDate] = useState<string>("");
@@ -377,26 +378,31 @@ export function HumanResources() {
     }
   }, [isHistoryModalOpen, historyDate, selectedBranch]);
 
+  const loadDataSeq = useRef(0);
   const loadData = async () => {
+    const seq = ++loadDataSeq.current;
     setLoading(true);
     try {
       if (activeTab === "overview") {
         const data = await apiRequest<HRStats>(
           `/employees/stats?branchId=${selectedBranch?.id}`,
         );
+        if (seq !== loadDataSeq.current) return;
         setStats(data);
       } else if (activeTab === "employees") {
         const response = await apiRequest<{ data: Employee[] }>(
           `/employees?branchId=${selectedBranch?.id}`,
         );
+        if (seq !== loadDataSeq.current) return;
         setEmployees(response.data);
       } else if (activeTab === "attendance") {
         const data = await apiRequest<AttendanceRecord[]>(
           `/attendance/today/${selectedBranch?.id}`,
         );
+        if (seq !== loadDataSeq.current) return;
         setAttendance(data);
       } else if (activeTab === "leaves") {
-        const [leavesData, onLeaveEmployees] = await Promise.all([
+        const [leavesData, onLeaveRes] = await Promise.all([
           apiRequest<LeaveRequest[]>(
             `/leave-requests/pending?branchId=${selectedBranch?.id}`,
           ),
@@ -404,13 +410,14 @@ export function HumanResources() {
             `/employees?branchId=${selectedBranch?.id}&status=PERMISO`,
           ),
         ]);
+        if (seq !== loadDataSeq.current) return;
         setPendingLeaves(leavesData);
-        setEmployees(onLeaveEmployees.data);
+        setOnLeaveEmployees(onLeaveRes.data);
       }
     } catch (error) {
       console.error("Error loading HR data:", error);
     } finally {
-      setLoading(false);
+      if (seq === loadDataSeq.current) setLoading(false);
     }
   };
 
@@ -1365,20 +1372,20 @@ export function HumanResources() {
                 </p>
               </div>
               <Badge variant="warning" className="h-7 px-4">
-                {employees.length} En Permiso
+                {onLeaveEmployees.length} En Permiso
               </Badge>
             </div>
             <div className="overflow-x-auto">
               <Table>
                 <TableBody>
-                  {employees.length === 0 ? (
+                  {onLeaveEmployees.length === 0 ? (
                     <TableRow>
                       <TableCell className="h-32 text-center text-xs font-bold opacity-30 uppercase tracking-widest">
                         No hay personal con estado de permiso actualmente
                       </TableCell>
                     </TableRow>
                   ) : (
-                    employees.map((emp) => (
+                    onLeaveEmployees.map((emp) => (
                       <TableRow key={emp.id} className="border-[var(--border)] hover:bg-amber-500/5 transition-colors">
                         <TableCell>
                           <div className="flex items-center gap-3">

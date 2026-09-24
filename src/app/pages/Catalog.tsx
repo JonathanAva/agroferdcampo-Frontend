@@ -1693,25 +1693,14 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <Label className="text-[10px] font-bold uppercase opacity-50 block">
-                              Selecciona la Unidad Alternativa
+                              Nombre de la Presentación
                             </Label>
-                            <Select
-                              value={watch(`units.${i}.unit`)}
-                              onValueChange={(v) =>
-                                setValue(`units.${i}.unit`, v)
-                              }
-                            >
-                              <SelectTrigger className="h-9 rounded-lg font-bold">
-                                <SelectValue placeholder="Ej. CAJA, DOCENA..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {UNITS.map((t) => (
-                                  <SelectItem key={t} value={t}>
-                                    {t?.replace("_", " ")}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <Input
+                              type="text"
+                              {...register(`units.${i}.unit`)}
+                              className="h-9 rounded-lg font-bold"
+                              placeholder="Ej. CAJA, DOCENA, OFERTAS..."
+                            />
                           </div>
 
                           <div className="flex flex-col gap-2 p-3 bg-[var(--surface)] rounded-xl border border-[var(--border)] border-dashed relative">

@@ -54,7 +54,7 @@ export function Finance() {
   useEffect(() => {
     const fetchCashRegisters = async () => {
       try {
-        const data = await apiRequest('/cash-registers');
+        const data = await apiRequest<any[]>('/cash-registers');
         setCashRegisters(data);
       } catch (e) {}
     };
@@ -144,6 +144,12 @@ export function Finance() {
       fetchShiftsHistory();
     }
   }, [activeTab, generalFilters.page, generalFilters.category, typeFilter, categoryFilter, startDateFilter, endDateFilter, shiftsPagination.page]);
+
+  // Al cambiar de pestaña o de filtros, regresamos a la página 1 para no quedar
+  // "atrapados" en una página que ya no tiene resultados con el nuevo filtro.
+  useEffect(() => {
+    setGeneralFilters(p => (p.page === 1 ? p : { ...p, page: 1 }));
+  }, [activeTab, typeFilter, categoryFilter, startDateFilter, endDateFilter]);
 
   useEffect(() => {
     const tab = searchParams.get('tab');
@@ -615,6 +621,30 @@ export function Finance() {
                 )}
               </TableBody>
             </Table>
+
+            {generalPagination.totalPages > 1 && (
+              <div className="p-4 border-t border-[var(--border)] flex justify-between items-center text-sm font-bold">
+                <span className="text-[var(--text-sec)]">
+                  Página {generalFilters.page} de {generalPagination.totalPages} ({generalPagination.total} movimientos)
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    disabled={generalFilters.page === 1}
+                    onClick={() => setGeneralFilters(p => ({ ...p, page: p.page - 1 }))}
+                  >
+                    Anterior
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={generalFilters.page === generalPagination.totalPages}
+                    onClick={() => setGeneralFilters(p => ({ ...p, page: p.page + 1 }))}
+                  >
+                    Siguiente
+                  </Button>
+                </div>
+              </div>
+            )}
           </Card>
         </div>
       )}

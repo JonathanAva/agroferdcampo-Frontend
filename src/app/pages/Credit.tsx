@@ -9,6 +9,8 @@ import { useSearchParams, useNavigate } from 'react-router';
 
 import { creditService, CreditSale, CreditSummary, CreditPayment, RegisterPaymentDto, CreateManualCreditDto, GroupedCreditCustomer } from '../services/credit.service';
 import { getSaleDetail } from '../services/sales.service';
+import { cashRegistersService } from '../services/cash-registers.service';
+import { CashRegister } from '../services/cash-shifts.service';
 import { apiRequest } from '../config/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -86,6 +88,8 @@ export function Credit() {
   });
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [savingPayment, setSavingPayment] = useState(false);
+  const [cashRegisters, setCashRegisters] = useState<CashRegister[]>([]);
+  const [selectedCashRegisterId, setSelectedCashRegisterId] = useState<number | null>(null);
 
   // Crear Cuenta por Cobrar Manual
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -175,7 +179,7 @@ export function Credit() {
 
 
 
-  const handleOpenPayment = (credit: CreditSale) => {
+  const handleOpenPayment = async (credit: CreditSale) => {
     const remaining = Number(credit.remainingAmount) || 0;
     setSelectedCreditForPayment(credit);
     setPaymentForm({
@@ -185,7 +189,16 @@ export function Credit() {
       notes: ''
     });
     setReceiptFile(null);
+    setSelectedCashRegisterId(null);
     setPaymentModalOpen(true);
+    try {
+      const registers = await cashRegistersService.findAll();
+      const active = registers.filter(r => r.isActive);
+      setCashRegisters(active);
+      if (active.length === 1) setSelectedCashRegisterId(active[0].id);
+    } catch (e) {
+      toast.error('Error al cargar las cajas disponibles');
+    }
   };
 
   const handleOpenPaymentDetail = (payment: CreditPayment) => {
@@ -251,7 +264,11 @@ export function Credit() {
       toast.error(`El monto debe ser mayor a 0 y no puede exceder $${maxAmount.toFixed(4)}`);
       return;
     }
-    
+    if (!selectedCashRegisterId) {
+      toast.error('Selecciona la caja a la que se registrará el ingreso');
+      return;
+    }
+
     // Bloquear el botón a nivel DOM ANTES de cualquier código asíncrono
     isAbonoSubmittingGlobal = true;
     isSubmittingRef.current = true;
@@ -288,6 +305,7 @@ export function Credit() {
         ...paymentForm,
         amount,
         receiptUrl,
+        cashRegisterId: selectedCashRegisterId,
       });
       toast.success('Abono registrado correctamente');
       setPaymentModalOpen(false);
@@ -796,6 +814,23 @@ export function Credit() {
               </Select>
             </div>
             <div className="space-y-2">
+              <Label>Caja de Destino</Label>
+              <Select
+                value={selectedCashRegisterId ? String(selectedCashRegisterId) : undefined}
+                onValueChange={(v) => setSelectedCashRegisterId(Number(v))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={cashRegisters.length === 0 ? "No hay cajas activas" : "Selecciona una caja..."} />
+                </SelectTrigger>
+                <SelectContent>
+                  {cashRegisters.map(r => (
+                    <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-[var(--text-sec)] mt-1.5">El ingreso de este abono se registrará en la caja seleccionada.</p>
+            </div>
+            <div className="space-y-2">
               <Label>Referencia (Opcional)</Label>
               <Input 
                 placeholder="N° Transacción, Cheque..." 
@@ -838,7 +873,7 @@ export function Credit() {
               onPointerDown={() => {
                 if (!isAbonoSubmittingGlobal) handlePaymentSubmit();
               }}
-              disabled={savingPayment}
+              disabled={savingPayment || !selectedCashRegisterId}
               style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
             >
               {savingPayment ? 'Registrando...' : 'Confirmar Abono'}

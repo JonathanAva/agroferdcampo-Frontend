@@ -68,6 +68,8 @@ export interface RegisterPaymentDto {
   paymentMethod: string;
   reference?: string;
   notes?: string;
+  receiptUrl?: string;
+  cashRegisterId?: number | null;
 }
 
 export interface CreateManualCreditDto {

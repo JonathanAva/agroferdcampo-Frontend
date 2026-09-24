@@ -22,6 +22,8 @@ export interface PettyCashMovement {
   id: number;
   type: 'INGRESO' | 'EGRESO';
   amount: number;
+  previousBalance: number;
+  newBalance: number;
   description: string;
   receiptRef?: string;
   createdAt: string;

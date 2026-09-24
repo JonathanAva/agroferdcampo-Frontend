@@ -35,6 +35,7 @@ import {
 } from '../components/ui/command';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { UnsavedChangesDialog } from '../components/ui/unsaved-changes-dialog';
+import { printSaleTicket as printSaleTicketUtil } from '../utils/printSaleTicket';
 
 function _qEnteroALetras(n: number): string {
   if (n === 0) return 'Cero';
@@ -306,6 +307,22 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
     win.document.close();
   };
 
+  const [printingSaleTicketId, setPrintingSaleTicketId] = useState<number | null>(null);
+  const printQuoteSaleTicket = async (quote: QuoteResponse) => {
+    if (!quote.sale?.id) {
+      toast.error('Esta cotización todavía no tiene una venta asociada');
+      return;
+    }
+    setPrintingSaleTicketId(quote.id);
+    try {
+      await printSaleTicketUtil({ id: quote.sale.id } as any, sysConfig);
+    } catch {
+      toast.error('Error al cargar los datos de la venta para imprimir el ticket');
+    } finally {
+      setPrintingSaleTicketId(null);
+    }
+  };
+
   const handleOpenDetail = async (quote: QuoteResponse) => {
     try {
       const fullQuote = await quotesService.getQuoteDetail(quote.id);
@@ -340,7 +357,8 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
 
   const handleConfirmQuote = async () => {
     if (!quoteToConfirm) return;
-    if (!selectedCashRegisterId) {
+    const requiresCashRegister = selectedPaymentMethod !== 'CREDITO' && selectedPaymentMethod !== 'CONTRAENTREGA';
+    if (requiresCashRegister && !selectedCashRegisterId) {
       toast.error('Selecciona la caja a la que se registrará el ingreso');
       return;
     }
@@ -348,7 +366,7 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
     try {
       await quotesService.confirmQuote(quoteToConfirm.id, {
         paymentMethod: selectedPaymentMethod,
-        cashRegisterId: selectedCashRegisterId,
+        ...(requiresCashRegister ? { cashRegisterId: selectedCashRegisterId! } : {}),
         ...(transportData && transportData.requiresTransport ? {
           requiresTransport: true,
           vehicleId: transportData.vehicleId,
@@ -663,9 +681,19 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                             <Eye size={14} className="mr-2 text-[var(--primary)]" /> Ver Detalle
                           </DropdownMenuItem>
 
-                          <DropdownMenuItem onClick={() => printQuote(quote)} className="font-bold cursor-pointer">
-                            <Printer size={14} className="mr-2 text-blue-600" /> Imprimir Cotización
-                          </DropdownMenuItem>
+                          {quote.status === 'CONFIRMADA' ? (
+                            <DropdownMenuItem
+                              onClick={() => printQuoteSaleTicket(quote)}
+                              disabled={printingSaleTicketId === quote.id}
+                              className="font-bold cursor-pointer"
+                            >
+                              <Printer size={14} className="mr-2 text-blue-600" /> Imprimir Ticket de Venta
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem onClick={() => printQuote(quote)} className="font-bold cursor-pointer">
+                              <Printer size={14} className="mr-2 text-blue-600" /> Imprimir Cotización
+                            </DropdownMenuItem>
+                          )}
 
                           <DropdownMenuItem onClick={() => handleOpenEmailModal(quote)} className="font-bold cursor-pointer">
                             <Mail size={14} className="mr-2 text-indigo-600" /> Enviar por Correo
@@ -1091,152 +1119,6 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG CONFIRMAR VENTA Y MÉTODO DE PAGO */}
-      <Dialog open={paymentModalOpen} onOpenChange={(o) => o ? setPaymentModalOpen(true) : confirmExit(() => setPaymentModalOpen(false))}>
-        <DialogContent className="max-w-xl bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-emerald-600">
-              <CheckCircle2 size={20} />
-              Confirmar Venta
-            </DialogTitle>
-            <DialogDescription>
-              Seleccione el método de pago con el que el cliente pagará la cotización. Esta venta se sumará a su caja actual.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="py-4">
-            <Label className="text-xs font-bold uppercase text-[var(--text-sec)] mb-3 block">Método de Pago</Label>
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
-              <div
-                onClick={() => setSelectedPaymentMethod('EFECTIVO')}
-                className={cn(
-                  "border rounded-xl p-3 flex flex-col items-center gap-2 cursor-pointer transition-all",
-                  selectedPaymentMethod === 'EFECTIVO' 
-                    ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold" 
-                    : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]/50"
-                )}
-              >
-                <Banknote size={24} />
-                <span className="text-sm">Efectivo</span>
-              </div>
-              <div 
-                onClick={() => setSelectedPaymentMethod('TRANSFERENCIA')}
-                className={cn(
-                  "border rounded-xl p-3 flex flex-col items-center gap-2 cursor-pointer transition-all",
-                  selectedPaymentMethod === 'TRANSFERENCIA' 
-                    ? "border-sky-500 bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold" 
-                    : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]/50"
-                )}
-              >
-                <Smartphone size={24} />
-                <span className="text-sm">Transf.</span>
-              </div>
-              <div 
-                onClick={() => setSelectedPaymentMethod('TARJETA')}
-                className={cn(
-                  "border rounded-xl p-3 flex flex-col items-center gap-2 cursor-pointer transition-all",
-                  selectedPaymentMethod === 'TARJETA' 
-                    ? "border-indigo-500 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold" 
-                    : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]/50"
-                )}
-              >
-                <CreditCard size={24} />
-                <span className="text-sm">Tarjeta</span>
-              </div>
-              <div 
-                onClick={() => setSelectedPaymentMethod('CREDITO')}
-                className={cn(
-                  "border rounded-xl p-3 flex flex-col items-center gap-2 cursor-pointer transition-all",
-                  selectedPaymentMethod === 'CREDITO' 
-                    ? "border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400 font-bold" 
-                    : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]/50"
-                )}
-              >
-                <Clock size={24} />
-                <span className="text-sm">Crédito</span>
-              </div>
-              <div
-                onClick={() => setSelectedPaymentMethod('CONTRAENTREGA')}
-                className={cn(
-                  "border rounded-xl p-3 flex flex-col items-center gap-2 cursor-pointer transition-all",
-                  selectedPaymentMethod === 'CONTRAENTREGA'
-                    ? "border-purple-500 bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold"
-                    : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]/50"
-                )}
-              >
-                <PackageCheck size={24} />
-                <span className="text-sm">Contraentrega</span>
-              </div>
-            </div>
-            {selectedPaymentMethod === 'CONTRAENTREGA' && (
-              <div className="mt-4 p-3 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 text-sm flex items-center gap-2">
-                <Clock size={16} className="text-purple-600 shrink-0" />
-                <span className="text-purple-800 dark:text-purple-300 font-medium">
-                  Se registrará como pago pendiente con vencimiento fijo de 2 días. Requiere un cliente registrado.
-                </span>
-              </div>
-            )}
-            <div className="mt-4">
-              <Label className="text-xs font-bold uppercase text-[var(--text-sec)] mb-2 block">Caja de Destino</Label>
-              <Select
-                value={selectedCashRegisterId ? String(selectedCashRegisterId) : undefined}
-                onValueChange={(v) => setSelectedCashRegisterId(Number(v))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={cashRegisters.length === 0 ? "No hay cajas activas" : "Selecciona una caja..."} />
-                </SelectTrigger>
-                <SelectContent>
-                  {cashRegisters.map(r => (
-                    <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-[10px] text-[var(--text-sec)] mt-1.5">El ingreso de esta venta se registrará en la caja seleccionada.</p>
-            </div>
-
-            {quoteToConfirm && (
-              <div className="mt-6 p-4 rounded-lg bg-[var(--bg)]/50 border border-[var(--border)] flex justify-between items-center">
-                <span className="text-sm text-[var(--text-sec)] font-medium">Total a cobrar:</span>
-                <span className="text-xl font-black text-[var(--text-main)]">${Number(quoteToConfirm.totalAmount).toFixed(4)}</span>
-              </div>
-            )}
-
-            {quoteToConfirm?.requiresTransport && (
-              <div className="mt-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 text-sm flex items-center gap-2">
-                <TruckIcon size={16} className="text-blue-600" />
-                <span className="text-blue-800 dark:text-blue-300 font-medium">
-                  Esta cotización incluye entrega a domicilio. Se generará un albarán automáticamente al confirmar.
-                </span>
-              </div>
-            )}
-
-            <div className="mt-4">
-              <TransportSelector
-                customerId={quoteToConfirm?.customerId}
-                value={transportData}
-                onChange={setTransportData}
-                disabled={!!confirmingId}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => confirmExit(() => setPaymentModalOpen(false))}>Cancelar</Button>
-            <Button
-              onClick={handlePreConfirmQuote}
-              disabled={!!confirmingId || !selectedCashRegisterId}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-2"
-            >
-              {confirmingId ? (
-                <><RefreshCcw size={16} className="animate-spin" /> Procesando...</>
-              ) : (
-                <><CheckCircle2 size={16} /> Confirmar Venta</>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* AVISO DE ENTREGA / DOMICILIO */}
       <Dialog open={deliveryWarningOpen} onOpenChange={setDeliveryWarningOpen}>
         <DialogContent className="sm:max-w-md bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
@@ -1487,23 +1369,25 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                 </span>
               </div>
             )}
-            <div className="mt-4">
-              <Label className="text-xs font-bold uppercase text-[var(--text-sec)] mb-2 block">Caja de Destino</Label>
-              <Select
-                value={selectedCashRegisterId ? String(selectedCashRegisterId) : undefined}
-                onValueChange={(v) => setSelectedCashRegisterId(Number(v))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={cashRegisters.length === 0 ? "No hay cajas activas" : "Selecciona una caja..."} />
-                </SelectTrigger>
-                <SelectContent>
-                  {cashRegisters.map(r => (
-                    <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-[10px] text-[var(--text-sec)] mt-1.5">El ingreso de esta venta se registrará en la caja seleccionada.</p>
-            </div>
+            {selectedPaymentMethod !== 'CREDITO' && selectedPaymentMethod !== 'CONTRAENTREGA' && (
+              <div className="mt-4">
+                <Label className="text-xs font-bold uppercase text-[var(--text-sec)] mb-2 block">Caja de Destino</Label>
+                <Select
+                  value={selectedCashRegisterId ? String(selectedCashRegisterId) : undefined}
+                  onValueChange={(v) => setSelectedCashRegisterId(Number(v))}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={cashRegisters.length === 0 ? "No hay cajas activas" : "Selecciona una caja..."} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cashRegisters.map(r => (
+                      <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-[var(--text-sec)] mt-1.5">El ingreso de esta venta se registrará en la caja seleccionada.</p>
+              </div>
+            )}
 
             {quoteToConfirm && (
               <div className="mt-6 p-4 rounded-lg bg-[var(--bg)]/50 border border-[var(--border)] flex justify-between items-center">
@@ -1535,7 +1419,7 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
             <Button variant="outline" onClick={() => confirmExit(() => setPaymentModalOpen(false))}>Cancelar</Button>
             <Button
               onClick={handlePreConfirmQuote}
-              disabled={!!confirmingId || !selectedCashRegisterId}
+              disabled={!!confirmingId || (selectedPaymentMethod !== 'CREDITO' && selectedPaymentMethod !== 'CONTRAENTREGA' && !selectedCashRegisterId)}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-2"
             >
               {confirmingId ? (
