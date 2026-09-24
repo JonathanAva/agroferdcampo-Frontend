@@ -105,6 +105,7 @@ export function Finance() {
   // --- PETTY CASH STATE ---
   const [pettyStatus, setPettyStatus] = useState<PettyCashStatus | null>(null);
   const [pettyMovements, setPettyMovements] = useState<PettyCashMovement[]>([]);
+  const [pettyPagination, setPettyPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
   const [pettyReplenishments, setPettyReplenishments] = useState<PettyCashReplenishment[]>([]);
   const [pettyLoading, setPettyLoading] = useState(true);
   
@@ -143,7 +144,7 @@ export function Finance() {
     } else if (activeTab === 'shifts') {
       fetchShiftsHistory();
     }
-  }, [activeTab, generalFilters.page, generalFilters.category, typeFilter, categoryFilter, startDateFilter, endDateFilter, shiftsPagination.page]);
+  }, [activeTab, generalFilters.page, generalFilters.category, typeFilter, categoryFilter, startDateFilter, endDateFilter, shiftsPagination.page, pettyPagination.page]);
 
   // Al cambiar de pestaña o de filtros, regresamos a la página 1 para no quedar
   // "atrapados" en una página que ya no tiene resultados con el nuevo filtro.
@@ -240,8 +241,9 @@ export function Finance() {
       const status = await pettyCashService.getStatus();
       setPettyStatus(status);
 
-      const movs = await pettyCashService.getMovements({ page: 1, limit: 20 });
+      const movs = await pettyCashService.getMovements({ page: pettyPagination.page, limit: pettyPagination.limit });
       setPettyMovements(movs.data);
+      setPettyPagination(p => ({ ...p, total: movs.total, totalPages: movs.totalPages }));
 
       const repls = await pettyCashService.getReplenishments();
       setPettyReplenishments(repls);
@@ -697,7 +699,7 @@ export function Finance() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* MOVIMIENTOS CAJA CHICA */}
                 <Card className="bg-[var(--card)] border-[var(--border)] shadow-sm flex flex-col">
-                  <div className="p-4 border-b border-[var(--border)] font-bold">Últimos Gastos</div>
+                  <div className="p-4 border-b border-[var(--border)] font-bold">Movimientos</div>
                   <div className="p-0 flex-1">
                     <Table>
                       <TableHeader>
@@ -728,6 +730,30 @@ export function Finance() {
                         ))}
                       </TableBody>
                     </Table>
+
+                    {pettyPagination.totalPages > 1 && (
+                      <div className="p-4 border-t border-[var(--border)] flex justify-between items-center text-sm font-bold">
+                        <span className="text-[var(--text-sec)]">
+                          Página {pettyPagination.page} de {pettyPagination.totalPages} ({pettyPagination.total} movimientos)
+                        </span>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            disabled={pettyPagination.page === 1}
+                            onClick={() => setPettyPagination(p => ({ ...p, page: p.page - 1 }))}
+                          >
+                            Anterior
+                          </Button>
+                          <Button
+                            variant="outline"
+                            disabled={pettyPagination.page === pettyPagination.totalPages}
+                            onClick={() => setPettyPagination(p => ({ ...p, page: p.page + 1 }))}
+                          >
+                            Siguiente
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </Card>
 
