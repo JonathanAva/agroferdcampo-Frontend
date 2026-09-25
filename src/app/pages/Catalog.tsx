@@ -22,7 +22,7 @@ import { Badge } from "../components/ui/badge";
 import { InlinePills } from "../components/ui/inline-pills";
 import { Button } from "../components/ui/button";
 import { Switch } from "../components/ui/switch";
-import { Edit, Copy } from "lucide-react";
+import { Edit, Copy, Check, X } from "lucide-react";
 import { cn } from "../components/ui/utils";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -290,6 +290,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
   const [newTagName, setNewTagName] = useState("");
   const [quickTagName, setQuickTagName] = useState("");
+  const [tagFilterQuery, setTagFilterQuery] = useState("");
   const [productImageUrl, setProductImageUrl] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
 
@@ -365,6 +366,12 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
     () => subcategories.filter((s) => String(s.categoryId) === watchCategoryId),
     [subcategories, watchCategoryId],
   );
+
+  const filteredFormTags = useMemo(() => {
+    if (!tagFilterQuery.trim()) return tags;
+    const query = tagFilterQuery.toLowerCase().trim();
+    return tags.filter((t) => t.name.toLowerCase().includes(query));
+  }, [tags, tagFilterQuery]);
 
   const isDirty =
     (isDialogOpen && productFormIsDirty) ||
@@ -512,6 +519,8 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   };
 
   const openDialog = (product?: CatalogProduct) => {
+    setTagFilterQuery("");
+    setQuickTagName("");
     if (product) {
       setEditingProduct(product);
       setProductImageUrl(product.imageUrl || null);
@@ -579,6 +588,8 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   };
 
   const openCopyDialog = (product: CatalogProduct) => {
+    setTagFilterQuery("");
+    setQuickTagName("");
     setEditingProduct(null);
     setProductImageUrl(product.imageUrl || null);
     reset({
@@ -1340,32 +1351,84 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-sm font-bold">Etiquetas</Label>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-bold flex items-center gap-1.5">
+                        <Tag size={15} className="text-[var(--primary)]" />
+                        Etiquetas
+                      </Label>
+                      {watchTagIds.length > 0 && (
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/20">
+                          {watchTagIds.length} seleccionada{watchTagIds.length !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
                     <div className="p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-3">
-                      <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto">
-                        {tags.length === 0 && (
-                          <p className="text-[10px] opacity-50">
-                            Sin etiquetas registradas todavía.
-                          </p>
-                        )}
-                        {tags.map((t) => {
-                          const selected = watchTagIds.includes(String(t.id));
-                          return (
+                      {/* Buscador de etiquetas */}
+                      {tags.length > 0 && (
+                        <div className="relative">
+                          <Search
+                            size={14}
+                            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+                          />
+                          <Input
+                            value={tagFilterQuery}
+                            onChange={(e) => setTagFilterQuery(e.target.value)}
+                            placeholder="Buscar etiquetas por nombre..."
+                            className="h-8 pl-8 pr-8 text-xs rounded-lg bg-[var(--bg)] border-[var(--border)]"
+                          />
+                          {tagFilterQuery && (
                             <button
                               type="button"
-                              key={t.id}
-                              onClick={() => toggleTag(String(t.id))}
-                              className={cn(
-                                "px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
-                                selected
-                                  ? "bg-[var(--primary)] text-white border-[var(--primary)]"
-                                  : "bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-[var(--primary)]",
-                              )}
+                              onClick={() => setTagFilterQuery("")}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded"
+                              title="Limpiar búsqueda"
                             >
-                              {t.name}
+                              <X size={13} />
                             </button>
-                          );
-                        })}
+                          )}
+                        </div>
+                      )}
+
+                      {/* Lista de etiquetas */}
+                      <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto pr-1">
+                        {tags.length === 0 ? (
+                          <p className="text-[10px] opacity-50 py-1">
+                            Sin etiquetas registradas todavía.
+                          </p>
+                        ) : filteredFormTags.length === 0 ? (
+                          <div className="py-2 text-center w-full">
+                            <p className="text-xs text-[var(--text-sec)]">
+                              No se encontraron etiquetas con "{tagFilterQuery}".
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setTagFilterQuery("")}
+                              className="text-xs text-[var(--primary)] hover:underline mt-1 font-medium"
+                            >
+                              Ver todas las etiquetas
+                            </button>
+                          </div>
+                        ) : (
+                          filteredFormTags.map((t) => {
+                            const selected = watchTagIds.includes(String(t.id));
+                            return (
+                              <button
+                                type="button"
+                                key={t.id}
+                                onClick={() => toggleTag(String(t.id))}
+                                className={cn(
+                                  "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
+                                  selected
+                                    ? "bg-[var(--primary)] text-white border-[var(--primary)] shadow-sm"
+                                    : "bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-[var(--primary)] hover:text-foreground",
+                                )}
+                              >
+                                {selected && <Check size={11} className="stroke-[3]" />}
+                                #{t.name}
+                              </button>
+                            );
+                          })
+                        )}
                       </div>
                       <div className="flex gap-2 pt-2 border-t border-[var(--border)]">
                         <Input
@@ -1384,10 +1447,12 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="h-8"
+                          className="h-8 shrink-0"
                           onClick={handleQuickAddTag}
+                          title="Crear y asignar etiqueta rápida"
                         >
-                          <Plus size={14} />
+                          <Plus size={14} className="mr-1" />
+                          Agregar
                         </Button>
                       </div>
                     </div>
