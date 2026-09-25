@@ -733,16 +733,10 @@ export function HumanResources() {
             : type === "sch"
               ? `/work-schedules/${id}`
               : `/leave-types/${id}`;
-      // In leave-types we should probably just deactivate them, but if there's a DELETE endpoint let's use it, 
-      // or we use PATCH to deactivate if DELETE doesn't exist. Let's do DELETE and if it fails, maybe manual db deletion.
-      // Actually leave-types API only has PATCH for update. Let's use PATCH to set isActive: false
-      if (type === "lvType") {
-        await apiRequest(`/leave-types/${id}`, { method: "PATCH", body: JSON.stringify({ isActive: false }) });
-      } else {
-        await apiRequest(endpoint, { method: "DELETE" });
-      }
+      await apiRequest(endpoint, { method: "DELETE" });
       toast.success("Eliminado exitosamente");
       loadConfigData();
+      loadData();
     } catch (error: any) {
       toast.error(error.message || "Error al eliminar");
     }
