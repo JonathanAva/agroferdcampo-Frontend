@@ -418,10 +418,10 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
   };
 
   useEffect(() => {
-    if (productSearchCreate.length > 2) {
+    if (productSearchCreate.trim().length >= 2) {
       const delay = setTimeout(async () => {
         try {
-          const res = await apiRequest<any>(`/catalog/products/search?q=${encodeURIComponent(productSearchCreate)}&limit=10`);
+          const res = await apiRequest<any>(`/catalog/products/search?q=${encodeURIComponent(productSearchCreate.trim())}`);
           setProductResultsCreate(res.data || res || []);
         } catch (e) { console.error(e); }
       }, 400);
@@ -1600,13 +1600,13 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                   onValueChange={setProductSearchCreate}
                   className="h-12 text-sm"
                 />
-                <CommandList className={cn("transition-all", productSearchCreate.length > 2 ? "max-h-60 border-t border-[var(--border)]" : "max-h-0 hidden")}>
-                  {productSearchCreate.length > 2 && productResultsCreate.length === 0 ? (
+                <CommandList className={cn("transition-all", productSearchCreate.trim().length >= 2 ? "max-h-80 overflow-y-auto border-t border-[var(--border)]" : "max-h-0 hidden")}>
+                  {productSearchCreate.trim().length >= 2 && productResultsCreate.length === 0 ? (
                     <CommandEmpty className="py-6 text-center text-sm text-[var(--text-sec)]">
                       No se encontraron productos.
                     </CommandEmpty>
                   ) : (
-                    <CommandGroup heading="Resultados (Presiona Enter para seleccionar)">
+                    <CommandGroup heading={`Resultados (${productResultsCreate.length}) — Presiona Enter para seleccionar`}>
                       {productResultsCreate.map(p => {
                         const price = p.price || (p.prices?.[0]?.price) || 0;
                         const stock = p.inventory?.[0]?.quantity ?? p.stock ?? 'N/A';

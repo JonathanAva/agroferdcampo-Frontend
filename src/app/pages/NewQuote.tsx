@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, User, CheckCircle2,
-  X, ArrowLeft, Percent, Package
+  X, ArrowLeft, Percent, Package, Loader2
 } from "lucide-react";
 import { apiRequest } from "../config/api";
 import { quotesService } from "../services/quotes.service";
@@ -189,6 +189,10 @@ export function NewQuote() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [totalCatalogCount, setTotalCatalogCount] = useState<number | null>(null);
 
   // Quote State
   const [validDays, setValidDays] = useState<number | "">(15);
@@ -234,55 +238,92 @@ export function NewQuote() {
     searchProducts("");
   }, []);
 
+  const PAGE_SIZE = 40;
+
+  const mapProduct = (p: any): Product => {
+    const inv = Array.isArray(p.inventory) ? p.inventory[0] : p.inventory;
+    const stockValue = inv?.quantity ?? p.stock ?? 0;
+
+    let publicPrice = p.prices?.find(
+      (pr: any) => pr.priceType === "PUBLICO"
+    )?.price;
+
+    if (publicPrice === undefined || publicPrice === null) {
+      publicPrice = p.prices?.[0]?.price || p.price || 0;
+    }
+    return {
+      id: p.id,
+      internalCode: p.internalCode || p.barcode || "S/C",
+      name: p.name,
+      price: Number(publicPrice),
+      costPrice: Number(p.costPrice) || 0,
+      stock: Number(stockValue),
+      category: p.category || { name: "General" },
+      unit: p.unit,
+      units: Array.isArray(p.units) ? p.units.map((u: any) => ({
+        unit: u.unit,
+        factor: Number(u.factor),
+        priceDetalle: u.priceDetalle !== null && u.priceDetalle !== undefined ? Number(u.priceDetalle) : null,
+        priceMayorista: u.priceMayorista !== null && u.priceMayorista !== undefined ? Number(u.priceMayorista) : null,
+      })) : [],
+    };
+  };
+
   const searchProducts = async (query: string) => {
     setLoading(true);
     try {
       const isSearch = !!query;
-      const endpoint = isSearch
-        ? `/catalog/products/search?q=${encodeURIComponent(query)}`
-        : `/catalog/products?isActive=true&limit=50`;
-
-      const response = await apiRequest<any>(endpoint);
-
-      const items = isSearch
-        ? Array.isArray(response)
-          ? response
-          : []
-        : response.data || [];
-
-      const mapped = items.map((p: any) => {
-        const inv = Array.isArray(p.inventory) ? p.inventory[0] : p.inventory;
-        const stockValue = inv?.quantity ?? p.stock ?? 0;
-
-        let publicPrice = p.prices?.find(
-          (pr: any) => pr.priceType === "PUBLICO"
-        )?.price;
-
-        if (publicPrice === undefined || publicPrice === null) {
-          publicPrice = p.prices?.[0]?.price || p.price || 0;
-        }
-        return {
-          id: p.id,
-          internalCode: p.internalCode || p.barcode || "S/C",
-          name: p.name,
-          price: Number(publicPrice),
-          costPrice: Number(p.costPrice) || 0,
-          stock: Number(stockValue),
-          category: p.category || { name: "General" },
-          unit: p.unit,
-          units: Array.isArray(p.units) ? p.units.map((u: any) => ({
-            unit: u.unit,
-            factor: Number(u.factor),
-            priceDetalle: u.priceDetalle !== null && u.priceDetalle !== undefined ? Number(u.priceDetalle) : null,
-            priceMayorista: u.priceMayorista !== null && u.priceMayorista !== undefined ? Number(u.priceMayorista) : null,
-          })) : [],
-        };
-      });
-      setProducts(mapped);
+      if (isSearch) {
+        // En búsqueda por texto, traemos TODOS los productos coincidentes sin límite
+        const response = await apiRequest<any>(`/catalog/products/search?q=${encodeURIComponent(query)}`);
+        const items = Array.isArray(response) ? response : (response.data || []);
+        setProducts(items.map(mapProduct));
+        setHasMore(false);
+      } else {
+        // En vista general del catálogo, paginamos con scroll infinito (40 por página)
+        setPage(1);
+        const response = await apiRequest<any>(`/catalog/products?isActive=true&limit=${PAGE_SIZE}&page=1`);
+        const items = response.data || [];
+        setProducts(items.map(mapProduct));
+        setTotalCatalogCount(response.total ?? null);
+        setHasMore(1 < (response.totalPages || 1));
+      }
     } catch (error) {
       toast.error("Error al obtener productos");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMoreProducts = async () => {
+    if (loadingMore || loading || !hasMore || searchTerm.trim().length > 0) return;
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    try {
+      const response = await apiRequest<any>(`/catalog/products?isActive=true&limit=${PAGE_SIZE}&page=${nextPage}`);
+      const items = response.data || [];
+      if (items.length > 0) {
+        setProducts(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const newItems = items.map(mapProduct).filter((p: Product) => !existingIds.has(p.id));
+          return [...prev, ...newItems];
+        });
+        setPage(nextPage);
+        setHasMore(nextPage < (response.totalPages || 1));
+      } else {
+        setHasMore(false);
+      }
+    } catch (error) {
+      console.error("Error al cargar más productos:", error);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop - clientHeight < 200) {
+      loadMoreProducts();
     }
   };
 
@@ -554,7 +595,12 @@ export function NewQuote() {
           </div>
         </div>
         
-        <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
+        <div onScroll={handleScroll} className="flex-1 overflow-y-auto p-3 custom-scrollbar">
+          {searchTerm.trim() && (
+            <div className="mb-2 text-xs font-semibold text-[var(--text-sec)]">
+              {products.length} {products.length === 1 ? 'producto encontrado' : 'productos encontrados'} (búsqueda completa)
+            </div>
+          )}
           {products.length > 0 ? (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
               {products.map((product) => {
@@ -598,6 +644,17 @@ export function NewQuote() {
                   </div>
                 );
               })}
+              {loadingMore && (
+                <div className="col-span-full py-4 flex items-center justify-center gap-2 text-xs font-semibold text-[var(--text-sec)]">
+                  <Loader2 className="animate-spin size-4 text-[var(--primary)]" />
+                  Cargando más productos...
+                </div>
+              )}
+              {!hasMore && !searchTerm.trim() && products.length > 0 && totalCatalogCount !== null && (
+                <div className="col-span-full py-3 text-center text-xs text-[var(--text-sec)] border-t border-dashed border-[var(--border)] mt-2">
+                  Todos los productos mostrados ({products.length} de {totalCatalogCount})
+                </div>
+              )}
             </div>
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-[var(--text-sec)] space-y-4 opacity-50">
