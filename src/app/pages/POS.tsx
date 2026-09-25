@@ -27,6 +27,7 @@ import {
   Layers,
   Check,
   PlusCircle,
+  Tag,
 } from "lucide-react";
 import { usePOSTabs } from "../hooks/usePOSTabs";
 import { format } from "date-fns";
@@ -64,6 +65,11 @@ interface PriceOption {
   price: number;
 }
 
+interface POSTag {
+  id: number;
+  name: string;
+}
+
 interface Product {
   id: number;
   internalCode: string;
@@ -73,6 +79,7 @@ interface Product {
   stock: number;
   category: { name: string };
   subcategory?: { id: number; name: string } | null;
+  tags?: POSTag[];
   expirationDate?: string | null;
   imageUrl?: string | null;
   unit: string;
@@ -342,6 +349,9 @@ export function POS() {
   const [categories, setCategories] = useState<POSCategory[]>([]);
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
   const [selectedSubcategoryIds, setSelectedSubcategoryIds] = useState<number[]>([]);
+  const [tags, setTags] = useState<POSTag[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
+  const [tagSearchTerm, setTagSearchTerm] = useState("");
   const [showExpiringSoonOnly, setShowExpiringSoonOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -470,6 +480,7 @@ export function POS() {
       checkActiveShift();
       searchProducts("");
       loadCategories();
+      loadTags();
       loadSysConfig();
       loadBranchPaymentConfig();
       loadUniversalProduct();
@@ -482,6 +493,15 @@ export function POS() {
       setCategories(Array.isArray(data) ? data : []);
     } catch {
       // Silencioso: los filtros de categoría son un extra, no bloquean el POS
+    }
+  };
+
+  const loadTags = async () => {
+    try {
+      const data = await apiRequest<POSTag[]>("/catalog/tags");
+      setTags(Array.isArray(data) ? data : []);
+    } catch {
+      // Silencioso: los filtros de etiquetas son un extra, no bloquean el POS
     }
   };
 
@@ -780,12 +800,12 @@ export function POS() {
     }
   };
 
-  // Volver a la página 1 cada vez que cambia el término de búsqueda o los filtros de categoría
+  // Volver a la página 1 cada vez que cambia el término de búsqueda o los filtros de categoría/etiquetas
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, selectedCategoryIds, selectedSubcategoryIds]);
+  }, [searchTerm, selectedCategoryIds, selectedSubcategoryIds, selectedTagIds]);
 
-  // Debounce product search (también re-busca al cambiar filtros de categoría/subcategoría/página)
+  // Debounce product search (también re-busca al cambiar filtros de categoría/subcategoría/etiquetas/página)
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       if (searchTerm.trim().length >= 2) {
@@ -796,7 +816,7 @@ export function POS() {
     }, 300);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [searchTerm, selectedCategoryIds, selectedSubcategoryIds, page]);
+  }, [searchTerm, selectedCategoryIds, selectedSubcategoryIds, selectedTagIds, page]);
 
   // Debounce customer search
   useEffect(() => {
@@ -829,6 +849,9 @@ export function POS() {
       }
       if (selectedSubcategoryIds.length > 0) {
         selectedSubcategoryIds.forEach(id => params.append("subcategoryIds", String(id)));
+      }
+      if (selectedTagIds.length > 0) {
+        selectedTagIds.forEach(id => params.append("tagIds", String(id)));
       }
 
       const endpoint = isSearch
@@ -886,6 +909,7 @@ export function POS() {
           stock: Number(stockValue),
           category: p.category || { name: "General" },
           subcategory: p.subcategory || null,
+          tags: p.tags || [],
           expirationDate: p.nearestExpirationDate || null,
           imageUrl: p.imageUrl || null,
           unit: p.unit,
@@ -1757,66 +1781,68 @@ ${paymentConditionHtml}
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="F1: Buscar productos, código o categoría..."
+                placeholder="F1: Buscar productos, código, categoría o etiquetas..."
                 className="pl-9 h-10 bg-[var(--bg)] border-[var(--border)] rounded-lg w-full text-sm"
               />
               {loading && <div className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin h-4 w-4 border-2 border-[var(--primary)] border-t-transparent rounded-full" />}
             </div>
 
-            {/* Filtro visual por Categoría / Subcategoría - MULTI SELECT */}
-            {categories.length > 0 && (
+            {/* Filtro visual por Categoría / Subcategoría / Etiquetas - MULTI SELECT */}
+            {(categories.length > 0 || tags.length > 0) && (
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 
                 {/* Categorías Multi Select */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="border-dashed h-9 bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-[var(--primary)] text-xs rounded-xl">
-                      <PlusCircle className="mr-2 h-4 w-4 text-emerald-500" />
-                      Categorías
-                      {selectedCategoryIds.length > 0 && (
-                        <>
-                          <div className="mx-2 h-4 w-[1px] bg-[var(--border)]" />
-                          <Badge variant="secondary" className="rounded-sm px-1 font-normal bg-emerald-500 text-white">
-                            {selectedCategoryIds.length} sel.
-                          </Badge>
-                        </>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="p-0 bg-[var(--card)] border-[var(--border)]" style={{ width: 'max-content', minWidth: '200px', maxWidth: '350px' }} align="start">
-                    <div className="p-2 space-y-1">
-                      {categories.map(cat => (
-                        <Button
-                          key={cat.id}
-                          variant="ghost"
-                          className="w-full justify-start font-normal h-8 px-2 gap-3 hover:bg-[var(--bg)]"
-                          onClick={() => {
-                            setSelectedCategoryIds(prev => 
-                              prev.includes(cat.id) ? prev.filter(id => id !== cat.id) : [...prev, cat.id]
-                            );
-                            // Clear subcategories if its parent category is unchecked
-                            if (selectedCategoryIds.includes(cat.id)) {
-                               const subIds = cat.subcategories?.map(s => s.id) || [];
-                               setSelectedSubcategoryIds(prev => prev.filter(id => !subIds.includes(id)));
-                            }
-                          }}
-                        >
-                          <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0", selectedCategoryIds.includes(cat.id) ? "bg-emerald-500 border-emerald-500 text-white" : "border-input")}>
-                            {selectedCategoryIds.includes(cat.id) && <Check className="h-3 w-3" />}
-                          </div>
-                          <span className="truncate text-left text-[var(--text-main)] text-sm">{cat.name}</span>
-                        </Button>
-                      ))}
-                      {selectedCategoryIds.length > 0 && (
-                        <div className="pt-2 mt-2 border-t border-[var(--border)]">
-                          <Button variant="ghost" size="sm" className="w-full h-8 text-xs text-[var(--text-sec)]" onClick={() => { setSelectedCategoryIds([]); setSelectedSubcategoryIds([]); }}>
-                            Limpiar
+                {categories.length > 0 && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="border-dashed h-9 bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-[var(--primary)] text-xs rounded-xl">
+                        <PlusCircle className="mr-2 h-4 w-4 text-emerald-500" />
+                        Categorías
+                        {selectedCategoryIds.length > 0 && (
+                          <>
+                            <div className="mx-2 h-4 w-[1px] bg-[var(--border)]" />
+                            <Badge variant="secondary" className="rounded-sm px-1 font-normal bg-emerald-500 text-white">
+                              {selectedCategoryIds.length} sel.
+                            </Badge>
+                          </>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0 bg-[var(--card)] border-[var(--border)]" style={{ width: 'max-content', minWidth: '200px', maxWidth: '350px' }} align="start">
+                      <div className="p-2 space-y-1">
+                        {categories.map(cat => (
+                          <Button
+                            key={cat.id}
+                            variant="ghost"
+                            className="w-full justify-start font-normal h-8 px-2 gap-3 hover:bg-[var(--bg)]"
+                            onClick={() => {
+                              setSelectedCategoryIds(prev => 
+                                prev.includes(cat.id) ? prev.filter(id => id !== cat.id) : [...prev, cat.id]
+                              );
+                              // Clear subcategories if its parent category is unchecked
+                              if (selectedCategoryIds.includes(cat.id)) {
+                                 const subIds = cat.subcategories?.map(s => s.id) || [];
+                                 setSelectedSubcategoryIds(prev => prev.filter(id => !subIds.includes(id)));
+                              }
+                            }}
+                          >
+                            <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0", selectedCategoryIds.includes(cat.id) ? "bg-emerald-500 border-emerald-500 text-white" : "border-input")}>
+                              {selectedCategoryIds.includes(cat.id) && <Check className="h-3 w-3" />}
+                            </div>
+                            <span className="truncate text-left text-[var(--text-main)] text-sm">{cat.name}</span>
                           </Button>
-                        </div>
-                      )}
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                        ))}
+                        {selectedCategoryIds.length > 0 && (
+                          <div className="pt-2 mt-2 border-t border-[var(--border)]">
+                            <Button variant="ghost" size="sm" className="w-full h-8 text-xs text-[var(--text-sec)]" onClick={() => { setSelectedCategoryIds([]); setSelectedSubcategoryIds([]); }}>
+                              Limpiar
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
 
                 {/* Subcategorías Multi Select (Only visible if a category with subcategories is selected) */}
                 {selectedCategoryIds.length > 0 && categories.some(c => selectedCategoryIds.includes(c.id) && c.subcategories && c.subcategories.length > 0) && (
@@ -1869,6 +1895,72 @@ ${paymentConditionHtml}
                   </Popover>
                 )}
 
+                {/* Etiquetas Multi Select */}
+                {tags.length > 0 && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="border-dashed h-9 bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-[var(--primary)] text-xs rounded-xl">
+                        <Tag className="mr-2 h-4 w-4 text-emerald-500" />
+                        Etiquetas
+                        {selectedTagIds.length > 0 && (
+                          <>
+                            <div className="mx-2 h-4 w-[1px] bg-[var(--border)]" />
+                            <Badge variant="secondary" className="rounded-sm px-1 font-normal bg-emerald-500 text-white">
+                              {selectedTagIds.length} sel.
+                            </Badge>
+                          </>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0 bg-[var(--card)] border-[var(--border)]" style={{ width: 'max-content', minWidth: '220px', maxWidth: '350px' }} align="start">
+                      <div className="p-2 space-y-1">
+                        {tags.length > 5 && (
+                          <div className="px-1 pb-1">
+                            <Input
+                              type="text"
+                              value={tagSearchTerm}
+                              onChange={(e) => setTagSearchTerm(e.target.value)}
+                              placeholder="Buscar etiqueta..."
+                              className="h-7 text-xs bg-[var(--bg)] border-[var(--border)] px-2"
+                            />
+                          </div>
+                        )}
+                        <div className="max-h-60 overflow-y-auto space-y-1 custom-scrollbar">
+                          {tags
+                            .filter(t => !tagSearchTerm || t.name.toLowerCase().includes(tagSearchTerm.toLowerCase()))
+                            .map(tag => (
+                              <Button
+                                key={tag.id}
+                                variant="ghost"
+                                className="w-full justify-start font-normal h-8 px-2 gap-3 hover:bg-[var(--bg)]"
+                                onClick={() => {
+                                  setSelectedTagIds(prev => 
+                                    prev.includes(tag.id) ? prev.filter(id => id !== tag.id) : [...prev, tag.id]
+                                  );
+                                }}
+                              >
+                                <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0", selectedTagIds.includes(tag.id) ? "bg-emerald-500 border-emerald-500 text-white" : "border-input")}>
+                                  {selectedTagIds.includes(tag.id) && <Check className="h-3 w-3" />}
+                                </div>
+                                <span className="truncate text-left text-[var(--text-main)] text-sm">#{tag.name}</span>
+                              </Button>
+                            ))}
+                          {tags.filter(t => !tagSearchTerm || t.name.toLowerCase().includes(tagSearchTerm.toLowerCase())).length === 0 && (
+                            <p className="text-xs text-[var(--text-sec)] text-center py-2">No hay etiquetas</p>
+                          )}
+                        </div>
+                        {selectedTagIds.length > 0 && (
+                          <div className="pt-2 mt-2 border-t border-[var(--border)]">
+                            <Button variant="ghost" size="sm" className="w-full h-8 text-xs text-[var(--text-sec)]" onClick={() => setSelectedTagIds([])}>
+                              Limpiar
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+
                 {/* Por Vencer Toggle (keeping this one as a simple button but styling it consistent) */}
                 <button
                   type="button"
@@ -1883,6 +1975,23 @@ ${paymentConditionHtml}
                   <CalendarIcon size={14} className={showExpiringSoonOnly ? "text-white" : "text-amber-500"} />
                   Por Vencer
                 </button>
+
+                {/* Limpiar todos los filtros si alguno está activo */}
+                {(selectedCategoryIds.length > 0 || selectedSubcategoryIds.length > 0 || selectedTagIds.length > 0) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 px-2 text-xs text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 rounded-xl"
+                    onClick={() => {
+                      setSelectedCategoryIds([]);
+                      setSelectedSubcategoryIds([]);
+                      setSelectedTagIds([]);
+                    }}
+                  >
+                    <X className="h-3.5 w-3.5 mr-1" />
+                    Limpiar filtros
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -2008,6 +2117,34 @@ ${paymentConditionHtml}
                         <CalendarIcon size={10} />
                         Vence: {formatExpirationDate(product.expirationDate)}
                       </p>
+                    )}
+                    {product.tags && product.tags.length > 0 && (
+                      <div className="w-full flex flex-wrap gap-1 mb-1.5">
+                        {product.tags.map((t) => {
+                          const isTagSelected = selectedTagIds.includes(t.id);
+                          return (
+                            <button
+                              key={t.id}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedTagIds((prev) =>
+                                  prev.includes(t.id) ? prev.filter((id) => id !== t.id) : [...prev, t.id]
+                                );
+                              }}
+                              className={cn(
+                                "text-[9px] px-1.5 py-0.5 rounded-md border transition-all inline-flex items-center gap-0.5 font-medium",
+                                isTagSelected
+                                  ? "bg-emerald-500 text-white border-emerald-500 shadow-xs"
+                                  : "bg-[var(--bg)] text-[var(--text-sec)] border-[var(--border)] hover:border-emerald-500/50 hover:text-emerald-600"
+                              )}
+                              title={isTagSelected ? `Quitar filtro: #${t.name}` : `Filtrar por: #${t.name}`}
+                            >
+                              #{t.name}
+                            </button>
+                          );
+                        })}
+                      </div>
                     )}
 
                     <div className="w-full mt-auto flex items-center justify-between pt-2 border-t border-[var(--border)]">
