@@ -16,6 +16,7 @@ interface Product {
   internalCode?: string;
   category?: { id: number; name: string } | null;
   subcategory?: { id: number; name: string } | null;
+  brand?: { id: number; name: string } | null;
   tags?: { id: number; name: string }[];
 }
 
@@ -28,7 +29,7 @@ interface BulkAssignModalProps {
   isOpen: boolean;
   onClose: () => void;
   assignTarget: {
-    type: 'category' | 'subcategory' | 'tag';
+    type: 'category' | 'subcategory' | 'tag' | 'brand';
     id: number;
     name: string;
   } | null;
@@ -126,6 +127,7 @@ export function BulkAssignModal({ isOpen, onClose, assignTarget, onSuccess }: Bu
       if (assignTarget.type === 'category') payload.categoryId = assignTarget.id;
       if (assignTarget.type === 'subcategory') payload.subcategoryId = assignTarget.id;
       if (assignTarget.type === 'tag') payload.tagId = assignTarget.id;
+      if (assignTarget.type === 'brand') payload.brandId = assignTarget.id;
 
       await apiRequest('/catalog/products/bulk/assign', {
         method: 'PATCH',
@@ -386,6 +388,11 @@ export function BulkAssignModal({ isOpen, onClose, assignTarget, onSuccess }: Bu
                       {product.subcategory && (
                         <Badge variant="outline" className="text-[10px] py-0 h-4 border-blue-500/30 text-blue-500 font-medium shrink-0 bg-blue-500/5">
                           {product.subcategory.name}
+                        </Badge>
+                      )}
+                      {product.brand && (
+                        <Badge variant="outline" className="text-[10px] py-0 h-4 border-amber-500/30 text-amber-600 font-medium shrink-0 bg-amber-500/5">
+                          🏷️ {product.brand.name}
                         </Badge>
                       )}
                       {product.tags && product.tags.map(tag => (

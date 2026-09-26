@@ -28,6 +28,7 @@ import {
   Check,
   PlusCircle,
   Tag,
+  Award,
 } from "lucide-react";
 import { usePOSTabs } from "../hooks/usePOSTabs";
 import { format } from "date-fns";
@@ -65,6 +66,11 @@ interface PriceOption {
   price: number;
 }
 
+interface POSBrand {
+  id: number;
+  name: string;
+}
+
 interface POSTag {
   id: number;
   name: string;
@@ -79,6 +85,8 @@ interface Product {
   stock: number;
   category: { name: string };
   subcategory?: { id: number; name: string } | null;
+  brand?: { id: number; name: string } | null;
+  brandId?: number | null;
   tags?: POSTag[];
   expirationDate?: string | null;
   imageUrl?: string | null;
@@ -349,6 +357,9 @@ export function POS() {
   const [categories, setCategories] = useState<POSCategory[]>([]);
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
   const [selectedSubcategoryIds, setSelectedSubcategoryIds] = useState<number[]>([]);
+  const [brands, setBrands] = useState<POSBrand[]>([]);
+  const [selectedBrandIds, setSelectedBrandIds] = useState<number[]>([]);
+  const [brandSearchTerm, setBrandSearchTerm] = useState("");
   const [tags, setTags] = useState<POSTag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [tagSearchTerm, setTagSearchTerm] = useState("");
@@ -480,6 +491,7 @@ export function POS() {
       checkActiveShift();
       searchProducts("");
       loadCategories();
+      loadBrands();
       loadTags();
       loadSysConfig();
       loadBranchPaymentConfig();
@@ -493,6 +505,15 @@ export function POS() {
       setCategories(Array.isArray(data) ? data : []);
     } catch {
       // Silencioso: los filtros de categoría son un extra, no bloquean el POS
+    }
+  };
+
+  const loadBrands = async () => {
+    try {
+      const data = await apiRequest<POSBrand[]>("/catalog/brands");
+      setBrands(Array.isArray(data) ? data : []);
+    } catch {
+      // Silencioso: los filtros de marcas son un extra, no bloquean el POS
     }
   };
 
@@ -800,12 +821,12 @@ export function POS() {
     }
   };
 
-  // Volver a la página 1 cada vez que cambia el término de búsqueda o los filtros de categoría/etiquetas
+  // Volver a la página 1 cada vez que cambia el término de búsqueda o los filtros de categoría/etiquetas/marcas
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, selectedCategoryIds, selectedSubcategoryIds, selectedTagIds]);
+  }, [searchTerm, selectedCategoryIds, selectedSubcategoryIds, selectedBrandIds, selectedTagIds]);
 
-  // Debounce product search (también re-busca al cambiar filtros de categoría/subcategoría/etiquetas/página)
+  // Debounce product search (también re-busca al cambiar filtros de categoría/subcategoría/marcas/etiquetas/página)
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       if (searchTerm.trim().length >= 2) {
@@ -816,7 +837,7 @@ export function POS() {
     }, 300);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [searchTerm, selectedCategoryIds, selectedSubcategoryIds, selectedTagIds, page]);
+  }, [searchTerm, selectedCategoryIds, selectedSubcategoryIds, selectedBrandIds, selectedTagIds, page]);
 
   // Debounce customer search
   useEffect(() => {
@@ -849,6 +870,9 @@ export function POS() {
       }
       if (selectedSubcategoryIds.length > 0) {
         selectedSubcategoryIds.forEach(id => params.append("subcategoryIds", String(id)));
+      }
+      if (selectedBrandIds.length > 0) {
+        selectedBrandIds.forEach(id => params.append("brandIds", String(id)));
       }
       if (selectedTagIds.length > 0) {
         selectedTagIds.forEach(id => params.append("tagIds", String(id)));
@@ -909,6 +933,8 @@ export function POS() {
           stock: Number(stockValue),
           category: p.category || { name: "General" },
           subcategory: p.subcategory || null,
+          brand: p.brand || null,
+          brandId: p.brandId || null,
           tags: p.tags || [],
           expirationDate: p.nearestExpirationDate || null,
           imageUrl: p.imageUrl || null,
@@ -1781,14 +1807,14 @@ ${paymentConditionHtml}
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="F1: Buscar productos, código, categoría o etiquetas..."
+                placeholder="F1: Buscar productos, código, categoría, marca o etiquetas..."
                 className="pl-9 h-10 bg-[var(--bg)] border-[var(--border)] rounded-lg w-full text-sm"
               />
               {loading && <div className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin h-4 w-4 border-2 border-[var(--primary)] border-t-transparent rounded-full" />}
             </div>
 
-            {/* Filtro visual por Categoría / Subcategoría / Etiquetas - MULTI SELECT */}
-            {(categories.length > 0 || tags.length > 0) && (
+            {/* Filtro visual por Categoría / Subcategoría / Marcas / Etiquetas - MULTI SELECT */}
+            {(categories.length > 0 || brands.length > 0 || tags.length > 0) && (
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 
                 {/* Categorías Multi Select */}
@@ -1895,6 +1921,72 @@ ${paymentConditionHtml}
                   </Popover>
                 )}
 
+                {/* Marcas Multi Select */}
+                {brands.length > 0 && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="border-dashed h-9 bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-amber-500 text-xs rounded-xl">
+                        <Award className="mr-2 h-4 w-4 text-amber-500" />
+                        Marcas
+                        {selectedBrandIds.length > 0 && (
+                          <>
+                            <div className="mx-2 h-4 w-[1px] bg-[var(--border)]" />
+                            <Badge variant="secondary" className="rounded-sm px-1 font-normal bg-amber-500 text-white">
+                              {selectedBrandIds.length} sel.
+                            </Badge>
+                          </>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0 bg-[var(--card)] border-[var(--border)]" style={{ width: 'max-content', minWidth: '220px', maxWidth: '350px' }} align="start">
+                      <div className="p-2 space-y-1">
+                        {brands.length > 5 && (
+                          <div className="px-1 pb-1">
+                            <Input
+                              type="text"
+                              value={brandSearchTerm}
+                              onChange={(e) => setBrandSearchTerm(e.target.value)}
+                              placeholder="Buscar marca..."
+                              className="h-7 text-xs bg-[var(--bg)] border-[var(--border)] px-2"
+                            />
+                          </div>
+                        )}
+                        <div className="max-h-60 overflow-y-auto space-y-1 custom-scrollbar">
+                          {brands
+                            .filter(b => !brandSearchTerm || b.name.toLowerCase().includes(brandSearchTerm.toLowerCase()))
+                            .map(brand => (
+                              <Button
+                                key={brand.id}
+                                variant="ghost"
+                                className="w-full justify-start font-normal h-8 px-2 gap-3 hover:bg-[var(--bg)]"
+                                onClick={() => {
+                                  setSelectedBrandIds(prev => 
+                                    prev.includes(brand.id) ? prev.filter(id => id !== brand.id) : [...prev, brand.id]
+                                  );
+                                }}
+                              >
+                                <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0", selectedBrandIds.includes(brand.id) ? "bg-amber-500 border-amber-500 text-white" : "border-input")}>
+                                  {selectedBrandIds.includes(brand.id) && <Check className="h-3 w-3" />}
+                                </div>
+                                <span className="truncate text-left text-[var(--text-main)] text-sm">{brand.name}</span>
+                              </Button>
+                            ))}
+                          {brands.filter(b => !brandSearchTerm || b.name.toLowerCase().includes(brandSearchTerm.toLowerCase())).length === 0 && (
+                            <p className="text-xs text-[var(--text-sec)] text-center py-2">No hay marcas</p>
+                          )}
+                        </div>
+                        {selectedBrandIds.length > 0 && (
+                          <div className="pt-2 mt-2 border-t border-[var(--border)]">
+                            <Button variant="ghost" size="sm" className="w-full h-8 text-xs text-[var(--text-sec)]" onClick={() => setSelectedBrandIds([])}>
+                              Limpiar
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+
                 {/* Etiquetas Multi Select */}
                 {tags.length > 0 && (
                   <Popover>
@@ -1977,7 +2069,7 @@ ${paymentConditionHtml}
                 </button>
 
                 {/* Limpiar todos los filtros si alguno está activo */}
-                {(selectedCategoryIds.length > 0 || selectedSubcategoryIds.length > 0 || selectedTagIds.length > 0) && (
+                {(selectedCategoryIds.length > 0 || selectedSubcategoryIds.length > 0 || selectedBrandIds.length > 0 || selectedTagIds.length > 0) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1985,6 +2077,7 @@ ${paymentConditionHtml}
                     onClick={() => {
                       setSelectedCategoryIds([]);
                       setSelectedSubcategoryIds([]);
+                      setSelectedBrandIds([]);
                       setSelectedTagIds([]);
                     }}
                   >
@@ -2117,6 +2210,31 @@ ${paymentConditionHtml}
                         <CalendarIcon size={10} />
                         Vence: {formatExpirationDate(product.expirationDate)}
                       </p>
+                    )}
+                    {product.brand && (
+                      <div className="w-full mb-1">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedBrandIds((prev) =>
+                              prev.includes(product.brand!.id)
+                                ? prev.filter((id) => id !== product.brand!.id)
+                                : [...prev, product.brand!.id]
+                            );
+                          }}
+                          className={cn(
+                            "text-[9px] px-1.5 py-0.5 rounded-md border transition-all inline-flex items-center gap-1 font-semibold",
+                            selectedBrandIds.includes(product.brand.id)
+                              ? "bg-amber-500 text-white border-amber-500 shadow-xs"
+                              : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 hover:border-amber-500"
+                          )}
+                          title={selectedBrandIds.includes(product.brand.id) ? `Quitar filtro: ${product.brand.name}` : `Filtrar por marca: ${product.brand.name}`}
+                        >
+                          <Award size={10} />
+                          {product.brand.name}
+                        </button>
+                      </div>
                     )}
                     {product.tags && product.tags.length > 0 && (
                       <div className="w-full flex flex-wrap gap-1 mb-1.5">

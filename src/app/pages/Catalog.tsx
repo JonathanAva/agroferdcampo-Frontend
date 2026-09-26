@@ -22,7 +22,7 @@ import { Badge } from "../components/ui/badge";
 import { InlinePills } from "../components/ui/inline-pills";
 import { Button } from "../components/ui/button";
 import { Switch } from "../components/ui/switch";
-import { Edit, Copy, Check, X, History } from "lucide-react";
+import { Edit, Copy, Check, X, History, Award } from "lucide-react";
 import { cn } from "../components/ui/utils";
 import { ProductSalesHistoryDialog } from "../components/products/ProductSalesHistoryDialog";
 import { Input } from "../components/ui/input";
@@ -84,6 +84,8 @@ interface CatalogProduct {
   imageUrl?: string;
   category?: { id: number; name: string };
   subcategory?: { id: number; name: string; categoryId: number };
+  brand?: { id: number; name: string } | null;
+  brandId?: number | null;
   tags?: { id: number; name: string }[];
   nearestExpirationDate?: string | null;
   prices: ProductPrice[];
@@ -108,6 +110,11 @@ interface Subcategory {
   name: string;
   categoryId: number;
   category?: { id: number; name: string };
+}
+
+interface ProductBrand {
+  id: number;
+  name: string;
 }
 
 interface ProductTag {
@@ -167,6 +174,7 @@ const productSchema = z.object({
   unit: z.string().min(1, "La unidad es obligatoria"),
   categoryId: z.string(),
   subcategoryId: z.string(),
+  brandId: z.string().optional(),
   tagIds: z.array(z.string()),
   expirationDate: z.string(),
   costPrice: z.string(),
@@ -223,6 +231,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
+  const [brands, setBrands] = useState<ProductBrand[]>([]);
   const [tags, setTags] = useState<ProductTag[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -235,6 +244,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   const showInactive = searchParams.get("showInactive") === "true";
   const categoriesFilter = searchParams.get("categories") || "";
   const subcategoriesFilter = searchParams.get("subcategories") || "";
+  const brandsFilter = searchParams.get("brands") || "";
   const tagsFilter = searchParams.get("tags") || "";
   const priceRangeFilter = searchParams.get("priceRange") || "";
   const page = parseInt(searchParams.get("page") || "1", 10);
@@ -269,6 +279,12 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         })),
       },
       {
+        id: "brands",
+        label: "Marcas",
+        type: "multi_category",
+        options: brands.map((b) => ({ label: b.name, value: b.id.toString() })),
+      },
+      {
         id: "tags",
         label: "Etiquetas",
         type: "multi_category",
@@ -277,7 +293,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       { id: "priceRange", label: "Precio", type: "number_range" },
       { id: "showInactive", label: "Ver inactivos", type: "boolean" },
     ],
-    [categories, subcategories, tags],
+    [categories, subcategories, brands, tags],
   );
 
   // Form state
@@ -289,6 +305,10 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   const [isSubcatDialogOpen, setIsSubcatDialogOpen] = useState(false);
   const [newSubcatName, setNewSubcatName] = useState("");
   const [newSubcatCategoryId, setNewSubcatCategoryId] = useState("");
+  const [isBrandDialogOpen, setIsBrandDialogOpen] = useState(false);
+  const [newBrandName, setNewBrandName] = useState("");
+  const [quickBrandName, setQuickBrandName] = useState("");
+  const [brandFilterQuery, setBrandFilterQuery] = useState("");
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
   const [newTagName, setNewTagName] = useState("");
   const [quickTagName, setQuickTagName] = useState("");
@@ -318,6 +338,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       unit: "UNIDAD",
       categoryId: "",
       subcategoryId: "",
+      brandId: "",
       tagIds: [],
       expirationDate: "",
       costPrice: "",
@@ -362,12 +383,19 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   const watchIsUniversal = watch("isUniversal");
   const watchIsService = watch("isService");
   const watchCategoryId = watch("categoryId");
+  const watchBrandId = watch("brandId");
   const watchTagIds = watch("tagIds") || [];
 
   const availableSubcategories = useMemo(
     () => subcategories.filter((s) => String(s.categoryId) === watchCategoryId),
     [subcategories, watchCategoryId],
   );
+
+  const filteredFormBrands = useMemo(() => {
+    if (!brandFilterQuery.trim()) return brands;
+    const query = brandFilterQuery.toLowerCase().trim();
+    return brands.filter((b) => b.name.toLowerCase().includes(query));
+  }, [brands, brandFilterQuery]);
 
   const filteredFormTags = useMemo(() => {
     if (!tagFilterQuery.trim()) return tags;
@@ -380,6 +408,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
     (isCatDialogOpen && newCatName.trim().length > 0) ||
     (isSubcatDialogOpen &&
       (newSubcatName.trim().length > 0 || !!newSubcatCategoryId)) ||
+    (isBrandDialogOpen && newBrandName.trim().length > 0) ||
     (isTagDialogOpen && newTagName.trim().length > 0);
   const {
     confirmExit,
@@ -401,6 +430,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
     searchTerm,
     categoriesFilter,
     subcategoriesFilter,
+    brandsFilter,
     tagsFilter,
     priceRangeFilter,
     showInactive,
@@ -412,6 +442,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
     searchTerm,
     categoriesFilter,
     subcategoriesFilter,
+    brandsFilter,
     tagsFilter,
     priceRangeFilter,
     showInactive,
@@ -429,6 +460,24 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchCategoryId]);
+
+  const handleQuickAddBrand = async () => {
+    if (!quickBrandName.trim()) return;
+    try {
+      const created = await apiRequest<ProductBrand>("/catalog/brands", {
+        method: "POST",
+        body: JSON.stringify({ name: quickBrandName.trim() }),
+      });
+      setBrands((prev) =>
+        [...prev, created].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+      setValue("brandId", String(created.id));
+      setQuickBrandName("");
+      toast.success(`Marca "${created.name}" creada y seleccionada`);
+    } catch (err: any) {
+      toast.error(err.message || "Error al crear la marca");
+    }
+  };
 
   const toggleTag = (tagId: string) => {
     const current = watch("tagIds") || [];
@@ -474,6 +523,11 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
           .split(",")
           .forEach((id) => queryParams.append("subcategoryIds", id));
       }
+      if (brandsFilter) {
+        brandsFilter
+          .split(",")
+          .forEach((id) => queryParams.append("brandIds", id));
+      }
       if (tagsFilter) {
         tagsFilter.split(",").forEach((id) => queryParams.append("tagIds", id));
       }
@@ -484,13 +538,14 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       }
       queryParams.append("isActive", showInactive ? "false" : "true");
 
-      const [prodData, catData, subcatData, tagData, brData] =
+      const [prodData, catData, subcatData, brandData, tagData, brData] =
         await Promise.all([
           apiRequest<{ data: CatalogProduct[]; total: number }>(
             `/catalog/products?${queryParams.toString()}`,
           ),
           apiRequest<Category[]>("/catalog/categories").catch(() => []),
           apiRequest<Subcategory[]>("/catalog/subcategories").catch(() => []),
+          apiRequest<ProductBrand[]>("/catalog/brands").catch(() => []),
           apiRequest<ProductTag[]>("/catalog/tags").catch(() => []),
           apiRequest<Branch[]>("/branches").catch(() => []),
         ]);
@@ -498,6 +553,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       setProducts(prodData?.data || []);
       setTotal(prodData?.total || 0);
       setCategories(Array.isArray(catData) ? catData : []);
+      setBrands(Array.isArray(brandData) ? brandData : []);
       setSubcategories(Array.isArray(subcatData) ? subcatData : []);
       setTags(Array.isArray(tagData) ? tagData : []);
       setBranches(Array.isArray(brData) ? brData : []);
@@ -523,6 +579,8 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   const openDialog = (product?: CatalogProduct) => {
     setTagFilterQuery("");
     setQuickTagName("");
+    setBrandFilterQuery("");
+    setQuickBrandName("");
     if (product) {
       setEditingProduct(product);
       setProductImageUrl(product.imageUrl || null);
@@ -536,6 +594,11 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         subcategoryId: product.subcategory?.id
           ? String(product.subcategory.id)
           : "",
+        brandId: product.brand?.id
+          ? String(product.brand.id)
+          : product.brandId
+            ? String(product.brandId)
+            : "",
         tagIds: product.tags?.map((t) => String(t.id)) || [],
         expirationDate: "",
         costPrice: product.costPrice?.toString() || "",
@@ -576,6 +639,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         unit: "UNIDAD",
         categoryId: "",
         subcategoryId: "",
+        brandId: "",
         tagIds: [],
         expirationDate: "",
         costPrice: "",
@@ -592,6 +656,8 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   const openCopyDialog = (product: CatalogProduct) => {
     setTagFilterQuery("");
     setQuickTagName("");
+    setBrandFilterQuery("");
+    setQuickBrandName("");
     setEditingProduct(null);
     setProductImageUrl(product.imageUrl || null);
     reset({
@@ -604,6 +670,11 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       subcategoryId: product.subcategory?.id
         ? String(product.subcategory.id)
         : "",
+      brandId: product.brand?.id
+        ? String(product.brand.id)
+        : product.brandId
+          ? String(product.brandId)
+          : "",
       tagIds: product.tags?.map((t) => String(t.id)) || [],
       expirationDate: "",
       costPrice: product.costPrice?.toString() || "",
@@ -666,6 +737,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
           : null,
       categoryId: data.categoryId ? Number(data.categoryId) : null,
       subcategoryId: data.subcategoryId ? Number(data.subcategoryId) : null,
+      brandId: data.brandId ? Number(data.brandId) : null,
       tagIds: data.tagIds.map(Number),
       costPrice: data.costPrice ? Number(data.costPrice) : null,
       internalCode: data.internalCode?.trim() || undefined,
@@ -828,6 +900,37 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
     }
   };
 
+  const handleCreateBrand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBrandName.trim()) return;
+
+    setFormLoading(true);
+    try {
+      await apiRequest("/catalog/brands", {
+        method: "POST",
+        body: JSON.stringify({ name: newBrandName.trim() }),
+      });
+      toast.success("Marca creada exitosamente");
+      setNewBrandName("");
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Error al crear la marca");
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleDeleteBrand = async (id: number, name: string) => {
+    if (!confirm(`¿Eliminar marca "${name}"?`)) return;
+    try {
+      await apiRequest(`/catalog/brands/${id}`, { method: "DELETE" });
+      toast.success("Marca eliminada");
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "No se puede eliminar la marca");
+    }
+  };
+
   const filtered = products;
 
   return (
@@ -873,6 +976,14 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
               >
                 <FolderTree size={16} />
                 Subcategorías
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setIsBrandDialogOpen(true)}
+                className="gap-2"
+              >
+                <Award size={16} />
+                Marcas
               </Button>
               <Button
                 variant="outline"
@@ -1033,9 +1144,17 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                           </div>
                         )}
                         <div className="flex flex-col">
-                          <span className="font-bold text-[var(--text-main)] group-hover:text-[var(--primary)] transition-colors">
-                            {product.name}
-                          </span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-[var(--text-main)] group-hover:text-[var(--primary)] transition-colors">
+                              {product.name}
+                            </span>
+                            {product.brand && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                <Award size={11} />
+                                {product.brand.name}
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[10px] font-mono font-bold opacity-40 uppercase tracking-tighter text-[var(--text-sec)]">
                             {product.internalCode ||
                               product.barcode ||
@@ -1379,6 +1498,128 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                         </p>
                       </div>
                     )}
+                  </div>
+
+                  {/* Marca */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-bold flex items-center gap-1.5">
+                        <Award size={15} className="text-amber-600" />
+                        Marca
+                      </Label>
+                      {watchBrandId && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                            {brands.find((b) => String(b.id) === watchBrandId)?.name || "Marca seleccionada"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setValue("brandId", "")}
+                            className="text-muted-foreground hover:text-red-500 p-0.5 rounded text-xs"
+                            title="Quitar marca"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-3">
+                      {/* Buscador de marcas */}
+                      {brands.length > 0 && (
+                        <div className="relative">
+                          <Search
+                            size={14}
+                            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+                          />
+                          <Input
+                            value={brandFilterQuery}
+                            onChange={(e) => setBrandFilterQuery(e.target.value)}
+                            placeholder="Buscar marcas por nombre..."
+                            className="h-8 pl-8 pr-8 text-xs rounded-lg bg-[var(--bg)] border-[var(--border)]"
+                          />
+                          {brandFilterQuery && (
+                            <button
+                              type="button"
+                              onClick={() => setBrandFilterQuery("")}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded"
+                              title="Limpiar búsqueda"
+                            >
+                              <X size={13} />
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Lista de marcas */}
+                      <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto pr-1">
+                        {brands.length === 0 ? (
+                          <p className="text-[10px] opacity-50 py-1">
+                            Sin marcas registradas todavía. Puedes agregar una abajo.
+                          </p>
+                        ) : filteredFormBrands.length === 0 ? (
+                          <div className="py-2 text-center w-full">
+                            <p className="text-xs text-[var(--text-sec)]">
+                              No se encontraron marcas con "{brandFilterQuery}".
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setBrandFilterQuery("")}
+                              className="text-xs text-[var(--primary)] hover:underline mt-1 font-medium"
+                            >
+                              Ver todas las marcas
+                            </button>
+                          </div>
+                        ) : (
+                          filteredFormBrands.map((b) => {
+                            const selected = watchBrandId === String(b.id);
+                            return (
+                              <button
+                                type="button"
+                                key={b.id}
+                                onClick={() => setValue("brandId", selected ? "" : String(b.id))}
+                                className={cn(
+                                  "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
+                                  selected
+                                    ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+                                    : "bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-amber-500 hover:text-foreground",
+                                )}
+                              >
+                                {selected && <Check size={11} className="stroke-[3]" />}
+                                {b.name}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                      <div className="flex gap-2 pt-2 border-t border-[var(--border)]">
+                        <Input
+                          value={quickBrandName}
+                          onChange={(e) => setQuickBrandName(e.target.value)}
+                          placeholder="Nueva marca rápida..."
+                          className="h-8 text-xs rounded-lg"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleQuickAddBrand();
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 shrink-0"
+                          onClick={handleQuickAddBrand}
+                          title="Crear y asignar marca rápida"
+                        >
+                          <Plus size={14} className="mr-1" />
+                          Agregar
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="text-[10px] opacity-60 ml-1">
+                      Asigna la marca comercial para facilitar la búsqueda y clasificación de productos.
+                    </p>
                   </div>
 
                   <div className="space-y-2">
@@ -2242,6 +2483,108 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
               variant="outline"
               className="w-full"
               onClick={() => confirmExit(() => setIsSubcatDialogOpen(false))}
+            >
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Gestionar Marcas */}
+      <Dialog
+        open={isBrandDialogOpen}
+        onOpenChange={(o) =>
+          o
+            ? setIsBrandDialogOpen(true)
+            : confirmExit(() => setIsBrandDialogOpen(false))
+        }
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Award className="text-amber-500" size={20} />
+              Gestionar Marcas
+            </DialogTitle>
+            <DialogDescription>
+              Las marcas permiten clasificar y filtrar productos en el catálogo y punto de venta.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4 space-y-6">
+            <form onSubmit={handleCreateBrand} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="brandName">Nombre de la Nueva Marca</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="brandName"
+                    value={newBrandName}
+                    onChange={(e) => setNewBrandName(e.target.value)}
+                    placeholder="Ej: Truper, Sika, Bellota..."
+                    required
+                  />
+                  <Button
+                    type="submit"
+                    disabled={formLoading}
+                    variant="default"
+                    size="icon"
+                  >
+                    {formLoading ? "..." : <Plus size={18} />}
+                  </Button>
+                </div>
+              </div>
+            </form>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>Marcas Existentes ({brands.length})</Label>
+              </div>
+              <div
+                className="max-h-[220px] overflow-y-auto rounded-xl border p-2 space-y-1"
+                style={{
+                  borderColor: "var(--border)",
+                  backgroundColor: "var(--bg)",
+                }}
+              >
+                {brands.length === 0 && (
+                  <p
+                    className="text-xs text-center py-4 opacity-50"
+                    style={{ color: "var(--text-sec)" }}
+                  >
+                    Sin marcas registradas.
+                  </p>
+                )}
+                {brands.map((b) => (
+                  <div
+                    key={b.id}
+                    className="flex items-center justify-between p-2 rounded-lg hover:bg-[var(--card)] transition-colors group"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                      <span
+                        className="text-sm font-medium"
+                        style={{ color: "var(--text-main)" }}
+                      >
+                        {b.name}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteBrand(b.id, b.name)}
+                      className="p-1.5 rounded-md text-red-400 hover:text-red-600 hover:bg-red-50 transition-all"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => confirmExit(() => setIsBrandDialogOpen(false))}
             >
               Cerrar
             </Button>

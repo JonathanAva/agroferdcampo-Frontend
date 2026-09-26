@@ -71,13 +71,25 @@ interface ProductPrice {
   price: string | number;
 }
 
+interface Category {
+  id: number;
+  name: string;
+}
+
+interface ProductBrand {
+  id: number;
+  name: string;
+}
+
 interface Product {
   id: number;
   name: string;
   internalCode?: string;
   barcode?: string;
   prices?: ProductPrice[];
-  category?: { name: string };
+  category?: { id?: number; name: string };
+  brand?: { id: number; name: string } | null;
+  brandId?: number | null;
   unit: string;
   units?: { unit: string; factor: number }[];
 }
@@ -109,10 +121,11 @@ import { Catalog } from './Catalog';
 import { CategoriesManager } from './CategoriesManager';
 import { SubcategoriesManager } from './SubcategoriesManager';
 import { TagsManager } from './TagsManager';
-import { Tag, ListTree, Hash } from "lucide-react";
+import { BrandsManager } from './BrandsManager';
+import { Tag, ListTree, Hash, Award } from "lucide-react";
 
 export function Inventory() {
-  const [activeTab, setActiveTab] = useState<'inventario' | 'catalogo' | 'categorias' | 'subcategorias' | 'etiquetas' | 'vencidos'>('inventario');
+  const [activeTab, setActiveTab] = useState<'inventario' | 'catalogo' | 'categorias' | 'subcategorias' | 'marcas' | 'etiquetas' | 'vencidos'>('inventario');
 
   return (
     <div className="flex flex-col gap-6 h-full">
@@ -164,6 +177,15 @@ export function Inventory() {
           Subcategorías
         </button>
         <button
+          onClick={() => setActiveTab('marcas')}
+          className={`px-6 py-3 font-bold text-sm transition-all border-b-2 -mb-[2px] cursor-pointer flex items-center gap-2 ${
+            activeTab === 'marcas' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--text-sec)]'
+          }`}
+        >
+          <Award size={16} />
+          Marcas
+        </button>
+        <button
           onClick={() => setActiveTab('etiquetas')}
           className={`px-6 py-3 font-bold text-sm transition-all border-b-2 -mb-[2px] cursor-pointer flex items-center gap-2 ${
             activeTab === 'etiquetas' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--text-sec)]'
@@ -187,6 +209,7 @@ export function Inventory() {
       {activeTab === 'catalogo' && <Catalog hideTitle={true} />}
       {activeTab === 'categorias' && <CategoriesManager />}
       {activeTab === 'subcategorias' && <SubcategoriesManager />}
+      {activeTab === 'marcas' && <BrandsManager />}
       {activeTab === 'etiquetas' && <TagsManager />}
       {activeTab === 'vencidos' && <ExpiredProductsList />}
     </div>
@@ -206,12 +229,16 @@ function InventoryList() {
   // 2. Main States
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [brands, setBrands] = useState<ProductBrand[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const searchTerm = searchParams.get('search') || '';
   const filterStatus = (searchParams.get('status') as "all" | "active" | "low" | "critical") || "all";
   const filterBranch = searchParams.get('branch') || 'all';
+  const filterCategories = searchParams.get('categories') || '';
+  const filterBrands = searchParams.get('brands') || '';
   
   const page = parseInt(searchParams.get('page') || '1', 10);
   const limit = 50;
@@ -220,12 +247,14 @@ function InventoryList() {
   const inventoryFilters: FilterConfig[] = useMemo(() => [
     { id: 'search', label: 'Buscar producto...', type: 'text', placeholder: 'Buscar por nombre, código o categoría...' },
     { id: 'branch', label: 'Sucursal', type: 'category', options: branches.map(b => ({ label: b.name, value: b.id.toString() })) },
+    { id: 'categories', label: 'Categorías', type: 'multi_category', options: categories.map(c => ({ label: c.name, value: c.id.toString() })) },
+    { id: 'brands', label: 'Marcas', type: 'multi_category', options: brands.map(b => ({ label: b.name, value: b.id.toString() })) },
     { id: 'status', label: 'Estado', type: 'category', options: [
       { label: 'En Stock (Normal)', value: 'active' },
       { label: 'Stock Bajo', value: 'low' },
       { label: 'Crítico / Sin Stock', value: 'critical' }
     ]}
-  ], [branches]);
+  ], [branches, categories, brands]);
 
   // 3. Modals state
   const [isAdjustOpen, setIsAdjustOpen] = useState(false);
@@ -285,11 +314,11 @@ function InventoryList() {
       setSearchParams(prev => { prev.set('page', '1'); return prev; });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, filterStatus, filterBranch]);
+  }, [searchTerm, filterStatus, filterBranch, filterCategories, filterBrands]);
 
   useEffect(() => {
     fetchData();
-  }, [searchTerm, filterStatus, filterBranch, page]);
+  }, [searchTerm, filterStatus, filterBranch, filterCategories, filterBrands, page]);
 
   const fetchData = async () => {
     try {
@@ -298,14 +327,24 @@ function InventoryList() {
       queryParams.append("limit", limit.toString());
       queryParams.append("page", page.toString());
       if (searchTerm) queryParams.append("search", searchTerm);
+      if (filterCategories) {
+        filterCategories.split(",").forEach(id => queryParams.append("categoryIds", id));
+      }
+      if (filterBrands) {
+        filterBrands.split(",").forEach(id => queryParams.append("brandIds", id));
+      }
       
-      const [invRes, branchData] = await Promise.all([
+      const [invRes, branchData, catData, brandData] = await Promise.all([
         apiRequest<{ data: InventoryItem[], total: number }>(`/inventory?${queryParams.toString()}`),
-        apiRequest<Branch[]>("/branches"),
+        apiRequest<Branch[]>("/branches").catch(() => []),
+        apiRequest<Category[]>("/catalog/categories").catch(() => []),
+        apiRequest<ProductBrand[]>("/catalog/brands").catch(() => []),
       ]);
       setInventory(invRes?.data || []);
       setTotal(invRes?.total || 0);
       setBranches(branchData || []);
+      setCategories(catData || []);
+      setBrands(brandData || []);
     } catch (error) {
       toast.error("Error al cargar datos de inventario");
     } finally {
@@ -514,8 +553,18 @@ function InventoryList() {
     const status = getProductStatus(item);
     const matchesStatus = filterStatus === "all" || status === filterStatus;
     const matchesBranch = filterBranch === "all" || String(item.branchId) === filterBranch;
+    const matchesCategory =
+      !filterCategories ||
+      (item.product.category?.id
+        ? filterCategories.split(",").includes(String(item.product.category.id))
+        : true);
+    const matchesBrand =
+      !filterBrands ||
+      (item.product.brand?.id
+        ? filterBrands.split(",").includes(String(item.product.brand.id))
+        : true);
 
-    return matchesStatus && matchesBranch;
+    return matchesStatus && matchesBranch && matchesCategory && matchesBrand;
   });
 
   const totalItemsCount = total;
@@ -804,9 +853,17 @@ function InventoryList() {
                 >
                   <TableCell>
                     <div className="flex flex-col">
-                      <span className="font-bold text-[var(--text-main)]">
-                        {item.product.name}
-                      </span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-[var(--text-main)]">
+                          {item.product.name}
+                        </span>
+                        {item.product.brand && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                            <Award size={10} />
+                            {item.product.brand.name}
+                          </span>
+                        )}
+                      </div>
                       <span className="text-[10px] font-mono font-bold opacity-40 uppercase tracking-tighter text-[var(--text-sec)]">
                         {item.product.internalCode ||
                           item.product.barcode ||
