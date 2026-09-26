@@ -72,6 +72,35 @@ export interface RegisterPaymentDto {
   cashRegisterId?: number | null;
 }
 
+export interface MultiPaymentItemDto {
+  creditSaleId: number;
+  amount: number;
+}
+
+export interface RegisterMultiPaymentDto {
+  customerId: number;
+  payments: MultiPaymentItemDto[];
+  paymentMethod: string;
+  reference?: string;
+  notes?: string;
+  receiptUrl?: string;
+  cashRegisterId?: number | null;
+}
+
+export interface MultiPaymentResponse {
+  batchId: string;
+  totalAmount: number;
+  paymentMethod: string;
+  paymentCount: number;
+  payments: CreditPayment[];
+  customer: {
+    id: number;
+    name: string;
+    creditBalance: number | string;
+  };
+  affectedSales: CreditSale[];
+}
+
 export interface CreateManualCreditDto {
   customerId: number;
   amount: number;
@@ -187,6 +216,19 @@ export const creditService = {
     return apiRequest<CreditPayment>(`/credit/${id}/payment`, {
       method: 'POST',
       body: JSON.stringify({ ...data, amount: Number(data.amount) }),
+    });
+  },
+
+  registerMultiPayment: (data: RegisterMultiPaymentDto) => {
+    return apiRequest<MultiPaymentResponse>('/credit/multi-payment', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...data,
+        payments: data.payments.map((p) => ({
+          creditSaleId: Number(p.creditSaleId),
+          amount: Number(p.amount),
+        })),
+      }),
     });
   },
 

@@ -2,12 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Search, FileText, Filter, CheckCircle2,
   CreditCard, DollarSign, AlertCircle, Plus, Eye, History, Users as UsersIcon, RefreshCcw, Trash2, Printer,
-  Hash, User, Package, Building2, X
+  Hash, User, Package, Building2, X, Layers, CheckSquare, Square, ArrowDownUp
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSearchParams, useNavigate } from 'react-router';
 
-import { creditService, CreditSale, CreditSummary, CreditPayment, RegisterPaymentDto, CreateManualCreditDto, GroupedCreditCustomer } from '../services/credit.service';
+import { creditService, CreditSale, CreditSummary, CreditPayment, RegisterPaymentDto, RegisterMultiPaymentDto, MultiPaymentResponse, CreateManualCreditDto, GroupedCreditCustomer } from '../services/credit.service';
 import { getSaleDetail } from '../services/sales.service';
 import { cashRegistersService } from '../services/cash-registers.service';
 import { CashRegister } from '../services/cash-shifts.service';
@@ -39,14 +39,36 @@ const creditFilters: FilterConfig[] = [
 ];
 
 let isAbonoSubmittingGlobal = false;
+let isMultiAbonoSubmittingGlobal = false;
+
+interface MultiPaymentRow {
+  creditSale: CreditSale;
+  selected: boolean;
+  remaining: number;
+  amount: number;
+}
 
 export function Credit() {
   const isSubmittingRef = useRef(false);
   const submitBtnRef = useRef<HTMLButtonElement>(null);
+  const multiSubmitBtnRef = useRef<HTMLButtonElement>(null);
   const [groupedCredits, setGroupedCredits] = useState<GroupedCreditCustomer[]>([]);
   const [summary, setSummary] = useState<CreditSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
+
+  // Abono Múltiple State
+  const [multiPaymentModalOpen, setMultiPaymentModalOpen] = useState(false);
+  const [multiPaymentCustomer, setMultiPaymentCustomer] = useState<GroupedCreditCustomer | null>(null);
+  const [multiPaymentRows, setMultiPaymentRows] = useState<MultiPaymentRow[]>([]);
+  const [multiGlobalAmount, setMultiGlobalAmount] = useState<number | string>('');
+  const [multiPaymentMethod, setMultiPaymentMethod] = useState<string>('EFECTIVO');
+  const [multiReference, setMultiReference] = useState('');
+  const [multiNotes, setMultiNotes] = useState('');
+  const [multiCashRegisterId, setMultiCashRegisterId] = useState<number | null>(null);
+  const [multiReceiptFile, setMultiReceiptFile] = useState<File | null>(null);
+  const [savingMultiPayment, setSavingMultiPayment] = useState(false);
+  const [selectedInnerSaleIds, setSelectedInnerSaleIds] = useState<number[]>([]);
   
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -150,12 +172,25 @@ export function Credit() {
 
   const handleOpenDetail = (group: GroupedCreditCustomer) => {
     setSelectedGroup(group);
+    setSelectedInnerSaleIds([]);
     setInnerStatusFilter('all');
     setInnerBuyDateStart('');
     setInnerBuyDateEnd('');
     setInnerDueDateStart('');
     setInnerDueDateEnd('');
     setDetailModalOpen(true);
+  };
+
+  const loadCashRegisters = async () => {
+    try {
+      const registers = await cashRegistersService.findAll();
+      const active = registers.filter(r => r.isActive);
+      setCashRegisters(active);
+      return active;
+    } catch (e) {
+      toast.error('Error al cargar las cajas disponibles');
+      return [];
+    }
   };
 
   const [specificSaleDetail, setSpecificSaleDetail] = useState<any>(null);
@@ -177,8 +212,6 @@ export function Credit() {
     }
   };
 
-
-
   const handleOpenPayment = async (credit: CreditSale) => {
     const remaining = Number(credit.remainingAmount) || 0;
     setSelectedCreditForPayment(credit);
@@ -191,15 +224,143 @@ export function Credit() {
     setReceiptFile(null);
     setSelectedCashRegisterId(null);
     setPaymentModalOpen(true);
-    try {
-      const registers = await cashRegistersService.findAll();
-      const active = registers.filter(r => r.isActive);
-      setCashRegisters(active);
-      if (active.length === 1) setSelectedCashRegisterId(active[0].id);
-    } catch (e) {
-      toast.error('Error al cargar las cajas disponibles');
+    const active = await loadCashRegisters();
+    if (active.length === 1) setSelectedCashRegisterId(active[0].id);
+  };
+
+  const handleOpenMultiPaymentForCustomer = async (group: GroupedCreditCustomer, preselectedIds?: number[]) => {
+    const pendingSales = group.creditSales.filter(s => s.status === 'PENDIENTE' || s.status === 'VENCIDO');
+    if (pendingSales.length === 0) {
+      toast.info('Este cliente no tiene compras a crédito con saldo pendiente');
+      return;
+    }
+
+    const hasPreselected = Array.isArray(preselectedIds) && preselectedIds.length > 0;
+    const rows: MultiPaymentRow[] = pendingSales.map(s => {
+      const rem = Number(s.remainingAmount) || 0;
+      const isSelected = hasPreselected ? preselectedIds.includes(s.id) : true;
+      return {
+        creditSale: s,
+        selected: isSelected,
+        remaining: rem,
+        amount: isSelected ? rem : 0,
+      };
+    });
+
+    setMultiPaymentCustomer(group);
+    setMultiPaymentRows(rows);
+    setMultiGlobalAmount('');
+    setMultiPaymentMethod('EFECTIVO');
+    setMultiReference('');
+    setMultiNotes('');
+    setMultiReceiptFile(null);
+    setMultiPaymentModalOpen(true);
+
+    const active = await loadCashRegisters();
+    if (active.length === 1) {
+      setMultiCashRegisterId(active[0].id);
+    } else if (selectedCashRegisterId) {
+      setMultiCashRegisterId(selectedCashRegisterId);
+    } else {
+      setMultiCashRegisterId(null);
     }
   };
+
+  const handleDistributeGlobalAmount = () => {
+    const totalToDistribute = Number(multiGlobalAmount);
+    if (!totalToDistribute || totalToDistribute <= 0) {
+      toast.error('Ingresa un monto global mayor a 0 para distribuir');
+      return;
+    }
+
+    const updated = [...multiPaymentRows];
+    const selectedIndices = updated
+      .map((r, idx) => ({ r, idx }))
+      .filter(({ r }) => r.selected)
+      .sort((a, b) => {
+        const dateA = a.r.creditSale.dueDate ? new Date(a.r.creditSale.dueDate).getTime() : new Date(a.r.creditSale.createdAt).getTime();
+        const dateB = b.r.creditSale.dueDate ? new Date(b.r.creditSale.dueDate).getTime() : new Date(b.r.creditSale.createdAt).getTime();
+        return dateA - dateB;
+      });
+
+    if (selectedIndices.length === 0) {
+      toast.error('Selecciona al menos una factura para distribuir el monto');
+      return;
+    }
+
+    let remainingToDistribute = totalToDistribute;
+    for (const { idx } of selectedIndices) {
+      const maxPossible = updated[idx].remaining;
+      const allocated = Math.min(maxPossible, remainingToDistribute);
+      updated[idx].amount = Number(allocated.toFixed(4));
+      remainingToDistribute = Number((remainingToDistribute - allocated).toFixed(4));
+    }
+
+    if (remainingToDistribute > 0) {
+      toast.info(`El monto ingresado excede la deuda de las facturas seleccionadas en $${remainingToDistribute.toFixed(4)}`);
+    } else {
+      toast.success('Monto distribuido automáticamente según vencimiento');
+    }
+
+    setMultiPaymentRows(updated);
+  };
+
+  const handleSaldarTodoSelected = () => {
+    setMultiPaymentRows(prev => prev.map(r => ({
+      ...r,
+      amount: r.selected ? r.remaining : 0,
+    })));
+  };
+
+  const handleLimpiarMontos = () => {
+    setMultiPaymentRows(prev => prev.map(r => ({
+      ...r,
+      amount: 0,
+    })));
+    setMultiGlobalAmount('');
+  };
+
+  const handleRowAmountChange = (idx: number, val: number) => {
+    setMultiPaymentRows(prev => {
+      const copy = [...prev];
+      const max = copy[idx].remaining;
+      const safeVal = Math.min(Math.max(0, val || 0), max);
+      copy[idx].amount = Number(safeVal.toFixed(4));
+      if (safeVal > 0 && !copy[idx].selected) {
+        copy[idx].selected = true;
+      }
+      return copy;
+    });
+  };
+
+  const handleRowToggle = (idx: number) => {
+    setMultiPaymentRows(prev => {
+      const copy = [...prev];
+      const newSelected = !copy[idx].selected;
+      copy[idx].selected = newSelected;
+      if (!newSelected) {
+        copy[idx].amount = 0;
+      } else {
+        copy[idx].amount = copy[idx].remaining;
+      }
+      return copy;
+    });
+  };
+
+  const totalMultiToPay = Number(
+    multiPaymentRows
+      .filter(r => r.selected && r.amount > 0)
+      .reduce((sum, r) => sum + r.amount, 0)
+      .toFixed(4)
+  );
+
+  const totalFullyPaidCount = multiPaymentRows.filter(
+    r => r.selected && r.amount >= r.remaining && r.remaining > 0
+  ).length;
+
+  const totalPartialPaidCount = multiPaymentRows.filter(
+    r => r.selected && r.amount > 0 && r.amount < r.remaining
+  ).length;
 
   const handleOpenPaymentDetail = (payment: CreditPayment) => {
     setSelectedPaymentDetail(payment);
@@ -448,6 +609,248 @@ export function Credit() {
     printWindow.document.close();
   };
 
+  const handleMultiPaymentSubmit = async () => {
+    if (!multiPaymentCustomer) return;
+    if (isMultiAbonoSubmittingGlobal) return;
+
+    const itemsToPay = multiPaymentRows
+      .filter(r => r.selected && r.amount > 0)
+      .map(r => ({
+        creditSaleId: r.creditSale.id,
+        amount: Number(r.amount.toFixed(4)),
+      }));
+
+    if (itemsToPay.length === 0) {
+      toast.error('Debes ingresar al menos un monto mayor a $0 en las facturas seleccionadas');
+      return;
+    }
+
+    if (!multiCashRegisterId) {
+      toast.error('Selecciona la caja a la que se registrará el ingreso');
+      return;
+    }
+
+    isMultiAbonoSubmittingGlobal = true;
+    if (multiSubmitBtnRef.current) {
+      multiSubmitBtnRef.current.disabled = true;
+      multiSubmitBtnRef.current.style.pointerEvents = 'none';
+      multiSubmitBtnRef.current.style.opacity = '0.6';
+    }
+
+    setSavingMultiPayment(true);
+    try {
+      let receiptUrl: string | undefined = undefined;
+      if (multiReceiptFile && (multiPaymentMethod === 'TARJETA' || multiPaymentMethod === 'TRANSFERENCIA')) {
+        const formData = new FormData();
+        formData.append('file', multiReceiptFile);
+        const uploadRes = await fetch(import.meta.env.VITE_API_URL + '/uploads/receipt', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('agro-token')}`
+          },
+          body: formData
+        });
+        if (!uploadRes.ok) throw new Error('Error al subir el comprobante');
+        const uploadData = await uploadRes.json();
+        receiptUrl = uploadData.url;
+      }
+
+      const res = await creditService.registerMultiPayment({
+        customerId: multiPaymentCustomer.customer.id,
+        payments: itemsToPay,
+        paymentMethod: multiPaymentMethod,
+        reference: multiReference || undefined,
+        notes: multiNotes || undefined,
+        receiptUrl,
+        cashRegisterId: multiCashRegisterId,
+      });
+
+      const printedItems = multiPaymentRows.filter(r => r.selected && r.amount > 0).map(r => ({
+        ref: r.creditSale.saleId ? `Venta #${r.creditSale.saleId}` : 'Cuenta manual',
+        oldRemaining: r.remaining,
+        amount: r.amount,
+        newRemaining: Math.max(0, r.remaining - r.amount),
+      }));
+
+      const customerName = multiPaymentCustomer.customer.name;
+      const paymentMethodUsed = multiPaymentMethod;
+      const refUsed = multiReference;
+
+      toast.success(`Abono múltiple registrado: $${res.totalAmount.toFixed(4)} en ${res.paymentCount} factura(s)`, {
+        duration: 9000,
+        action: {
+          label: 'Imprimir Recibo',
+          onClick: () => printMultiPaymentReceipt({
+            batchId: res.batchId,
+            customerName,
+            cashierName: 'Caja',
+            paymentMethod: paymentMethodUsed,
+            reference: refUsed,
+            totalAmount: res.totalAmount,
+            newTotalDebt: Number(res.customer.creditBalance),
+            date: new Date().toLocaleString('es-ES'),
+            items: printedItems,
+          }),
+        },
+      });
+
+      if (selectedGroup && selectedGroup.customer.id === multiPaymentCustomer.customer.id) {
+        const paymentMap = new Map(itemsToPay.map(it => [it.creditSaleId, it.amount]));
+        const updatedSales = selectedGroup.creditSales.map(s => {
+          if (paymentMap.has(s.id)) {
+            const payAmt = paymentMap.get(s.id)!;
+            const newPaid = Number(s.paidAmount) + payAmt;
+            const newRem = Math.max(0, Number(s.remainingAmount) - payAmt);
+            return {
+              ...s,
+              paidAmount: newPaid,
+              remainingAmount: newRem,
+              status: newRem <= 0 ? 'PAGADO' : s.status,
+            };
+          }
+          return s;
+        }) as CreditSale[];
+
+        setSelectedGroup({
+          ...selectedGroup,
+          creditSales: updatedSales,
+          totalPaid: selectedGroup.totalPaid + res.totalAmount,
+          totalRemaining: Math.max(0, selectedGroup.totalRemaining - res.totalAmount),
+        });
+      }
+
+      setMultiPaymentModalOpen(false);
+      setSelectedInnerSaleIds([]);
+      fetchSummary();
+      fetchCredits();
+    } catch (e: any) {
+      toast.error(e.message || 'Error al procesar el abono múltiple');
+      if (multiSubmitBtnRef.current) {
+        multiSubmitBtnRef.current.disabled = false;
+        multiSubmitBtnRef.current.style.pointerEvents = '';
+        multiSubmitBtnRef.current.style.opacity = '';
+      }
+    } finally {
+      isMultiAbonoSubmittingGlobal = false;
+      setSavingMultiPayment(false);
+    }
+  };
+
+  const printMultiPaymentReceipt = (data: {
+    batchId: string;
+    customerName: string;
+    cashierName: string;
+    paymentMethod: string;
+    reference?: string;
+    totalAmount: number;
+    newTotalDebt: number;
+    date: string;
+    items: { ref: string; oldRemaining: number; amount: number; newRemaining: number }[];
+  }) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('El navegador bloqueó la ventana emergente de impresión.');
+      return;
+    }
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Comprobante de Abono Múltiple - ${data.batchId}</title>
+        <style>
+          @page { margin: 0; }
+          body {
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            padding: 10px;
+            width: 80mm;
+            color: #000;
+            font-size: 13px;
+            font-weight: bold;
+          }
+          .center { text-align: center; }
+          .bold { font-weight: bold; }
+          .divider { border-bottom: 1px dashed #000; margin: 10px 0; }
+          .row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+          h2 { margin: 0 0 5px 0; font-size: 16px; }
+          p { margin: 0 0 5px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="center">
+          <h2>AGROFERR D'CAMPO</h2>
+          <p>San Lorenzo, Ahuachapán,<br>El Salvador, 01009</p>
+          <p>Tel: 7216 6748</p>
+          <p>agroferreteriadcampo@gmail.com</p>
+          <div class="divider"></div>
+          <p class="bold" style="font-size: 14px;">COMPROBANTE DE ABONO MÚLTIPLE</p>
+        </div>
+        <div class="divider"></div>
+        <div class="row">
+          <span>N° Lote:</span>
+          <span>${data.batchId}</span>
+        </div>
+        <div class="row">
+          <span>Fecha:</span>
+          <span>${data.date}</span>
+        </div>
+        <div class="row">
+          <span>Cliente:</span>
+          <span>${data.customerName}</span>
+        </div>
+        <div class="row">
+          <span>Método de Pago:</span>
+          <span>${data.paymentMethod}</span>
+        </div>
+        ${data.reference ? `<div class="row"><span>Referencia:</span><span>${data.reference}</span></div>` : ''}
+
+        <div class="divider"></div>
+        <div class="bold" style="margin-bottom: 6px; font-size: 12px;">DESGLOSE DE FACTURAS ABONADAS:</div>
+        ${data.items.map(it => `
+          <div class="row">
+            <span>${it.ref}</span>
+            <span>Abono: $${it.amount.toFixed(4)}</span>
+          </div>
+          <div class="row" style="font-size: 11px; color: #444; margin-bottom: 4px;">
+            <span>Ant: $${it.oldRemaining.toFixed(4)}</span>
+            <span>Nuevo Saldo: $${it.newRemaining.toFixed(4)}</span>
+          </div>
+        `).join('')}
+
+        <div class="divider"></div>
+        <div class="row bold" style="font-size: 14px; margin-top: 6px;">
+          <span>TOTAL ABONADO:</span>
+          <span>$${data.totalAmount.toFixed(4)}</span>
+        </div>
+        <div class="row" style="margin-top: 4px; font-size: 12px;">
+          <span>Nuevo Saldo Deudor:</span>
+          <span>$${data.newTotalDebt.toFixed(4)}</span>
+        </div>
+
+        <div class="divider"></div>
+        <div class="center" style="margin-top: 15px;">
+          <p style="font-size: 11px; margin-bottom: 8px;">
+            * Este documento NO es una factura válida.
+            Es un comprobante de abono múltiple a cuenta. *
+          </p>
+          <p class="bold">¡Gracias por su pago!</p>
+          <p>*** COPIA CLIENTE ***</p>
+        </div>
+        <script>
+          window.onload = () => {
+            window.print();
+            setTimeout(() => window.close(), 500);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
   const getStatusBadge = (status: string) => {
     switch(status) {
       case 'PENDIENTE': return <Badge variant="warning">Pendiente</Badge>;
@@ -486,6 +889,11 @@ export function Credit() {
     (paymentModalOpen && (
       !!paymentForm.reference?.trim() ||
       !!paymentForm.notes?.trim()
+    )) ||
+    (multiPaymentModalOpen && (
+      multiPaymentRows.some(r => r.amount > 0) ||
+      !!multiReference?.trim() ||
+      !!multiNotes?.trim()
     ));
   const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
 
@@ -596,6 +1004,17 @@ export function Credit() {
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex justify-center gap-2">
+                        {group.creditSales.some(s => s.status === 'PENDIENTE' || s.status === 'VENCIDO') && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOpenMultiPaymentForCustomer(group)}
+                            className="text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/10 font-bold"
+                            title="Abono Múltiple de Facturas"
+                          >
+                            <Layers size={15} className="mr-1" /> Abono Múltiple
+                          </Button>
+                        )}
                         <Button variant="ghost" size="sm" onClick={() => handleOpenDetail(group)} className="text-[var(--primary)] hover:bg-[var(--primary)]/10">
                           <Eye size={16} className="mr-1.5" /> Ver Detalle
                         </Button>
@@ -664,7 +1083,19 @@ export function Credit() {
                 </div>
 
                 <div className="flex flex-col gap-4 mb-4">
-                  <h3 className="font-bold text-lg flex items-center gap-2"><History size={18}/> Compras a Crédito</h3>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <h3 className="font-bold text-lg flex items-center gap-2"><History size={18}/> Compras a Crédito</h3>
+                    {selectedGroup.creditSales.some(s => s.status === 'PENDIENTE' || s.status === 'VENCIDO') && (
+                      <Button
+                        type="button"
+                        onClick={() => handleOpenMultiPaymentForCustomer(selectedGroup, selectedInnerSaleIds)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-9 shadow-sm"
+                      >
+                        <Layers size={16} className="mr-1.5" />
+                        Abono Múltiple {selectedInnerSaleIds.length > 0 ? `(${selectedInnerSaleIds.length} seleccionada${selectedInnerSaleIds.length > 1 ? 's' : ''})` : ''}
+                      </Button>
+                    )}
+                  </div>
                   
                   {/* Filtros Internos */}
                   <div className="flex flex-wrap gap-3 bg-[var(--bg)] p-3 rounded-xl border border-[var(--border)]">
@@ -717,6 +1148,25 @@ export function Credit() {
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-10 text-center">
+                            <input
+                              type="checkbox"
+                              className="rounded cursor-pointer h-4 w-4 accent-[var(--primary)]"
+                              checked={
+                                filteredInnerSales.filter(s => s.status === 'PENDIENTE' || s.status === 'VENCIDO').length > 0 &&
+                                filteredInnerSales.filter(s => s.status === 'PENDIENTE' || s.status === 'VENCIDO').every(s => selectedInnerSaleIds.includes(s.id))
+                              }
+                              onChange={(e) => {
+                                const pendings = filteredInnerSales.filter(s => s.status === 'PENDIENTE' || s.status === 'VENCIDO');
+                                if (e.target.checked) {
+                                  setSelectedInnerSaleIds(pendings.map(s => s.id));
+                                } else {
+                                  setSelectedInnerSaleIds([]);
+                                }
+                              }}
+                              title="Seleccionar todas las pendientes mostradas"
+                            />
+                          </TableHead>
                           <TableHead>Ref. Venta</TableHead>
                           <TableHead>Fecha</TableHead>
                           <TableHead>Vencimiento</TableHead>
@@ -730,7 +1180,7 @@ export function Credit() {
                       <TableBody>
                         {filteredInnerSales.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={8} className="text-center py-6 text-[var(--text-sec)]">
+                            <TableCell colSpan={9} className="text-center py-6 text-[var(--text-sec)]">
                               No hay compras que coincidan con los filtros
                             </TableCell>
                           </TableRow>
@@ -742,7 +1192,25 @@ export function Credit() {
                             const isOverdue = dateToUse < new Date() && s.status !== 'PAGADO';
                             
                             return (
-                              <TableRow key={s.id}>
+                              <TableRow key={s.id} className={selectedInnerSaleIds.includes(s.id) ? 'bg-[var(--primary)]/5' : ''}>
+                                <TableCell className="text-center">
+                                  {s.status === 'PENDIENTE' || s.status === 'VENCIDO' ? (
+                                    <input
+                                      type="checkbox"
+                                      className="rounded cursor-pointer h-4 w-4 accent-[var(--primary)]"
+                                      checked={selectedInnerSaleIds.includes(s.id)}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setSelectedInnerSaleIds(prev => [...prev, s.id]);
+                                        } else {
+                                          setSelectedInnerSaleIds(prev => prev.filter(id => id !== s.id));
+                                        }
+                                      }}
+                                    />
+                                  ) : (
+                                    <span className="text-[var(--text-sec)] text-xs">-</span>
+                                  )}
+                                </TableCell>
                                 <TableCell className="font-bold">{s.saleId ? `Venta #${s.saleId}` : 'Cuenta Manual'}</TableCell>
                                 <TableCell>{new Date(s.createdAt).toLocaleDateString()}</TableCell>
                                 <TableCell className={isOverdue ? 'text-rose-500 font-bold' : ''}>
@@ -877,6 +1345,312 @@ export function Credit() {
               style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
             >
               {savingPayment ? 'Registrando...' : 'Confirmar Abono'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ABONO MÚLTIPLE DE FACTURAS */}
+      <Dialog open={multiPaymentModalOpen} onOpenChange={(o) => o ? setMultiPaymentModalOpen(true) : confirmExit(() => setMultiPaymentModalOpen(false))}>
+        <DialogContent className="sm:max-w-4xl w-full flex flex-col p-0 max-h-[92vh]">
+          <DialogHeader className="p-5 border-b shrink-0 bg-[var(--bg)]/50">
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle className="text-xl font-black flex items-center gap-2">
+                  <Layers className="text-emerald-600" size={22} />
+                  Abono Múltiple de Facturas
+                </DialogTitle>
+                <DialogDescription className="mt-1">
+                  {multiPaymentCustomer?.customer.name} — Deuda total en cartera: ${Number(multiPaymentCustomer?.totalRemaining || 0).toFixed(4)}
+                </DialogDescription>
+              </div>
+              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-xs px-2.5 py-1 font-bold">
+                {multiPaymentRows.filter(r => r.selected).length} de {multiPaymentRows.length} seleccionada(s)
+              </Badge>
+            </div>
+          </DialogHeader>
+
+          <div className="p-5 overflow-y-auto space-y-5 flex-1 custom-scrollbar">
+            {/* Barra de Distribución Rápida */}
+            <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--bg)] flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <ArrowDownUp size={16} className="text-[var(--primary)] shrink-0" />
+                <span className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">
+                  Distribuir monto:
+                </span>
+                <div className="w-36">
+                  <Input
+                    type="number"
+                    min={0.01}
+                    step="any"
+                    placeholder="Monto total ($)"
+                    className="h-8 text-xs bg-[var(--card)]"
+                    value={multiGlobalAmount}
+                    onChange={e => setMultiGlobalAmount(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleDistributeGlobalAmount();
+                      }
+                    }}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs font-bold text-[var(--primary)] border-[var(--primary)]/30 hover:bg-[var(--primary)]/10"
+                  onClick={handleDistributeGlobalAmount}
+                >
+                  Distribuir (Antiguas 1°)
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs font-medium text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/10"
+                  onClick={handleSaldarTodoSelected}
+                >
+                  Saldar Seleccionadas
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs text-[var(--text-sec)] hover:text-rose-500"
+                  onClick={handleLimpiarMontos}
+                >
+                  Limpiar
+                </Button>
+              </div>
+            </div>
+
+            {/* Tabla de Facturas */}
+            <div className="border border-[var(--border)] rounded-xl overflow-hidden shadow-xs bg-[var(--card)]">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-[var(--bg)]/60 text-xs">
+                    <TableHead className="w-10 text-center">
+                      <input
+                        type="checkbox"
+                        className="rounded cursor-pointer h-4 w-4 accent-[var(--primary)]"
+                        checked={multiPaymentRows.length > 0 && multiPaymentRows.every(r => r.selected)}
+                        onChange={(e) => {
+                          const val = e.target.checked;
+                          setMultiPaymentRows(prev => prev.map(r => ({
+                            ...r,
+                            selected: val,
+                            amount: val ? r.remaining : 0,
+                          })));
+                        }}
+                        title="Seleccionar todas"
+                      />
+                    </TableHead>
+                    <TableHead>Factura / Ref</TableHead>
+                    <TableHead>Emisión</TableHead>
+                    <TableHead>Vencimiento</TableHead>
+                    <TableHead className="text-right">Saldo Actual</TableHead>
+                    <TableHead className="w-40 text-center">Abonar ($)</TableHead>
+                    <TableHead className="text-right">Saldo Final</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {multiPaymentRows.map((row, idx) => {
+                    const cs = row.creditSale;
+                    const dateToUse = cs.dueDate ? new Date(cs.dueDate) : new Date(new Date(cs.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000);
+                    const isOverdue = dateToUse < new Date() && cs.status !== 'PAGADO';
+                    const finalBalance = Math.max(0, row.remaining - row.amount);
+
+                    return (
+                      <TableRow key={cs.id} className={cn('transition-colors', row.selected ? 'bg-[var(--primary)]/5' : 'opacity-60')}>
+                        <TableCell className="text-center">
+                          <input
+                            type="checkbox"
+                            className="rounded cursor-pointer h-4 w-4 accent-[var(--primary)]"
+                            checked={row.selected}
+                            onChange={() => handleRowToggle(idx)}
+                          />
+                        </TableCell>
+                        <TableCell className="font-bold text-xs">
+                          {cs.saleId ? `Venta #${cs.saleId}` : 'Cuenta manual'}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {new Date(cs.createdAt).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className={cn('text-xs', isOverdue ? 'text-rose-500 font-bold' : '')}>
+                          {dateToUse.toLocaleDateString()}
+                          {isOverdue && <span className="ml-1 text-[10px] text-rose-500 uppercase font-black">(Vencida)</span>}
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-xs">
+                          ${row.remaining.toFixed(4)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1 justify-center">
+                            <Input
+                              type="number"
+                              min={0}
+                              max={row.remaining}
+                              step="any"
+                              disabled={!row.selected}
+                              className="h-8 text-xs text-right font-bold bg-[var(--card)] w-28"
+                              value={row.amount || ''}
+                              onChange={e => handleRowAmountChange(idx, parseFloat(e.target.value) || 0)}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={!row.selected}
+                              className="h-8 px-2 text-[10px] text-[var(--primary)] font-bold hover:bg-[var(--primary)]/10"
+                              onClick={() => handleRowAmountChange(idx, row.remaining)}
+                              title="Pagar saldo total de esta factura"
+                            >
+                              Max
+                            </Button>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right text-xs">
+                          {finalBalance === 0 ? (
+                            <Badge variant="success" className="text-[10px] px-2 py-0.5">Saldada ($0.00)</Badge>
+                          ) : (
+                            <span className="font-bold text-[var(--text-sec)]">${finalBalance.toFixed(4)}</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Configuración del Pago & Resumen */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+              <div className="space-y-3 p-4 rounded-xl border border-[var(--border)] bg-[var(--card)]">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold">Método de Pago</Label>
+                  <Select
+                    value={multiPaymentMethod}
+                    onValueChange={(val) => setMultiPaymentMethod(val)}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EFECTIVO">Efectivo</SelectItem>
+                      <SelectItem value="TARJETA">Tarjeta</SelectItem>
+                      <SelectItem value="TRANSFERENCIA">Transferencia</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold">Caja de Destino</Label>
+                  <Select
+                    value={multiCashRegisterId ? String(multiCashRegisterId) : undefined}
+                    onValueChange={(v) => setMultiCashRegisterId(Number(v))}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder={cashRegisters.length === 0 ? "No hay cajas activas" : "Selecciona una caja..."} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {cashRegisters.map(r => (
+                        <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-[var(--text-sec)]">El ingreso se registrará en esta caja.</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold">Referencia (Opcional)</Label>
+                  <Input
+                    placeholder="Voucher, N° Transferencia..."
+                    className="h-8 text-xs"
+                    value={multiReference}
+                    onChange={e => setMultiReference(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3 p-4 rounded-xl border border-[var(--border)] bg-[var(--card)]">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold">Notas / Observaciones (Opcional)</Label>
+                  <Input
+                    placeholder="Detalles sobre este pago..."
+                    className="h-8 text-xs"
+                    value={multiNotes}
+                    onChange={e => setMultiNotes(e.target.value)}
+                  />
+                </div>
+
+                {(multiPaymentMethod === 'TARJETA' || multiPaymentMethod === 'TRANSFERENCIA') && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold">Comprobante de Pago (Opcional)</Label>
+                    <Input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={e => {
+                        if (e.target.files && e.target.files.length > 0) {
+                          setMultiReceiptFile(e.target.files[0]);
+                        } else {
+                          setMultiReceiptFile(null);
+                        }
+                      }}
+                      className="cursor-pointer file:cursor-pointer file:bg-[var(--primary)] file:text-white file:border-0 file:rounded-md file:px-2.5 file:py-0.5 file:text-xs file:font-bold file:mr-2 hover:file:bg-[var(--primary)]/90 h-8 text-xs"
+                    />
+                    {multiReceiptFile && <p className="text-[11px] text-[var(--primary)] font-medium">Archivo: {multiReceiptFile.name}</p>}
+                  </div>
+                )}
+              </div>
+
+              {/* Resumen Final */}
+              <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 dark:bg-emerald-500/10 flex flex-col justify-between">
+                <div className="space-y-2">
+                  <p className="text-xs font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                    Resumen del Pago
+                  </p>
+                  <div className="flex justify-between text-xs py-1 border-b border-[var(--border)]">
+                    <span className="text-[var(--text-sec)]">Facturas con abono:</span>
+                    <span className="font-bold">{multiPaymentRows.filter(r => r.selected && r.amount > 0).length}</span>
+                  </div>
+                  <div className="flex justify-between text-xs py-1 border-b border-[var(--border)]">
+                    <span className="text-[var(--text-sec)]">Quedarán saldadas (100%):</span>
+                    <span className="font-bold text-emerald-600">{totalFullyPaidCount}</span>
+                  </div>
+                  {totalPartialPaidCount > 0 && (
+                    <div className="flex justify-between text-xs py-1 border-b border-[var(--border)]">
+                      <span className="text-[var(--text-sec)]">Con abono parcial:</span>
+                      <span className="font-bold text-amber-600">{totalPartialPaidCount}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-3 border-t border-emerald-500/20 mt-2">
+                  <p className="text-xs font-bold text-[var(--text-sec)] uppercase">Total a Cobrar</p>
+                  <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                    ${totalMultiToPay.toFixed(4)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="p-4 border-t shrink-0 bg-[var(--bg)]/50 flex items-center justify-between sm:justify-between">
+            <Button variant="outline" onClick={() => confirmExit(() => setMultiPaymentModalOpen(false))}>
+              Cancelar
+            </Button>
+            <Button
+              ref={multiSubmitBtnRef}
+              onPointerDown={() => {
+                if (!isMultiAbonoSubmittingGlobal) handleMultiPaymentSubmit();
+              }}
+              disabled={savingMultiPayment || totalMultiToPay <= 0 || !multiCashRegisterId}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+            >
+              {savingMultiPayment ? 'Procesando Abono...' : `Confirmar Abono Múltiple ($${totalMultiToPay.toFixed(4)})`}
             </Button>
           </DialogFooter>
         </DialogContent>
