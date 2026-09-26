@@ -28,6 +28,9 @@ import { Switch } from '../components/ui/switch';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { UnsavedChangesDialog } from '../components/ui/unsaved-changes-dialog';
 
+import { Checkbox } from '../components/ui/checkbox';
+import { printSequentialPurchaseOrders, printSequentialPurchasePaymentReceipts } from '../utils/printBatchDocuments';
+
 export function Purchases() {
   const [activeTab, setActiveTab] = useState<'compras' | 'proveedores' | 'pagar'>('compras');
 
@@ -36,6 +39,81 @@ export function Purchases() {
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
   
+  // Selección Múltiple y Acciones Masivas
+  const [selectedPurchaseIds, setSelectedPurchaseIds] = useState<number[]>([]);
+  const [openMenuPurchaseId, setOpenMenuPurchaseId] = useState<number | null>(null);
+
+  const selectedPurchases = purchases.filter((p: any) => selectedPurchaseIds.includes(p.id));
+  const paidSelectedPurchases = selectedPurchases.filter((p: any) => p.isPaid);
+  const draftSelectedPurchases = selectedPurchases.filter((p: any) => p.status === 'BORRADOR');
+
+  const allVisiblePurchasesSelected =
+    purchases.length > 0 && purchases.every((p: any) => selectedPurchaseIds.includes(p.id));
+  const someVisiblePurchasesSelected = purchases.some((p: any) =>
+    selectedPurchaseIds.includes(p.id)
+  );
+
+  const toggleSelectAllPurchases = () => {
+    if (allVisiblePurchasesSelected) {
+      const visibleIds = new Set(purchases.map((p: any) => p.id));
+      setSelectedPurchaseIds((prev) => prev.filter((id) => !visibleIds.has(id)));
+    } else {
+      const visibleIds = purchases.map((p: any) => p.id);
+      setSelectedPurchaseIds((prev) =>
+        Array.from(new Set([...prev, ...visibleIds]))
+      );
+    }
+  };
+
+  const toggleSelectPurchase = (id: number) => {
+    setSelectedPurchaseIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleBatchPrintPurchaseOrders = async () => {
+    if (selectedPurchases.length === 0) {
+      toast.error('No hay órdenes de compra seleccionadas');
+      return;
+    }
+    await printSequentialPurchaseOrders(selectedPurchases);
+  };
+
+  const handleBatchPrintPaymentReceipts = async () => {
+    if (paidSelectedPurchases.length === 0) {
+      toast.error('Ninguna de las órdenes seleccionadas está pagada');
+      return;
+    }
+    await printSequentialPurchasePaymentReceipts(paidSelectedPurchases);
+  };
+
+  const handleBatchConfirmPurchases = async () => {
+    if (draftSelectedPurchases.length === 0) {
+      toast.error('Ninguna de las órdenes seleccionadas está en estado Borrador');
+      return;
+    }
+    const toastId = toast.loading(`Confirmando ${draftSelectedPurchases.length} órdenes...`);
+    let successCount = 0;
+    let failCount = 0;
+    for (const purchase of draftSelectedPurchases) {
+      try {
+        await purchasesService.confirmPurchase(purchase.id);
+        successCount++;
+      } catch (err) {
+        failCount++;
+      }
+    }
+    toast.dismiss(toastId);
+    if (successCount > 0) {
+      toast.success(`${successCount} ${successCount === 1 ? 'orden confirmada' : 'órdenes confirmadas'} con éxito`);
+      fetchPurchases();
+      setSelectedPurchaseIds([]);
+    }
+    if (failCount > 0) {
+      toast.error(`${failCount} ${failCount === 1 ? 'orden falló' : 'órdenes fallaron'} al confirmarse`);
+    }
+  };
+
   const [searchParams] = useSearchParams();
   const statusFilter = searchParams.get('status') || 'all';
   const supplierFilter = searchParams.get('supplier') || 'all';
@@ -744,7 +822,7 @@ export function Purchases() {
   };
 
   return (
-    <div className="flex flex-col gap-6 h-full">
+    <div className="flex flex-col gap-6 min-h-full">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-[var(--text-main)]">Compras y Abastecimiento</h1>
@@ -797,6 +875,19 @@ export function Purchases() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12 text-center">
+                  <Checkbox
+                    checked={
+                      allVisiblePurchasesSelected
+                        ? true
+                        : someVisiblePurchasesSelected
+                          ? "indeterminate"
+                          : false
+                    }
+                    onCheckedChange={toggleSelectAllPurchases}
+                    aria-label="Seleccionar todas las órdenes"
+                  />
+                </TableHead>
                 <TableHead>N° Orden</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead>Proveedor</TableHead>
@@ -809,92 +900,112 @@ export function Purchases() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-32 text-center text-[var(--text-sec)] animate-pulse">
+                  <TableCell colSpan={8} className="h-32 text-center text-[var(--text-sec)] animate-pulse">
                     Cargando compras...
                   </TableCell>
                 </TableRow>
               ) : purchases.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-32 text-center text-[var(--text-sec)] font-medium">
+                  <TableCell colSpan={8} className="h-32 text-center text-[var(--text-sec)] font-medium">
                     No se encontraron órdenes con estos filtros
                   </TableCell>
                 </TableRow>
               ) : (
-                purchases.map(purchase => (
-                  <TableRow key={purchase.id} className="group hover:bg-[var(--bg)]/30">
-                    <TableCell className="font-bold text-[var(--primary)]">
-                      OC-{purchase.id.toString().padStart(6, '0')}
-                    </TableCell>
-                    <TableCell className="text-[var(--text-main)] text-sm">
-                      {new Date(purchase.createdAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      <span className="font-bold text-[var(--text-main)] block">
-                        {purchase.supplier?.name}
-                      </span>
-                      {purchase.referenceDoc && <span className="text-[10px] text-muted-foreground">Ref: {purchase.referenceDoc}</span>}
-                    </TableCell>
-                    <TableCell className="text-right font-black text-[var(--text-main)]">
-                      ${Number(purchase.totalAmount).toFixed(4)}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {getStatusBadge(purchase.status)}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant={purchase.isPaid ? 'success' : 'warning'}>
-                        {purchase.isPaid ? 'PAGADO' : 'PENDIENTE'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">Opciones</Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleOpenDetail(purchase)} className="font-bold cursor-pointer">
-                            <Eye size={14} className="mr-2 text-[var(--primary)]" /> Ver Detalle
-                          </DropdownMenuItem>
-
-                          <DropdownMenuItem onClick={() => printPurchaseOrder(purchase)} className="font-bold cursor-pointer text-[var(--primary)]">
-                            <Printer size={14} className="mr-2" /> Imprimir Orden
-                          </DropdownMenuItem>
-                          
-                          {purchase.isPaid && (
-                            <DropdownMenuItem onClick={() => printPaymentReceipt(purchase)} className="font-bold cursor-pointer text-emerald-600">
-                              <DollarSign size={14} className="mr-2" /> Imprimir Recibo Pago
+                purchases.map(purchase => {
+                  const isSelected = selectedPurchaseIds.includes(purchase.id);
+                  return (
+                    <TableRow 
+                      key={purchase.id} 
+                      onClick={() => setOpenMenuPurchaseId(prev => (prev === purchase.id ? null : purchase.id))}
+                      className={cn(
+                        "group hover:bg-[var(--bg)]/30 transition-colors cursor-pointer",
+                        isSelected && "bg-[var(--primary)]/5"
+                      )}
+                    >
+                      <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleSelectPurchase(purchase.id)}
+                          aria-label={`Seleccionar orden ${purchase.id}`}
+                        />
+                      </TableCell>
+                      <TableCell className="font-bold text-[var(--primary)]">
+                        OC-{purchase.id.toString().padStart(6, '0')}
+                      </TableCell>
+                      <TableCell className="text-[var(--text-main)] text-sm">
+                        {new Date(purchase.createdAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-bold text-[var(--text-main)] block">
+                          {purchase.supplier?.name}
+                        </span>
+                        {purchase.referenceDoc && <span className="text-[10px] text-muted-foreground">Ref: {purchase.referenceDoc}</span>}
+                      </TableCell>
+                      <TableCell className="text-right font-black text-[var(--text-main)]">
+                        ${Number(purchase.totalAmount).toFixed(4)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {getStatusBadge(purchase.status)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant={purchase.isPaid ? 'success' : 'warning'}>
+                          {purchase.isPaid ? 'PAGADO' : 'PENDIENTE'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenu
+                          open={openMenuPurchaseId === purchase.id}
+                          onOpenChange={(isOpen) => setOpenMenuPurchaseId(isOpen ? purchase.id : null)}
+                        >
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">Opciones</Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleOpenDetail(purchase)} className="font-bold cursor-pointer">
+                              <Eye size={14} className="mr-2 text-[var(--primary)]" /> Ver Detalle
                             </DropdownMenuItem>
-                          )}
-                          
-                          {purchase.status === 'BORRADOR' && (
-                            <>
-                              <DropdownMenuItem 
-                                onClick={() => handleConfirmPurchase(purchase.id)}
-                                className="font-bold cursor-pointer text-blue-600"
-                              >
-                                <CheckCircle2 size={14} className="mr-2" /> Confirmar Orden
-                              </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                onClick={() => handleCancelPurchase(purchase.id)}
-                                className="font-bold cursor-pointer text-destructive"
-                              >
-                                <Trash2 size={14} className="mr-2" /> Cancelar
-                              </DropdownMenuItem>
-                            </>
-                          )}
 
-                          {purchase.status === 'CONFIRMADA' && (
-                            <DropdownMenuItem 
-                              onClick={() => handleOpenReceiveModal(purchase)}
-                              className="font-bold cursor-pointer text-emerald-600"
-                            >
-                              <ArrowDownToLine size={14} className="mr-2" /> Recibir Mercadería
+                            <DropdownMenuItem onClick={() => printPurchaseOrder(purchase)} className="font-bold cursor-pointer text-[var(--primary)]">
+                              <Printer size={14} className="mr-2" /> Imprimir Orden
                             </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
+                            
+                            {purchase.isPaid && (
+                              <DropdownMenuItem onClick={() => printPaymentReceipt(purchase)} className="font-bold cursor-pointer text-emerald-600">
+                                <DollarSign size={14} className="mr-2" /> Imprimir Recibo Pago
+                              </DropdownMenuItem>
+                            )}
+                            
+                            {purchase.status === 'BORRADOR' && (
+                              <>
+                                <DropdownMenuItem 
+                                  onClick={() => handleConfirmPurchase(purchase.id)}
+                                  className="font-bold cursor-pointer text-blue-600"
+                                >
+                                  <CheckCircle2 size={14} className="mr-2" /> Confirmar Orden
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={() => handleCancelPurchase(purchase.id)}
+                                  className="font-bold cursor-pointer text-destructive"
+                                >
+                                  <Trash2 size={14} className="mr-2" /> Cancelar
+                                </DropdownMenuItem>
+                              </>
+                            )}
+
+                            {purchase.status === 'CONFIRMADA' && (
+                              <DropdownMenuItem 
+                                onClick={() => handleOpenReceiveModal(purchase)}
+                                className="font-bold cursor-pointer text-emerald-600"
+                              >
+                                <ArrowDownToLine size={14} className="mr-2" /> Recibir Mercadería
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
@@ -924,6 +1035,70 @@ export function Purchases() {
           </div>
         )}
       </div>
+
+      {/* BARRA FLOTANTE DE ACCIONES MASIVAS */}
+      {selectedPurchaseIds.length >= 2 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-5 duration-200">
+          <div className="bg-[var(--card)] border border-[var(--border)] shadow-2xl rounded-2xl p-4 flex items-center gap-4 text-sm font-medium">
+            <div className="flex items-center gap-2 pr-4 border-r border-[var(--border)]">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--primary)] text-white text-xs font-bold">
+                {selectedPurchaseIds.length}
+              </span>
+              <span className="text-[var(--text-main)] font-semibold">
+                órdenes seleccionadas
+              </span>
+              <span className="text-xs text-[var(--text-sec)]">
+                (Total: ${selectedPurchases.reduce((acc, p) => acc + Number(p.totalAmount || 0), 0).toFixed(2)})
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBatchPrintPurchaseOrders}
+                className="font-bold gap-2 text-[var(--primary)] border-[var(--primary)]/30 hover:bg-[var(--primary)]/10"
+              >
+                <Printer size={16} /> Imprimir Órdenes ({selectedPurchaseIds.length})
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBatchPrintPaymentReceipts}
+                disabled={paidSelectedPurchases.length === 0}
+                className={cn(
+                  "font-bold gap-2 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/10",
+                  paidSelectedPurchases.length === 0 && "opacity-50 cursor-not-allowed text-[var(--text-sec)] border-[var(--border)]"
+                )}
+                title={paidSelectedPurchases.length === 0 ? "Ninguna orden seleccionada está pagada" : "Imprimir recibos de pago en lote"}
+              >
+                <DollarSign size={16} /> Imprimir Recibos Pago ({paidSelectedPurchases.length})
+              </Button>
+
+              {draftSelectedPurchases.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBatchConfirmPurchases}
+                  className="font-bold gap-2 text-blue-600 border-blue-500/30 hover:bg-blue-500/10"
+                >
+                  <CheckCircle2 size={16} /> Confirmar Órdenes ({draftSelectedPurchases.length})
+                </Button>
+              )}
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedPurchaseIds([])}
+                className="text-[var(--text-sec)] hover:text-[var(--text-main)]"
+              >
+                <X size={16} className="mr-1" /> Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* --- MODAL CREAR ORDEN --- */}
       <Dialog open={createModalOpen} onOpenChange={(o) => o ? setCreateModalOpen(true) : confirmExit(() => setCreateModalOpen(false))}>

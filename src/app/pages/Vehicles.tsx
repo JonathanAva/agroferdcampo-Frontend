@@ -158,7 +158,7 @@ export default function Vehicles({ hideTitle }: { hideTitle?: boolean } = {}) {
   };
 
   return (
-    <div className="flex flex-col gap-6 h-full animate-in fade-in duration-500">
+    <div className="flex flex-col gap-6 min-h-full animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         {!hideTitle && (
           <div>
@@ -184,7 +184,7 @@ export default function Vehicles({ hideTitle }: { hideTitle?: boolean } = {}) {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6 animate-pulse">
           {[1,2,3].map(i => (
             <div key={i} className="h-48 rounded-2xl bg-[var(--bg)]/50 border border-[var(--border)]"></div>
           ))}
@@ -195,38 +195,38 @@ export default function Vehicles({ hideTitle }: { hideTitle?: boolean } = {}) {
           <p className="font-medium">No se encontraron vehículos</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 overflow-y-auto pb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6 pb-8">
           {(Array.isArray(vehicles) ? vehicles : []).map(vehicle => (
-            <Card key={vehicle.id} className="overflow-hidden border-[var(--border)] flex flex-col transition-all hover:shadow-md hover:border-[var(--primary)]/50">
-              <div className="p-5 flex-1">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-3 rounded-xl border ${vehicleStatusColor(vehicle.status).split(' ')[0]} ${vehicleStatusColor(vehicle.status).split(' ')[1]}`}>
+            <Card key={vehicle.id} className="overflow-hidden border-[var(--border)] flex flex-col transition-all hover:shadow-md hover:border-[var(--primary)]/50 min-h-fit">
+              <div className="p-4 sm:p-5 flex-1">
+                <div className="flex justify-between items-start mb-3 sm:mb-4 gap-2">
+                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                    <div className={`p-2.5 sm:p-3 rounded-xl border shrink-0 ${vehicleStatusColor(vehicle.status).split(' ')[0]} ${vehicleStatusColor(vehicle.status).split(' ')[1]}`}>
                       {getTypeIcon(vehicle.type)}
                     </div>
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-baseline gap-2">
-                        <h3 className="text-xl font-black text-[var(--text-main)] uppercase tracking-wider">{vehicle.plate}</h3>
+                        <h3 className="text-lg sm:text-xl font-black text-[var(--text-main)] uppercase tracking-wider truncate">{vehicle.plate}</h3>
                       </div>
                       {vehicle.nickname && (
-                        <p className="text-sm font-black text-[var(--text-sec)] italic tracking-wide uppercase mb-1">
+                        <p className="text-xs sm:text-sm font-black text-[var(--text-sec)] italic tracking-wide uppercase mb-0.5 truncate" title={vehicle.nickname}>
                           "{vehicle.nickname}"
                         </p>
                       )}
-                      <p className="text-sm font-bold text-[var(--text-muted)]">{vehicle.brand} {vehicle.model} {vehicle.year}</p>
+                      <p className="text-xs sm:text-sm font-bold text-[var(--text-muted)] truncate">{vehicle.brand} {vehicle.model} {vehicle.year}</p>
                     </div>
                   </div>
-                  <Badge variant="outline" className={`font-bold border ${vehicleStatusColor(vehicle.status)}`}>
+                  <Badge variant="outline" className={`font-bold border shrink-0 text-[10px] sm:text-xs ${vehicleStatusColor(vehicle.status)}`}>
                     {VEHICLE_STATUS_LABELS[vehicle.status]}
                   </Badge>
                 </div>
 
-                <div className="space-y-2 mt-6">
-                  <div className="flex justify-between text-sm border-b border-dashed border-[var(--border)] pb-2">
+                <div className="space-y-1.5 sm:space-y-2 mt-4 sm:mt-6">
+                  <div className="flex justify-between text-xs sm:text-sm border-b border-dashed border-[var(--border)] pb-1.5 sm:pb-2">
                     <span className="text-[var(--text-sec)]">Tipo</span>
                     <span className="font-bold text-[var(--text-main)]">{VEHICLE_TYPE_LABELS[vehicle.type]}</span>
                   </div>
-                  <div className="flex justify-between text-sm pb-2">
+                  <div className="flex justify-between text-xs sm:text-sm pb-1 sm:pb-2">
                     <span className="text-[var(--text-sec)]">Capacidad</span>
                     <span className="font-bold text-[var(--text-main)]">
                       {vehicle.capacityKg ? `${vehicle.capacityKg} kg` : '-'}
@@ -236,34 +236,46 @@ export default function Vehicles({ hideTitle }: { hideTitle?: boolean } = {}) {
                 </div>
               </div>
               
-              <div className="p-3 bg-[var(--bg)]/50 border-t border-[var(--border)] flex justify-between gap-2">
+              <div className="p-2 sm:p-2.5 bg-[var(--bg)]/50 border-t border-[var(--border)] grid grid-cols-3 gap-1 sm:gap-1.5 shrink-0">
                 <Button 
-                  variant="ghost" size="sm" className="flex-1 font-bold text-[var(--text-sec)]"
+                  variant="ghost" 
+                  size="sm" 
+                  className="w-full h-8 px-1 text-xs font-bold text-[var(--text-sec)] hover:text-[var(--text-main)] hover:bg-[var(--card)] min-w-0 flex items-center justify-center gap-1 shrink"
+                  title="Cambiar Estado"
                   onClick={() => {
                     setSelectedVehicle(vehicle);
                     setNewStatus(vehicle.status);
                     setShowStatusDialog(true);
                   }}
                 >
-                  <Power size={14} className="mr-2" /> Estado
+                  <Power size={13} className="shrink-0 text-amber-500" />
+                  <span className="truncate">Estado</span>
                 </Button>
                 <Button 
-                  variant="ghost" size="sm" className="flex-1 font-bold text-[var(--text-main)]"
+                  variant="ghost" 
+                  size="sm" 
+                  className="w-full h-8 px-1 text-xs font-bold text-[var(--text-main)] hover:text-[var(--primary)] hover:bg-[var(--card)] min-w-0 flex items-center justify-center gap-1 shrink"
+                  title="Editar Vehículo"
                   onClick={() => {
                     setEditingVehicle(vehicle);
                     setShowDialog(true);
                   }}
                 >
-                  <Edit2 size={14} className="mr-2" /> Editar
+                  <Edit2 size={13} className="shrink-0 text-blue-500" />
+                  <span className="truncate">Editar</span>
                 </Button>
                 <Button 
-                  variant="ghost" size="sm" className="flex-1 font-bold text-destructive hover:text-destructive hover:bg-destructive/10"
+                  variant="ghost" 
+                  size="sm" 
+                  className="w-full h-8 px-1 text-xs font-bold text-destructive hover:text-destructive hover:bg-destructive/10 min-w-0 flex items-center justify-center gap-1 shrink"
+                  title="Eliminar Vehículo"
                   onClick={() => {
                     setSelectedVehicle(vehicle);
                     setShowDeleteDialog(true);
                   }}
                 >
-                  <Trash2 size={14} className="mr-2" /> Eliminar
+                  <Trash2 size={13} className="shrink-0" />
+                  <span className="truncate">Eliminar</span>
                 </Button>
               </div>
             </Card>

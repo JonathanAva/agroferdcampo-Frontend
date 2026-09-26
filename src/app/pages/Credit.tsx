@@ -972,7 +972,11 @@ export function Credit() {
                 </TableRow>
               ) : (
                 groupedCredits.map(group => (
-                  <TableRow key={group.customer.id} className="group hover:bg-[var(--bg)]/30">
+                  <TableRow 
+                    key={group.customer.id} 
+                    onClick={() => handleOpenDetail(group)}
+                    className="group hover:bg-[var(--bg)]/30 transition-colors cursor-pointer"
+                  >
                     <TableCell>
                       <span className="font-bold text-[var(--text-main)] block">
                         {group.customer.name}
@@ -1002,7 +1006,7 @@ export function Credit() {
                     <TableCell className="text-center">
                       {getStatusBadge(group.status)}
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-center gap-2">
                         {group.creditSales.some(s => s.status === 'PENDIENTE' || s.status === 'VENCIDO') && (
                           <Button
@@ -1192,8 +1196,15 @@ export function Credit() {
                             const isOverdue = dateToUse < new Date() && s.status !== 'PAGADO';
                             
                             return (
-                              <TableRow key={s.id} className={selectedInnerSaleIds.includes(s.id) ? 'bg-[var(--primary)]/5' : ''}>
-                                <TableCell className="text-center">
+                              <TableRow 
+                                key={s.id} 
+                                onClick={() => handleOpenSpecificDetail(s)}
+                                className={cn(
+                                  "hover:bg-[var(--bg)]/40 transition-colors cursor-pointer",
+                                  selectedInnerSaleIds.includes(s.id) ? 'bg-[var(--primary)]/5' : ''
+                                )}
+                              >
+                                <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                                   {s.status === 'PENDIENTE' || s.status === 'VENCIDO' ? (
                                     <input
                                       type="checkbox"
@@ -1220,7 +1231,7 @@ export function Credit() {
                                 <TableCell className="text-right text-emerald-600">${Number(s.paidAmount).toFixed(4)}</TableCell>
                                 <TableCell className="text-right font-bold text-[var(--primary)]">${Number(s.remainingAmount).toFixed(4)}</TableCell>
                                 <TableCell className="text-center">{getStatusBadge(s.status)}</TableCell>
-                                <TableCell className="text-center">
+                                <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                                   <div className="flex justify-center gap-1">
                                     <Button variant="ghost" size="icon" onClick={() => handleOpenSpecificDetail(s)} className="text-[var(--primary)] hover:bg-[var(--primary)]/10" title="Ver Historial de Abonos">
                                       <Eye size={16} />

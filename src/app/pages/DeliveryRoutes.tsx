@@ -535,7 +535,7 @@ export default function DeliveryRoutes({ hideTitle }: { hideTitle?: boolean } = 
   };
 
   return (
-    <div className="flex flex-col gap-6 h-full">
+    <div className="flex flex-col gap-6 min-h-full">
       {!hideTitle && (
         <div>
           <h1 className="text-3xl font-bold text-[var(--text-main)]">Rutas de Reparto</h1>

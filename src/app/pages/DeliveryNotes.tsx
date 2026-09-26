@@ -11,6 +11,7 @@ import { deliveryNotesService, DeliveryNoteResponse, DeliverDeliveryNoteDto, Cre
 import { searchProducts } from '../services/sales.service';
 import { format } from 'date-fns';
 import { Button } from '../components/ui/button';
+import { cn } from '../components/ui/utils';
 import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -33,12 +34,13 @@ import Vehicles from './Vehicles';
 import DeliveryRoutes from './DeliveryRoutes';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { UnsavedChangesDialog } from '../components/ui/unsaved-changes-dialog';
+import { printSequentialDeliveryNotes } from '../utils/printBatchDocuments';
 
 export function DeliveryNotes() {
   const [activeTab, setActiveTab] = useState<'albaranes' | 'flota' | 'rutas'>('albaranes');
 
   return (
-    <div className="flex flex-col gap-6 h-full">
+    <div className="flex flex-col gap-6 min-h-full">
       <div>
         <h1 className="text-3xl font-bold text-[var(--text-main)]">Logística y Albaranes</h1>
         <p className="text-[var(--text-sec)]">Gestiona albaranes, flota de vehículos y rutas de reparto.</p>
@@ -82,6 +84,43 @@ function DeliveryNotesList() {
   const [notes, setNotes] = useState<DeliveryNoteResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
+  
+  // Estados para Selección Múltiple y Acciones Masivas
+  const [selectedNoteIds, setSelectedNoteIds] = useState<number[]>([]);
+  const [openMenuNoteId, setOpenMenuNoteId] = useState<number | null>(null);
+
+  const selectedNotes = notes.filter((n: any) => selectedNoteIds.includes(n.id));
+  const allVisibleNotesSelected =
+    notes.length > 0 && notes.every((n: any) => selectedNoteIds.includes(n.id));
+  const someVisibleNotesSelected = notes.some((n: any) =>
+    selectedNoteIds.includes(n.id)
+  );
+
+  const toggleSelectAllNotes = () => {
+    if (allVisibleNotesSelected) {
+      const visibleIds = new Set(notes.map((n: any) => n.id));
+      setSelectedNoteIds((prev) => prev.filter((id) => !visibleIds.has(id)));
+    } else {
+      const visibleIds = notes.map((n: any) => n.id);
+      setSelectedNoteIds((prev) =>
+        Array.from(new Set([...prev, ...visibleIds]))
+      );
+    }
+  };
+
+  const toggleSelectNote = (id: number) => {
+    setSelectedNoteIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleBatchPrintDeliveryNotes = async () => {
+    if (selectedNotes.length === 0) {
+      toast.error("No hay albaranes seleccionados");
+      return;
+    }
+    await printSequentialDeliveryNotes(selectedNotes);
+  };
   
   const [searchParams] = useSearchParams();
   const statusFilter = searchParams.get('status') || 'all';
@@ -829,6 +868,19 @@ function DeliveryNotesList() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12 text-center">
+                  <Checkbox
+                    checked={
+                      allVisibleNotesSelected
+                        ? true
+                        : someVisibleNotesSelected
+                          ? "indeterminate"
+                          : false
+                    }
+                    onCheckedChange={toggleSelectAllNotes}
+                    aria-label="Seleccionar todos los albaranes"
+                  />
+                </TableHead>
                 <TableHead>N° Albarán</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead>Destino</TableHead>
@@ -840,12 +892,28 @@ function DeliveryNotesList() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={7} className="h-32 text-center animate-pulse">Cargando...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="h-32 text-center animate-pulse">Cargando...</TableCell></TableRow>
               ) : notes.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="h-32 text-center font-medium">No se encontraron albaranes</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="h-32 text-center font-medium">No se encontraron albaranes</TableCell></TableRow>
               ) : (
-                notes.map((note: any) => (
-                  <TableRow key={note.id} className="group hover:bg-[var(--bg)]/30">
+                notes.map((note: any) => {
+                  const isSelected = selectedNoteIds.includes(note.id);
+                  return (
+                  <TableRow
+                    key={note.id}
+                    onClick={() => setOpenMenuNoteId(prev => (prev === note.id ? null : note.id))}
+                    className={cn(
+                      "group hover:bg-[var(--bg)]/30 transition-colors cursor-pointer",
+                      isSelected && "bg-[var(--primary)]/5 dark:bg-[var(--primary)]/10"
+                    )}
+                  >
+                    <TableCell className="w-12 text-center" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleSelectNote(note.id)}
+                        aria-label={`Seleccionar albarán ${note.number || note.id}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-bold text-[var(--primary)]">
                       {note.number}
                     </TableCell>
@@ -910,8 +978,11 @@ function DeliveryNotesList() {
                     <TableCell className="text-center">
                       {getStatusBadge(note.status)}
                     </TableCell>
-                    <TableCell className="text-center">
-                      <DropdownMenu>
+                    <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu
+                        open={openMenuNoteId === note.id}
+                        onOpenChange={(isOpen) => setOpenMenuNoteId(isOpen ? note.id : null)}
+                      >
                         <DropdownMenuTrigger asChild><Button variant="ghost" size="sm">Opciones</Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleOpenDetail(note); }} className="font-bold cursor-pointer">
@@ -957,7 +1028,8 @@ function DeliveryNotesList() {
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))
+                );
+              })
               )}
             </TableBody>
           </Table>
@@ -972,6 +1044,49 @@ function DeliveryNotesList() {
           </div>
         )}
       </div>
+
+      {/* Barra de Acciones Globales Flotante */}
+      {selectedNoteIds.length >= 2 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[var(--card)]/95 backdrop-blur-md border border-[var(--border)] shadow-2xl rounded-2xl px-5 py-3.5 flex flex-wrap items-center gap-4 animate-in slide-in-from-bottom-5 duration-200">
+          <div className="flex items-center gap-2 pr-3 border-r border-[var(--border)]">
+            <Badge
+              variant="default"
+              className="bg-[var(--primary)] text-white font-bold px-2.5 py-1"
+            >
+              {selectedNoteIds.length}
+            </Badge>
+            <div className="text-xs">
+              <span className="font-bold text-[var(--text-main)] block">
+                Albaranes seleccionados
+              </span>
+              <span className="text-[var(--text-sec)]">
+                {selectedNoteIds.length} documentos para despacho
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={handleBatchPrintDeliveryNotes}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm"
+            >
+              <Printer size={15} className="mr-1.5" />
+              Imprimir Albaranes ({selectedNoteIds.length})
+            </Button>
+
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelectedNoteIds([])}
+              className="text-xs text-[var(--text-sec)] hover:text-[var(--text-main)] hover:bg-[var(--bg)]/60"
+            >
+              <X size={14} className="mr-1" />
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* MODAL DETALLE */}
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>

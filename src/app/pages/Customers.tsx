@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, Search, Plus, Phone, Mail, CreditCard, 
   AlertCircle, Edit2, Trash2, MoreVertical
@@ -85,6 +85,7 @@ export function Customers() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [openMenuCustomerId, setOpenMenuCustomerId] = useState<number | null>(null);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -230,7 +231,11 @@ export function Customers() {
                 </TableRow>
               ) : (
                 customers.map((customer) => (
-                  <TableRow key={customer.id} className="group hover:bg-[var(--bg)]/30 transition-colors border-b border-[var(--border)]">
+                  <TableRow
+                    key={customer.id}
+                    onClick={() => setOpenMenuCustomerId(prev => (prev === customer.id ? null : customer.id))}
+                    className="group hover:bg-[var(--bg)]/30 transition-colors border-b border-[var(--border)] cursor-pointer"
+                  >
                     <TableCell>
                       <div className="flex flex-col">
                         <span className="font-bold text-[var(--text-main)]">{customer.name}</span>
@@ -273,7 +278,7 @@ export function Customers() {
                         ${Number(customer.creditBalance).toFixed(4)}
                       </span>
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                       <UIBadge 
                         onClick={() => toggleStatus(customer)}
                         variant={customer.isActive ? "success" : "destructive"}
@@ -283,9 +288,12 @@ export function Customers() {
                         {customer.isActive ? 'Activo' : 'Inactivo'}
                       </UIBadge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-center">
-                        <DropdownMenu>
+                        <DropdownMenu
+                          open={openMenuCustomerId === customer.id}
+                          onOpenChange={(isOpen) => setOpenMenuCustomerId(isOpen ? customer.id : null)}
+                        >
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-[var(--primary)]/10 text-[var(--primary)] rounded-lg">
                               <MoreVertical size={18} />

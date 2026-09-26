@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router";
 import {
   Search,
@@ -93,6 +93,11 @@ import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
 import { apiRequest } from "../config/api";
 import { SystemConfigData } from "./SystemConfig";
 import { printSaleTicket as printSaleTicketUtil } from "../utils/printSaleTicket";
+import { Checkbox } from "../components/ui/checkbox";
+import {
+  printSequentialSaleTickets,
+  printSequentialFacturaSheets,
+} from "../utils/printBatchDocuments";
 
 const salesFilters: FilterConfig[] = [
   {
@@ -135,6 +140,51 @@ export function SalesHistory() {
     total: 0,
     totalPages: 1,
   });
+
+  // Estados para Selección Múltiple y Acciones Masivas
+  const [selectedSaleIds, setSelectedSaleIds] = useState<number[]>([]);
+  const [openMenuSaleId, setOpenMenuSaleId] = useState<number | null>(null);
+
+  const selectedSales = sales.filter((s) => selectedSaleIds.includes(s.id));
+  const allVisibleSalesSelected =
+    sales.length > 0 && sales.every((s) => selectedSaleIds.includes(s.id));
+  const someVisibleSalesSelected = sales.some((s) =>
+    selectedSaleIds.includes(s.id)
+  );
+
+  const toggleSelectAllSales = () => {
+    if (allVisibleSalesSelected) {
+      const visibleIds = new Set(sales.map((s) => s.id));
+      setSelectedSaleIds((prev) => prev.filter((id) => !visibleIds.has(id)));
+    } else {
+      const visibleIds = sales.map((s) => s.id);
+      setSelectedSaleIds((prev) =>
+        Array.from(new Set([...prev, ...visibleIds]))
+      );
+    }
+  };
+
+  const toggleSelectSale = (id: number) => {
+    setSelectedSaleIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleBatchPrintSaleTickets = async () => {
+    if (selectedSales.length === 0) {
+      toast.error("No hay ventas seleccionadas");
+      return;
+    }
+    await printSequentialSaleTickets(selectedSales, sysConfig);
+  };
+
+  const handleBatchPrintDteSheets = async () => {
+    if (selectedSales.length === 0) {
+      toast.error("No hay facturas seleccionadas");
+      return;
+    }
+    await printSequentialFacturaSheets(selectedSales);
+  };
 
   // Tab state synced with search param
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1121,6 +1171,19 @@ export function SalesHistory() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12 text-center">
+                      <Checkbox
+                        checked={
+                          allVisibleSalesSelected
+                            ? true
+                            : someVisibleSalesSelected
+                              ? "indeterminate"
+                              : false
+                        }
+                        onCheckedChange={toggleSelectAllSales}
+                        aria-label="Seleccionar todas las ventas"
+                      />
+                    </TableHead>
                     <TableHead>N° Venta</TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Cliente</TableHead>
@@ -1137,7 +1200,7 @@ export function SalesHistory() {
                   {loading ? (
                     <TableRow>
                       <TableCell
-                        colSpan={8}
+                        colSpan={9}
                         className="h-32 text-center text-[var(--text-sec)] animate-pulse"
                       >
                         Cargando ventas...
@@ -1146,18 +1209,31 @@ export function SalesHistory() {
                   ) : sales.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={8}
+                        colSpan={9}
                         className="h-32 text-center text-[var(--text-sec)] font-medium"
                       >
                         No se encontraron ventas con estos filtros
                       </TableCell>
                     </TableRow>
                   ) : (
-                    sales.map((sale) => (
+                    sales.map((sale) => {
+                      const isSelected = selectedSaleIds.includes(sale.id);
+                      return (
                       <TableRow
                         key={sale.id}
-                        className="group hover:bg-[var(--bg)]/30"
+                        onClick={() => setOpenMenuSaleId(prev => (prev === sale.id ? null : sale.id))}
+                        className={cn(
+                          "group hover:bg-[var(--bg)]/30 transition-colors cursor-pointer",
+                          isSelected && "bg-[var(--primary)]/5 dark:bg-[var(--primary)]/10"
+                        )}
                       >
+                        <TableCell className="w-12 text-center" onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleSelectSale(sale.id)}
+                            aria-label={`Seleccionar venta ${sale.id}`}
+                          />
+                        </TableCell>
                         <TableCell className="font-bold text-[var(--primary)]">
                           #{sale.id.toString().padStart(6, "0")}
                         </TableCell>
@@ -1217,8 +1293,11 @@ export function SalesHistory() {
                             </Badge>
                           )}
                         </TableCell>
-                        <TableCell className="text-center">
-                          <DropdownMenu>
+                        <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu
+                            open={openMenuSaleId === sale.id}
+                            onOpenChange={(isOpen) => setOpenMenuSaleId(isOpen ? sale.id : null)}
+                          >
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="sm">
                                 Opciones
@@ -1346,7 +1425,8 @@ export function SalesHistory() {
                           </DropdownMenu>
                         </TableCell>
                       </TableRow>
-                    ))
+                    );
+                  })
                   )}
                 </TableBody>
               </Table>
@@ -1383,6 +1463,62 @@ export function SalesHistory() {
               </div>
             )}
           </div>
+
+          {/* Barra de Acciones Globales Flotante */}
+          {selectedSaleIds.length >= 2 && (
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[var(--card)]/95 backdrop-blur-md border border-[var(--border)] shadow-2xl rounded-2xl px-5 py-3.5 flex flex-wrap items-center gap-4 animate-in slide-in-from-bottom-5 duration-200">
+              <div className="flex items-center gap-2 pr-3 border-r border-[var(--border)]">
+                <Badge
+                  variant="default"
+                  className="bg-[var(--primary)] text-white font-bold px-2.5 py-1"
+                >
+                  {selectedSaleIds.length}
+                </Badge>
+                <div className="text-xs">
+                  <span className="font-bold text-[var(--text-main)] block">
+                    Facturas / Ventas seleccionadas
+                  </span>
+                  <span className="text-[var(--text-sec)]">
+                    Total: $
+                    {selectedSales
+                      .reduce((acc, s) => acc + Number(s.totalAmount), 0)
+                      .toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={handleBatchPrintSaleTickets}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm"
+                >
+                  <Printer size={15} className="mr-1.5" />
+                  Imprimir Tickets Térmicos ({selectedSaleIds.length})
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleBatchPrintDteSheets}
+                  className="font-bold border-[var(--border)] hover:bg-[var(--bg)]/50 text-[var(--text-main)]"
+                >
+                  <FileText size={15} className="mr-1.5 text-blue-600" />
+                  Imprimir Facturas DTE (Carta) ({selectedSaleIds.length})
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSelectedSaleIds([])}
+                  className="text-xs text-[var(--text-sec)] hover:text-[var(--text-main)] hover:bg-[var(--bg)]/60"
+                >
+                  <X size={14} className="mr-1" />
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
         </>
       ) : (
         <>
@@ -1547,7 +1683,8 @@ export function SalesHistory() {
                     returnsList.map((ret) => (
                       <TableRow
                         key={ret.id}
-                        className="hover:bg-muted/10 transition-colors"
+                        onClick={() => handleOpenReturnDetail(ret)}
+                        className="hover:bg-muted/10 transition-colors cursor-pointer"
                       >
                         <TableCell className="font-bold text-[var(--primary)]">
                           #DEV-{ret.id.toString().padStart(6, "0")}
@@ -1593,7 +1730,7 @@ export function SalesHistory() {
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <Button
                             variant="ghost"
                             size="icon"

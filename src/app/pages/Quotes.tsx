@@ -3,7 +3,7 @@ import logo from '../../assets/logo.png';
 import {
   Search, FileText, Eye, EyeOff, CheckCircle2, AlertCircle, Calendar as CalendarIcon, RefreshCcw, Filter, X,
   Mail, UserCog, Clock, Send, Plus, Banknote, CreditCard, Smartphone, Trash2, Truck as TruckIcon, Printer, PackageCheck, Edit3, Copy
-, Store
+, Store, Layers, Loader2
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { quotesService, QuoteResponse } from '../services/quotes.service';
@@ -36,6 +36,8 @@ import {
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { UnsavedChangesDialog } from '../components/ui/unsaved-changes-dialog';
 import { printSaleTicket as printSaleTicketUtil } from '../utils/printSaleTicket';
+import { Checkbox } from '../components/ui/checkbox';
+import { printSequentialQuoteTickets } from '../utils/printBatchDocuments';
 
 function _qEnteroALetras(n: number): string {
   if (n === 0) return 'Cero';
@@ -155,6 +157,15 @@ export function Quotes() {
     return () => clearTimeout(timer);
   }, [pagination.page, statusFilter, dateFilter, searchTerm, showCancelled]);
 
+  // --- Estados para Selección Múltiple y Acciones Masivas ---
+  const [selectedQuoteIds, setSelectedQuoteIds] = useState<number[]>([]);
+  const [openMenuQuoteId, setOpenMenuQuoteId] = useState<number | null>(null);
+  const [batchConfirmModalOpen, setBatchConfirmModalOpen] = useState(false);
+  const [batchPaymentMethod, setBatchPaymentMethod] = useState('EFECTIVO');
+  const [batchCashRegisterId, setBatchCashRegisterId] = useState<number | null>(null);
+  const [batchConfirming, setBatchConfirming] = useState(false);
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
+
   const fetchQuotes = async () => {
     setLoading(true);
     try {
@@ -178,6 +189,107 @@ export function Quotes() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Cotizaciones seleccionadas completas (objetos)
+  const selectedQuotes = quotes.filter(q => selectedQuoteIds.includes(q.id));
+  
+  // Cotizaciones elegibles para confirmación: PENDIENTE y vigentes
+  const eligibleQuotesForConfirm = selectedQuotes.filter(q => {
+    if (q.status !== 'PENDIENTE') return false;
+    if (q.validUntil && new Date(q.validUntil) < new Date()) return false;
+    return true;
+  });
+
+  const allVisibleSelected = quotes.length > 0 && quotes.every(q => selectedQuoteIds.includes(q.id));
+  const someVisibleSelected = quotes.some(q => selectedQuoteIds.includes(q.id));
+
+  const toggleSelectAll = () => {
+    if (allVisibleSelected) {
+      const visibleIds = new Set(quotes.map(q => q.id));
+      setSelectedQuoteIds(prev => prev.filter(id => !visibleIds.has(id)));
+    } else {
+      const visibleIds = quotes.map(q => q.id);
+      setSelectedQuoteIds(prev => Array.from(new Set([...prev, ...visibleIds])));
+    }
+  };
+
+  const toggleSelectQuote = (id: number) => {
+    setSelectedQuoteIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleOpenBatchConfirmModal = async () => {
+    if (eligibleQuotesForConfirm.length === 0) {
+      toast.error('Ninguna de las cotizaciones seleccionadas está en estado Pendiente y vigente.');
+      return;
+    }
+    setBatchPaymentMethod('EFECTIVO');
+    setBatchCashRegisterId(null);
+    setBatchConfirmModalOpen(true);
+    try {
+      const registers = await cashRegistersService.findAll();
+      const active = registers.filter(r => r.isActive);
+      setCashRegisters(active);
+      if (active.length === 1) setBatchCashRegisterId(active[0].id);
+    } catch {
+      toast.error('Error al cargar las cajas disponibles');
+    }
+  };
+
+  const handleProcessBatchConfirm = async () => {
+    const requiresCashRegister = batchPaymentMethod !== 'CREDITO' && batchPaymentMethod !== 'CONTRAENTREGA';
+    if (requiresCashRegister && !batchCashRegisterId) {
+      toast.error('Selecciona la caja a la que se registrará el ingreso');
+      return;
+    }
+
+    setBatchConfirming(true);
+    setBatchProgress({ current: 0, total: eligibleQuotesForConfirm.length });
+
+    let successCount = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < eligibleQuotesForConfirm.length; i++) {
+      const quote = eligibleQuotesForConfirm[i];
+      setBatchProgress({ current: i + 1, total: eligibleQuotesForConfirm.length });
+      try {
+        await quotesService.confirmQuote(quote.id, {
+          paymentMethod: batchPaymentMethod,
+          ...(requiresCashRegister ? { cashRegisterId: batchCashRegisterId! } : {}),
+          ...(quote.requiresTransport ? {
+            requiresTransport: true,
+            vehicleId: quote.vehicleId || undefined,
+            deliveryAddress: quote.deliveryAddress || undefined,
+          } : {})
+        });
+        successCount++;
+      } catch (err: any) {
+        errors.push(`Cotización #${String(quote.id).padStart(6, '0')}: ${err.message || 'Error desconocido'}`);
+      }
+    }
+
+    setBatchConfirming(false);
+    setBatchConfirmModalOpen(false);
+    setSelectedQuoteIds(prev => prev.filter(id => !eligibleQuotesForConfirm.some(q => q.id === id)));
+    fetchQuotes();
+
+    if (successCount > 0 && errors.length === 0) {
+      toast.success(`${successCount} cotizaciones confirmadas y convertidas en ventas exitosamente.`);
+    } else if (successCount > 0 && errors.length > 0) {
+      toast.warning(`Se confirmaron ${successCount} cotizaciones. ${errors.length} fallaron:\n${errors.join('\n')}`);
+    } else {
+      toast.error(`No se pudo confirmar ninguna cotización:\n${errors.join('\n')}`);
+    }
+  };
+
+  const handleBatchPrintQuoteTickets = async () => {
+    if (selectedQuotes.length === 0) {
+      toast.error('No hay cotizaciones seleccionadas');
+      return;
+    }
+    await printSequentialQuoteTickets(selectedQuotes, sysConfig);
   };
 
 
@@ -602,6 +714,13 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12 text-center">
+                  <Checkbox
+                    checked={allVisibleSelected ? true : someVisibleSelected ? 'indeterminate' : false}
+                    onCheckedChange={toggleSelectAll}
+                    aria-label="Seleccionar todas las cotizaciones"
+                  />
+                </TableHead>
                 <TableHead>N° Cotiz</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead>Cliente</TableHead>
@@ -615,19 +734,35 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-32 text-center text-[var(--text-sec)] animate-pulse">
+                  <TableCell colSpan={9} className="h-32 text-center text-[var(--text-sec)] animate-pulse">
                     Cargando cotizaciones...
                   </TableCell>
                 </TableRow>
               ) : quotes.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-32 text-center text-[var(--text-sec)] font-medium">
+                  <TableCell colSpan={9} className="h-32 text-center text-[var(--text-sec)] font-medium">
                     No se encontraron cotizaciones con estos filtros
                   </TableCell>
                 </TableRow>
               ) : (
-                quotes.map(quote => (
-                  <TableRow key={quote.id} className="group hover:bg-[var(--bg)]/30">
+                quotes.map(quote => {
+                  const isSelected = selectedQuoteIds.includes(quote.id);
+                  return (
+                  <TableRow
+                    key={quote.id}
+                    onClick={() => setOpenMenuQuoteId(prev => (prev === quote.id ? null : quote.id))}
+                    className={cn(
+                      "group hover:bg-[var(--bg)]/30 transition-colors cursor-pointer",
+                      isSelected && "bg-[var(--primary)]/5 dark:bg-[var(--primary)]/10"
+                    )}
+                  >
+                    <TableCell className="w-12 text-center" onClick={e => e.stopPropagation()}>
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleSelectQuote(quote.id)}
+                        aria-label={`Seleccionar cotización ${quote.id}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-bold text-[var(--primary)]">
                       #{quote.id.toString().padStart(6, '0')}
                     </TableCell>
@@ -671,8 +806,11 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                         return <span className="text-indigo-500 font-bold text-[11px] bg-indigo-500/10 px-2 py-1 rounded-md border border-indigo-500/20">Con Envío</span>;
                       })()}
                     </TableCell>
-                    <TableCell className="text-center">
-                      <DropdownMenu>
+                    <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu
+                        open={openMenuQuoteId === quote.id}
+                        onOpenChange={(isOpen) => setOpenMenuQuoteId(isOpen ? quote.id : null)}
+                      >
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="sm">Opciones</Button>
                         </DropdownMenuTrigger>
@@ -750,7 +888,8 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))
+                );
+              })
               )}
             </TableBody>
           </Table>
@@ -780,6 +919,55 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
           </div>
         )}
       </div>
+
+      {/* Barra de Acciones Globales Flotante */}
+      {selectedQuoteIds.length >= 2 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[var(--card)]/95 backdrop-blur-md border border-[var(--border)] shadow-2xl rounded-2xl px-5 py-3.5 flex flex-wrap items-center gap-4 animate-in slide-in-from-bottom-5 duration-200">
+          <div className="flex items-center gap-2 pr-3 border-r border-[var(--border)]">
+            <Badge variant="default" className="bg-[var(--primary)] text-white font-bold px-2.5 py-1">
+              {selectedQuoteIds.length}
+            </Badge>
+            <div className="text-xs">
+              <span className="font-bold text-[var(--text-main)] block">Cotizaciones seleccionadas</span>
+              <span className="text-[var(--text-sec)]">
+                {eligibleQuotesForConfirm.length} pendientes vigentes
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={handleOpenBatchConfirmModal}
+              disabled={eligibleQuotesForConfirm.length === 0}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm"
+            >
+              <CheckCircle2 size={15} className="mr-1.5" />
+              Confirmar Cotizaciones ({eligibleQuotesForConfirm.length})
+            </Button>
+
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleBatchPrintQuoteTickets}
+              className="font-bold border-[var(--border)] hover:bg-[var(--bg)]/50 text-[var(--text-main)]"
+            >
+              <Printer size={15} className="mr-1.5 text-blue-600" />
+              Imprimir Tickets Secuenciales ({selectedQuoteIds.length})
+            </Button>
+
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelectedQuoteIds([])}
+              className="text-xs text-[var(--text-sec)] hover:text-[var(--text-main)] hover:bg-[var(--bg)]/60"
+            >
+              <X size={14} className="mr-1" />
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      )}
 
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
         <DialogContent
@@ -1112,6 +1300,134 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
               ) : (
                 <>
                   <Send size={14} /> Enviar Correo
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL DE CONFIRMACIÓN MASIVA DE COTIZACIONES */}
+      <Dialog open={batchConfirmModalOpen} onOpenChange={setBatchConfirmModalOpen}>
+        <DialogContent className="sm:max-w-lg bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-600">
+              <CheckCircle2 size={22} />
+              Confirmación Masiva de Cotizaciones
+            </DialogTitle>
+            <DialogDescription>
+              Se convertirán en ventas <strong>{eligibleQuotesForConfirm.length}</strong> cotizaciones pendientes seleccionadas.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-4 py-2">
+            {/* Resumen de documentos */}
+            <div className="bg-[var(--bg)]/60 rounded-xl p-3 border border-[var(--border)] max-h-48 overflow-y-auto space-y-2">
+              {eligibleQuotesForConfirm.map(q => (
+                <div key={q.id} className="flex items-center justify-between text-xs py-1 border-b border-[var(--border)]/50 last:border-0">
+                  <div>
+                    <span className="font-bold text-[var(--primary)] mr-2">#{String(q.id).padStart(6, '0')}</span>
+                    <span className="text-[var(--text-main)]">{q.customer?.name || 'Consumidor Final'}</span>
+                    {q.requiresTransport && (
+                      <span className="ml-2 text-[10px] text-blue-500 font-semibold">(Con envío)</span>
+                    )}
+                  </div>
+                  <span className="font-mono font-bold">${Number(q.totalAmount).toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Total acumulado */}
+            <div className="flex items-center justify-between px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Total a Facturar:</span>
+              <span className="text-lg font-black text-emerald-700 dark:text-emerald-400 font-mono">
+                ${eligibleQuotesForConfirm.reduce((sum, q) => sum + Number(q.totalAmount), 0).toFixed(2)}
+              </span>
+            </div>
+
+            {/* Selector de Método de Pago */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Método de Pago para las Ventas</Label>
+              <Select value={batchPaymentMethod} onValueChange={setBatchPaymentMethod}>
+                <SelectTrigger className="bg-[var(--bg)]">
+                  <SelectValue placeholder="Seleccione método" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="EFECTIVO">Efectivo</SelectItem>
+                  <SelectItem value="TARJETA">Tarjeta</SelectItem>
+                  <SelectItem value="TRANSFERENCIA">Transferencia</SelectItem>
+                  <SelectItem value="CREDITO">Crédito</SelectItem>
+                  <SelectItem value="CONTRAENTREGA">Contraentrega</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Selector de Caja Registradora (si no es crédito ni contraentrega) */}
+            {batchPaymentMethod !== 'CREDITO' && batchPaymentMethod !== 'CONTRAENTREGA' && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Caja Registradora Receptora *</Label>
+                <Select
+                  value={batchCashRegisterId ? String(batchCashRegisterId) : ''}
+                  onValueChange={v => setBatchCashRegisterId(Number(v))}
+                >
+                  <SelectTrigger className="bg-[var(--bg)]">
+                    <SelectValue placeholder="Seleccione la caja registradora" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cashRegisters.map(cr => (
+                      <SelectItem key={cr.id} value={String(cr.id)}>
+                        {cr.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {cashRegisters.length === 0 && (
+                  <p className="text-[11px] text-amber-500 font-medium">
+                    No se detectaron cajas activas abiertas en esta sucursal.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Barra de progreso si está confirmando */}
+            {batchConfirming && (
+              <div className="space-y-1.5 bg-[var(--bg)] p-3 rounded-lg border border-[var(--border)]">
+                <div className="flex justify-between text-xs font-bold text-[var(--text-sec)]">
+                  <span>Procesando cotizaciones...</span>
+                  <span>{batchProgress.current} de {batchProgress.total}</span>
+                </div>
+                <div className="w-full bg-[var(--border)] h-2 rounded-full overflow-hidden">
+                  <div
+                    className="bg-emerald-500 h-full transition-all duration-300"
+                    style={{ width: `${(batchProgress.current / Math.max(batchProgress.total, 1)) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              disabled={batchConfirming}
+              onClick={() => setBatchConfirmModalOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleProcessBatchConfirm}
+              disabled={batchConfirming || (batchPaymentMethod !== 'CREDITO' && batchPaymentMethod !== 'CONTRAENTREGA' && !batchCashRegisterId)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+            >
+              {batchConfirming ? (
+                <>
+                  <Loader2 size={16} className="mr-2 animate-spin" />
+                  Confirmando...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={16} className="mr-2" />
+                  Confirmar {eligibleQuotesForConfirm.length} Cotizaciones
                 </>
               )}
             </Button>
