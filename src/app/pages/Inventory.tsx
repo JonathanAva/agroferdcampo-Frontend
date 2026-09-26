@@ -18,11 +18,13 @@ import {
   Pencil,
   Check,
   X,
+  History,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 import { apiRequest } from "../config/api";
 import { formatSmartInventory } from "../utils/inventory";
 import { Lot } from "../services/purchases.service";
+import { ProductSalesHistoryDialog } from "../components/products/ProductSalesHistoryDialog";
 
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
@@ -232,6 +234,7 @@ function InventoryList() {
   const [isMinStockOpen, setIsMinStockOpen] = useState(false);
   const [isAlertsOpen, setIsAlertsOpen] = useState(false);
   const [isLotsOpen, setIsLotsOpen] = useState(false);
+  const [salesHistoryProduct, setSalesHistoryProduct] = useState<{ id: number; name: string } | null>(null);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [formLoading, setFormLoading] = useState(false);
 
@@ -910,6 +913,21 @@ function InventoryList() {
                       >
                         <CalendarClock size={18} />
                       </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSalesHistoryProduct({
+                            id: item.product.id,
+                            name: item.product.name,
+                          });
+                        }}
+                        className="h-8 w-8 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg"
+                        title="Historial de Ventas"
+                      >
+                        <History size={18} />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -1456,6 +1474,13 @@ function InventoryList() {
       </Dialog>
 
       <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
+
+      <ProductSalesHistoryDialog
+        open={!!salesHistoryProduct}
+        onOpenChange={(open) => !open && setSalesHistoryProduct(null)}
+        productId={salesHistoryProduct?.id ?? null}
+        productName={salesHistoryProduct?.name}
+      />
     </div>
   );
 }

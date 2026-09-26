@@ -209,3 +209,84 @@ export async function searchProducts(query: string, page = 1, limit = 10): Promi
     
   return { data: items };
 }
+
+// ─── Historial de Ventas por Producto ─────────────────────────────────────────
+
+export interface ProductSalesHistorySummary {
+  timesSold: number;
+  totalQuantitySold: number;
+  totalRevenue: number;
+}
+
+export interface ProductSalesHistoryItem {
+  saleItemId: number;
+  saleId: number;
+  date: string;
+  quantity: number;
+  unitType: string;
+  unitPrice: number;
+  totalPrice: number;
+  status: string;
+  paymentMethod: string;
+  branch: {
+    id: number;
+    name: string;
+  };
+  seller: {
+    id: number;
+    fullName: string;
+    email: string;
+  };
+  customer: {
+    id: number;
+    name: string;
+    documentNumber?: string;
+  } | null;
+}
+
+export interface ProductSalesHistoryResponse {
+  product: {
+    id: number;
+    name: string;
+    internalCode?: string;
+    barcode?: string;
+    unit: string;
+    imageUrl?: string;
+    category?: { id: number; name: string };
+  };
+  summary: ProductSalesHistorySummary;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  data: ProductSalesHistoryItem[];
+}
+
+export interface ProductSalesHistoryFilters {
+  page?: number;
+  limit?: number;
+  startDate?: string;
+  endDate?: string;
+  allBranches?: boolean;
+  userId?: number;
+  customerId?: number;
+}
+
+/** Obtener historial de ventas de un producto específico */
+export function getProductSalesHistory(
+  productId: number,
+  filters: ProductSalesHistoryFilters = {},
+): Promise<ProductSalesHistoryResponse> {
+  const params = new URLSearchParams();
+  if (filters.page) params.set('page', String(filters.page));
+  if (filters.limit) params.set('limit', String(filters.limit));
+  if (filters.startDate) params.set('startDate', filters.startDate);
+  if (filters.endDate) params.set('endDate', filters.endDate);
+  if (filters.allBranches) params.set('allBranches', 'true');
+  if (filters.userId) params.set('userId', String(filters.userId));
+  if (filters.customerId) params.set('customerId', String(filters.customerId));
+  return apiRequest<ProductSalesHistoryResponse>(`/catalog/products/${productId}/sales-history?${params.toString()}`);
+}
+

@@ -22,8 +22,9 @@ import { Badge } from "../components/ui/badge";
 import { InlinePills } from "../components/ui/inline-pills";
 import { Button } from "../components/ui/button";
 import { Switch } from "../components/ui/switch";
-import { Edit, Copy, Check, X } from "lucide-react";
+import { Edit, Copy, Check, X, History } from "lucide-react";
 import { cn } from "../components/ui/utils";
+import { ProductSalesHistoryDialog } from "../components/products/ProductSalesHistoryDialog";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
@@ -226,6 +227,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [salesHistoryProduct, setSalesHistoryProduct] = useState<{ id: number; name: string } | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -1129,6 +1131,18 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                         >
                           <Copy size={16} />
                         </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSalesHistoryProduct({ id: product.id, name: product.name });
+                          }}
+                          className="h-8 w-8 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg"
+                          title="Historial de Ventas"
+                        >
+                          <History size={16} />
+                        </Button>
                         {isOwner && (
                           <Button
                             variant="ghost"
@@ -1163,13 +1177,30 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
             color: "var(--text-main)",
           }}
         >
-          <DialogHeader className="px-2">
+          <DialogHeader className="px-2 flex flex-row items-center justify-between">
             <DialogTitle
               style={{ color: "var(--text-main)" }}
               className="text-2xl font-black"
             >
               {editingProduct ? "Editar Producto" : "Nuevo Producto"}
             </DialogTitle>
+            {editingProduct && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setSalesHistoryProduct({
+                    id: editingProduct.id,
+                    name: editingProduct.name,
+                  })
+                }
+                className="gap-1.5 text-xs text-indigo-600 border-indigo-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 mr-6"
+              >
+                <History size={14} />
+                Historial de Ventas
+              </Button>
+            )}
           </DialogHeader>
 
           <form
@@ -2317,6 +2348,13 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         open={exitDialogOpen}
         onConfirm={confirmDiscard}
         onCancel={cancelDiscard}
+      />
+
+      <ProductSalesHistoryDialog
+        open={!!salesHistoryProduct}
+        onOpenChange={(open) => !open && setSalesHistoryProduct(null)}
+        productId={salesHistoryProduct?.id ?? null}
+        productName={salesHistoryProduct?.name}
       />
     </div>
   );
