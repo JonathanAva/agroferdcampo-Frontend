@@ -617,7 +617,7 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
     }
     setUpdatingCustomer(true);
     try {
-      await quotesService.updateQuote(editingQuote.id, selectedCustomerId);
+      await quotesService.updateQuote(editingQuote.id, { customerId: selectedCustomerId });
       toast.success('Cliente de la cotización actualizado con éxito');
       setEditCustomerModalOpen(false);
       fetchQuotes();
@@ -1470,135 +1470,6 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG DE EDITAR CLIENTE (PATCH) */}
-      <Dialog open={editCustomerModalOpen} onOpenChange={(o) => o ? setEditCustomerModalOpen(true) : confirmExit(() => setEditCustomerModalOpen(false))}>
-        <DialogContent className="max-w-md bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <UserCog className="text-amber-500" size={20} />
-              Editar Cliente de Cotización
-            </DialogTitle>
-            <DialogDescription>
-              Asocia un cliente de la base de datos a la cotización #{editingQuote?.id}.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase text-[var(--text-sec)]">Buscar Cliente</Label>
-              <div className="relative">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-sec)]" />
-                <Input 
-                  placeholder="Escribe el nombre o documento..." 
-                  value={customerSearchQuery}
-                  onChange={e => setCustomerSearchQuery(e.target.value)}
-                  className="pl-9 bg-[var(--bg)]"
-                />
-              </div>
-              {searchingCustomers && (
-                <p className="text-xs text-[var(--text-sec)] animate-pulse">Buscando clientes...</p>
-              )}
-            </div>
-
-            {customerResults.length > 0 ? (
-              <div className="max-h-48 overflow-y-auto border rounded-lg divide-y bg-[var(--bg)]/10">
-                {customerResults.map(cust => (
-                  <div 
-                    key={cust.id} 
-                    onClick={() => setSelectedCustomerId(cust.id)}
-                    className={cn(
-                      "p-3 text-sm cursor-pointer transition-colors flex items-center justify-between",
-                      selectedCustomerId === cust.id 
-                        ? "bg-[var(--primary)]/10 font-bold border-l-4 border-[var(--primary)]" 
-                        : "hover:bg-[var(--bg)]/40"
-                    )}
-                  >
-                    <div>
-                      <p className="text-[var(--text-main)] font-semibold">{cust.name}</p>
-                      <p className="text-xs text-[var(--text-sec)]">{cust.documentNumber || cust.nit || 'Sin Documento'}</p>
-                    </div>
-                    {selectedCustomerId === cust.id && (
-                      <CheckCircle2 size={16} className="text-[var(--primary)]" />
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : customerSearchQuery.trim().length >= 2 ? (
-              <p className="text-sm text-[var(--text-sec)] text-center py-4">No se encontraron clientes</p>
-            ) : null}
-          </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => confirmExit(() => setEditCustomerModalOpen(false))}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleUpdateCustomer}
-              disabled={updatingCustomer || !selectedCustomerId}
-              style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
-              className="font-bold"
-            >
-              {updatingCustomer ? 'Guardando...' : 'Asociar Cliente'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* DIALOG DE ENVIAR CORREO (resend-email) */}
-      <Dialog open={emailModalOpen} onOpenChange={(o) => o ? setEmailModalOpen(true) : confirmExit(() => setEmailModalOpen(false))}>
-        <DialogContent className="max-w-md bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Mail className="text-indigo-500" size={20} />
-              Enviar Cotización por Correo
-            </DialogTitle>
-            <DialogDescription>
-              La cotización se enviará como un reporte al correo especificado.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase text-[var(--text-sec)]">Correo Destinatario</Label>
-              <div className="relative">
-                <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-sec)]" />
-                <Input 
-                  type="email"
-                  placeholder="ejemplo@correo.com" 
-                  value={destinationEmail}
-                  onChange={e => setDestinationEmail(e.target.value)}
-                  className="pl-9 bg-[var(--bg)]"
-                />
-              </div>
-              {emailQuote?.customer && !emailQuote.customer.email && (
-                <p className="text-xs text-rose-500 font-bold flex items-center gap-1 mt-1">
-                  <AlertCircle size={12} /> El cliente asociado no tiene un correo registrado.
-                </p>
-              )}
-            </div>
-          </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => confirmExit(() => setEmailModalOpen(false))}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleSendEmail}
-              disabled={sendingEmail || !destinationEmail}
-              style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
-              className="font-bold flex items-center gap-2"
-            >
-              {sendingEmail ? (
-                <>Enviando...</>
-              ) : (
-                <>
-                  <Send size={14} /> Enviar Correo
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* DIALOG CONFIRMAR VENTA Y MÉTODO DE PAGO */}
       <Dialog open={paymentModalOpen} onOpenChange={(o) => o ? setPaymentModalOpen(true) : confirmExit(() => setPaymentModalOpen(false))}>
