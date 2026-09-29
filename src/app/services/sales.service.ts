@@ -34,6 +34,7 @@ export interface CreateSaleDto {
   vehicleId?: number;
   deliveryAddress?: string;
   scheduledAt?: string;
+  cashRegisterId?: number;
 }
 
 export interface VoidSaleDto {

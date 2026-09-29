@@ -66,7 +66,7 @@ export function CashRegisters() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const regsRes = await cashRegistersService.findAll();
+      const regsRes = await cashRegistersService.findAll(true);
       setRegisters(regsRes);
     } catch (error) {
       toast.error("Error al cargar cajas físicas");

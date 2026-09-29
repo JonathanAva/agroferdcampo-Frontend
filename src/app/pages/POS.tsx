@@ -1356,6 +1356,7 @@ export function POS() {
     try {
       const sale = await createSale({
         customerId: selectedCustomer?.id,
+        cashRegisterId: activeShift?.cashRegisterId ? Number(activeShift.cashRegisterId) : undefined,
         paymentMethod: payments[0]?.paymentMethod || 'EFECTIVO',
         payments: payments,
         totalAmount: total,

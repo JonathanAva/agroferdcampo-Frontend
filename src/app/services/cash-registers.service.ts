@@ -13,8 +13,8 @@ export interface UpdateCashRegisterDto {
 const BASE = '/cash-registers';
 
 export const cashRegistersService = {
-  findAll: async (): Promise<CashRegister[]> => {
-    return await apiRequest<CashRegister[]>(BASE);
+  findAll: async (includeInactive = false): Promise<CashRegister[]> => {
+    return await apiRequest<CashRegister[]>(`${BASE}${includeInactive ? '?includeInactive=true' : ''}`);
   },
 
   create: async (data: CreateCashRegisterDto): Promise<CashRegister> => {

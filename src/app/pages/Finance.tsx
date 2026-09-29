@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Wallet, DollarSign, TrendingUp, Search, 
   ArrowDownCircle, ArrowUpCircle, Filter, CheckCircle2, XCircle, Clock, FileDown, FileSpreadsheet, FileText, Printer
@@ -56,6 +56,9 @@ export function Finance() {
       try {
         const data = await apiRequest<any[]>('/cash-registers');
         setCashRegisters(data);
+        if (activeTab.startsWith('register_') && !data.some(r => `register_${r.id}` === activeTab)) {
+          setActiveTab('general');
+        }
       } catch (e) {}
     };
     fetchCashRegisters();
@@ -613,11 +616,15 @@ export function Finance() {
                         <p className="font-medium text-[var(--text-main)]">{m.description}</p>
                         {m.reference && <p className="text-xs text-[var(--text-sec)]">Ref: {m.reference}</p>}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-[var(--text-sec)]">${Number(m.previousBalance || 0).toFixed(4)}</TableCell>
+                      <TableCell className="text-right font-mono text-[var(--text-sec)]">
+                        {Number(m.previousBalance || 0) === 0 && Number(m.newBalance || 0) === 0 ? '—' : `${Number(m.previousBalance || 0).toFixed(4)}`}
+                      </TableCell>
                       <TableCell className={`text-right font-bold ${m.type === 'INGRESO' ? 'text-emerald-600' : 'text-rose-600'}`}>
                         {m.type === 'INGRESO' ? '+' : '-'}${Number(m.amount).toFixed(4)}
                       </TableCell>
-                      <TableCell className="text-right font-mono font-bold text-[var(--primary)]">${Number(m.newBalance || 0).toFixed(4)}</TableCell>
+                      <TableCell className="text-right font-mono font-bold text-[var(--primary)]">
+                        {Number(m.previousBalance || 0) === 0 && Number(m.newBalance || 0) === 0 ? '—' : `${Number(m.newBalance || 0).toFixed(4)}`}
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -721,11 +728,15 @@ export function Finance() {
                                 {m.type === 'INGRESO' ? 'Reposición' : 'Gasto'}
                               </span>
                             </TableCell>
-                            <TableCell className="text-right font-mono text-[var(--text-sec)]">${Number(m.previousBalance || 0).toFixed(4)}</TableCell>
+                            <TableCell className="text-right font-mono text-[var(--text-sec)]">
+                              {Number(m.previousBalance || 0) === 0 && Number(m.newBalance || 0) === 0 ? '—' : `${Number(m.previousBalance || 0).toFixed(4)}`}
+                            </TableCell>
                             <TableCell className={`text-right font-bold ${m.type === 'INGRESO' ? 'text-emerald-600' : 'text-rose-600'}`}>
                               {m.type === 'INGRESO' ? '+' : '-'}${Number(m.amount).toFixed(4)}
                             </TableCell>
-                            <TableCell className="text-right font-mono font-bold text-[var(--primary)]">${Number(m.newBalance || 0).toFixed(4)}</TableCell>
+                            <TableCell className="text-right font-mono font-bold text-[var(--primary)]">
+                              {Number(m.previousBalance || 0) === 0 && Number(m.newBalance || 0) === 0 ? '—' : `${Number(m.newBalance || 0).toFixed(4)}`}
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
