@@ -100,7 +100,7 @@ export function Quotes() {
   // Modales
   const [selectedQuote, setSelectedQuote] = useState<QuoteResponse | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
-  const [showMargin, setShowMargin] = useState(false);
+  const [showMargin, setShowMargin] = useState(true);
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [cancelingId, setCancelingId] = useState<number | null>(null);
 
@@ -439,7 +439,7 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
     try {
       const fullQuote = await quotesService.getQuoteDetail(quote.id);
       setSelectedQuote(fullQuote);
-      setShowMargin(false);
+      setShowMargin(true);
       setDetailModalOpen(true);
     } catch (e) {
       toast.error('Error al cargar detalles de la cotización');
@@ -1049,24 +1049,64 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                       <TableRow>
                         <TableHead>Cant</TableHead>
                         <TableHead>Producto</TableHead>
+                        {showMargin && <TableHead className="text-right text-emerald-700 dark:text-emerald-400">Costo Unit.</TableHead>}
                         <TableHead className="text-right">Precio</TableHead>
                         <TableHead className="text-right">Total</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {selectedQuote.items?.map(item => (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-bold">
-                            {item.quantity}
-                            {item.unitType && <span className="ml-1 text-[10px] font-bold text-[var(--text-sec)] uppercase">{formatUnitLabel(item.unitType)}</span>}
-                          </TableCell>
-                          <TableCell>{item.product?.name}</TableCell>
-                          <TableCell className="text-right">${Number(item.unitPrice).toFixed(4)}</TableCell>
-                          <TableCell className="text-right font-black text-[var(--primary)]">${Number(item.totalPrice).toFixed(4)}</TableCell>
-                        </TableRow>
-                      ))}
+                      {selectedQuote.items?.map(item => {
+                        const factor = Number(item.unitFactor) || 1;
+                        const itemBaseCost = item.costPrice !== null && item.costPrice !== undefined
+                          ? Number(item.costPrice)
+                          : (Number(item.product?.costPrice) || 0);
+                        const unitCost = itemBaseCost * factor;
+                        const originalBase = Number(item.product?.costPrice) || 0;
+                        const isCustomCost = item.costPrice !== null && item.costPrice !== undefined && Math.abs(Number(item.costPrice) - originalBase) > 0.0001;
+                        const unitPrice = Number(item.unitPrice) || 0;
+                        const lineMargin = unitCost > 0 ? ((unitPrice - unitCost) / unitCost) * 100 : (unitPrice > 0 ? 100 : 0);
+
+                        return (
+                          <TableRow key={item.id}>
+                            <TableCell className="font-bold">
+                              {item.quantity}
+                              {item.unitType && <span className="ml-1 text-[10px] font-bold text-[var(--text-sec)] uppercase">{formatUnitLabel(item.unitType)}</span>}
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-medium text-[var(--text-main)]">{item.product?.name}</div>
+                              {item.product?.internalCode && (
+                                <span className="text-[10px] text-[var(--text-sec)] font-mono">{item.product.internalCode}</span>
+                              )}
+                            </TableCell>
+                            {showMargin && (
+                              <TableCell className="text-right">
+                                <div className="flex flex-col items-end">
+                                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                    ${unitCost.toFixed(4)}
+                                  </span>
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    <span className={cn("text-[9px] font-semibold", lineMargin < 5 ? "text-rose-500" : "text-emerald-600/80")}>
+                                      {lineMargin.toFixed(1)}% mg.
+                                    </span>
+                                    {isCustomCost && (
+                                      <span
+                                        className="text-[9px] font-bold px-1 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                                        title={`Costo ajustado para esta cotización (Original: $${(originalBase * factor).toFixed(4)})`}
+                                      >
+                                        Ajustado
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </TableCell>
+                            )}
+                            <TableCell className="text-right">${unitPrice.toFixed(4)}</TableCell>
+                            <TableCell className="text-right font-black text-[var(--primary)]">${Number(item.totalPrice).toFixed(4)}</TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
-                    </Table>
+                  </Table>
                   <div className="p-4 border-t border-[var(--border)] bg-[var(--bg)] flex flex-col md:flex-row justify-between items-end gap-4">
                     <div className="text-[var(--text-sec)]">
                       {showMargin ? (
@@ -1098,10 +1138,10 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                               <button
                                 type="button"
                                 onClick={() => setShowMargin(false)}
-                                title="Ocultar márgenes"
-                                className="text-[var(--text-sec)]/40 hover:text-[var(--text-sec)] transition-colors -mt-0.5 -mr-0.5"
+                                title="Ocultar costos y márgenes (modo cliente)"
+                                className="text-[var(--text-sec)]/50 hover:text-[var(--text-sec)] p-1 rounded hover:bg-[var(--bg)] transition-colors -mt-1 -mr-1"
                               >
-                                <EyeOff size={13} />
+                                <EyeOff size={15} />
                               </button>
                             </div>
                           );
@@ -1110,10 +1150,11 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                         <button
                           type="button"
                           onClick={() => setShowMargin(true)}
-                          title="Mostrar márgenes"
-                          className="size-8 flex items-center justify-center rounded-full text-[var(--text-sec)]/25 hover:text-[var(--text-sec)] hover:bg-[var(--card)] transition-colors"
+                          title="Mostrar costos y márgenes (Usuario del sistema)"
+                          className="h-8 px-2.5 text-xs font-semibold text-[var(--text-sec)] hover:text-[var(--text-main)] flex items-center gap-1.5 rounded-lg border border-dashed border-[var(--border)] hover:bg-[var(--card)] transition-colors"
                         >
-                          <Eye size={14} />
+                          <Eye size={14} className="text-emerald-600" />
+                          <span>Ver Costos / Márgenes</span>
                         </button>
                       )}
                     </div>

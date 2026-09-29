@@ -7,6 +7,7 @@ export interface QuoteItemDto {
   productId: number;
   quantity: number;
   unitPrice: number;
+  costPrice?: number;
   unitType?: string;
   unitFactor?: number;
 }

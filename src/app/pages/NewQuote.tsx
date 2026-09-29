@@ -141,7 +141,11 @@ export function NewQuote() {
           const newCart = quote.items.map((item: any) => {
             const qty = Number(item.quantity);
             const price = Number(item.unitPrice);
-            const costPerUnit = (Number(item.product?.costPrice) || 0) * (item.unitFactor || 1);
+            const factor = item.unitFactor || 1;
+            const baseCost = item.costPrice !== null && item.costPrice !== undefined
+              ? Number(item.costPrice)
+              : (Number(item.product?.costPrice) || 0);
+            const costPerUnit = baseCost * factor;
             const subtotal = qty * price;
             let margin = 0;
             if (costPerUnit > 0 && price > costPerUnit) {
@@ -149,13 +153,14 @@ export function NewQuote() {
             }
             return {
               ...item.product,
+              costPrice: baseCost,
               cartId: Math.random().toString(36).substr(2, 9),
               id: item.productId,
               imageUrl: item.product?.imageUrl || null,
               internalCode: item.product?.internalCode || "",
               name: item.product?.name || "Producto",
               unitType: item.unitType || item.product?.unit || "UNIDAD",
-              unitFactor: item.unitFactor || 1,
+              unitFactor: factor,
               unitPrice: price,
               costTotal: qty * costPerUnit,
               quantity: qty,
@@ -218,6 +223,8 @@ export function NewQuote() {
     marginPercent: 0,
     unitType: "",
     unitFactor: 1,
+    costPrice: 0,
+    costPerUnit: 0,
   });
 
   const [savingQuote, setSavingQuote] = useState(false);
@@ -463,18 +470,21 @@ export function NewQuote() {
 
   const openAddProductModal = (product: Product) => {
     setSelectedProduct(product);
-    const cost = Number(product.costPrice) || 0;
-    const initialPrice = Number(product.price) || 0;
+    const existingInCart = cart.find(i => i.id === product.id && i.unitType === product.unit);
+    const baseCost = existingInCart ? Number(existingInCart.costPrice) : (Number(product.costPrice) || 0);
+    const initialPrice = existingInCart ? Number(existingInCart.unitPrice) : (Number(product.price) || 0);
     let initialMargin = 0;
-    if (cost > 0 && initialPrice > cost) {
-      initialMargin = ((initialPrice - cost) / cost) * 100;
+    if (baseCost > 0 && initialPrice > baseCost) {
+      initialMargin = ((initialPrice - baseCost) / baseCost) * 100;
     }
     setMarginForm({
-      quantity: 1,
+      quantity: existingInCart ? existingInCart.quantity : 1,
       unitPrice: initialPrice,
       marginPercent: initialMargin,
       unitType: product.unit,
       unitFactor: 1,
+      costPrice: baseCost,
+      costPerUnit: baseCost,
     });
     setShowAddModal(true);
   };
@@ -483,28 +493,36 @@ export function NewQuote() {
     if (!selectedProduct) return;
     const factor = resolveUnitFactor(selectedProduct, newUnitType);
     const price = resolveUnitDefaultPrice(selectedProduct, newUnitType);
-    const costPerUnit = (Number(selectedProduct.costPrice) || 0) * factor;
+    const costPerUnit = marginForm.costPrice * factor;
     let margin = 0;
     if (costPerUnit > 0 && price > costPerUnit) {
       margin = ((price - costPerUnit) / costPerUnit) * 100;
     }
-    setMarginForm({ quantity: 1, unitPrice: price, marginPercent: margin, unitType: newUnitType, unitFactor: factor });
+    setMarginForm(prev => ({
+      ...prev,
+      quantity: 1,
+      unitPrice: price,
+      marginPercent: margin,
+      unitType: newUnitType,
+      unitFactor: factor,
+      costPerUnit,
+    }));
   };
 
   const handleApplyQuickMargin = (percent: number) => {
     if (!selectedProduct) return;
-    const costPerUnit = (Number(selectedProduct.costPrice) || 0) * marginForm.unitFactor;
+    const costPerUnit = marginForm.costPerUnit;
     if (costPerUnit <= 0) {
-      toast.warning("El producto no tiene costo configurado.");
+      toast.warning("El costo debe ser mayor a 0 para aplicar margen.");
       return;
     }
     const newPrice = costPerUnit * (1 + percent / 100);
-    setMarginForm({ ...marginForm, marginPercent: percent, unitPrice: newPrice });
+    setMarginForm(prev => ({ ...prev, marginPercent: percent, unitPrice: newPrice }));
   };
 
   const handleCustomPriceChange = (val: number | undefined) => {
     if (!selectedProduct || val === undefined) return;
-    const costPerUnit = (Number(selectedProduct.costPrice) || 0) * marginForm.unitFactor;
+    const costPerUnit = marginForm.costPerUnit;
     let newMargin = 0;
     if (costPerUnit > 0 && val > costPerUnit) {
       newMargin = ((val - costPerUnit) / costPerUnit) * 100;
@@ -513,7 +531,53 @@ export function NewQuote() {
     } else if (costPerUnit === 0 && val > 0) {
       newMargin = 100;
     }
-    setMarginForm({ ...marginForm, unitPrice: val, marginPercent: newMargin });
+    setMarginForm(prev => ({ ...prev, unitPrice: val, marginPercent: newMargin }));
+  };
+
+  const handleCustomCostChange = (val: number | undefined) => {
+    if (!selectedProduct || val === undefined) return;
+    const newUnitCost = Math.max(0, val || 0);
+    const factor = marginForm.unitFactor || 1;
+    const newBaseCost = factor > 0 ? newUnitCost / factor : newUnitCost;
+    
+    let newMargin = 0;
+    if (newUnitCost > 0 && marginForm.unitPrice > newUnitCost) {
+      newMargin = ((marginForm.unitPrice - newUnitCost) / newUnitCost) * 100;
+    } else if (newUnitCost > 0 && marginForm.unitPrice <= newUnitCost) {
+      newMargin = marginForm.unitPrice === newUnitCost ? 0 : -1;
+    } else if (newUnitCost === 0 && marginForm.unitPrice > 0) {
+      newMargin = 100;
+    }
+
+    setMarginForm(prev => ({
+      ...prev,
+      costPerUnit: newUnitCost,
+      costPrice: newBaseCost,
+      marginPercent: newMargin
+    }));
+  };
+
+  const handleResetCost = () => {
+    if (!selectedProduct) return;
+    const originalBase = Number(selectedProduct.costPrice) || 0;
+    const factor = marginForm.unitFactor || 1;
+    const originalUnitCost = originalBase * factor;
+    
+    let newMargin = 0;
+    if (originalUnitCost > 0 && marginForm.unitPrice > originalUnitCost) {
+      newMargin = ((marginForm.unitPrice - originalUnitCost) / originalUnitCost) * 100;
+    } else if (originalUnitCost > 0 && marginForm.unitPrice <= originalUnitCost) {
+      newMargin = marginForm.unitPrice === originalUnitCost ? 0 : -1;
+    } else if (originalUnitCost === 0 && marginForm.unitPrice > 0) {
+      newMargin = 100;
+    }
+
+    setMarginForm(prev => ({
+      ...prev,
+      costPerUnit: originalUnitCost,
+      costPrice: originalBase,
+      marginPercent: newMargin
+    }));
   };
 
   const addProductToCart = () => {
@@ -529,7 +593,8 @@ export function NewQuote() {
 
     // Stock validation removed for quotes
 
-    const costPerUnit = (Number(selectedProduct.costPrice) || 0) * marginForm.unitFactor;
+    const costPerUnit = marginForm.costPerUnit;
+    const baseCostPrice = marginForm.costPrice;
     const cartId = `${selectedProduct.id}-${marginForm.unitType}`;
 
     const existing = cart.find(i => i.cartId === cartId);
@@ -537,6 +602,7 @@ export function NewQuote() {
       const newQty = existing.quantity + marginForm.quantity;
       setCart(cart.map(i => i.cartId === cartId ? {
         ...i,
+        costPrice: baseCostPrice,
         quantity: newQty,
         subtotal: newQty * marginForm.unitPrice,
         unitPrice: marginForm.unitPrice,
@@ -546,6 +612,7 @@ export function NewQuote() {
     } else {
       setCart([{
         ...selectedProduct,
+        costPrice: baseCostPrice,
         cartId,
         quantity: marginForm.quantity,
         unitPrice: marginForm.unitPrice,
@@ -584,12 +651,32 @@ export function NewQuote() {
     if (!item) return;
     
     const costPerUnit = (Number(item.costPrice) || 0) * item.unitFactor;
-    const marginPercent = newPrice > 0 ? ((newPrice - costPerUnit) / newPrice) * 100 : 0;
+    const marginPercent = costPerUnit > 0 && newPrice > costPerUnit
+      ? ((newPrice - costPerUnit) / costPerUnit) * 100
+      : (costPerUnit > 0 && newPrice <= costPerUnit ? (newPrice === costPerUnit ? 0 : -1) : 100);
     
     setCart(cart.map(i => i.cartId === cartId ? {
       ...i,
       unitPrice: newPrice,
       subtotal: i.quantity * newPrice,
+      marginPercent: marginPercent
+    } : i));
+  };
+
+  const updateCartCost = (cartId: string, newUnitCost: number) => {
+    const item = cart.find(i => i.cartId === cartId);
+    if (!item) return;
+    const safeUnitCost = Math.max(0, newUnitCost || 0);
+    const factor = item.unitFactor || 1;
+    const newBaseCost = factor > 0 ? safeUnitCost / factor : safeUnitCost;
+    const marginPercent = safeUnitCost > 0 && item.unitPrice > safeUnitCost
+      ? ((item.unitPrice - safeUnitCost) / safeUnitCost) * 100
+      : (safeUnitCost > 0 && item.unitPrice <= safeUnitCost ? (item.unitPrice === safeUnitCost ? 0 : -1) : 100);
+
+    setCart(cart.map(i => i.cartId === cartId ? {
+      ...i,
+      costPrice: newBaseCost,
+      costTotal: i.quantity * safeUnitCost,
       marginPercent: marginPercent
     } : i));
   };
@@ -624,6 +711,7 @@ export function NewQuote() {
           productId: i.id,
           quantity: Number(i.quantity),
           unitPrice: Number(i.unitPrice),
+          costPrice: Number(i.costPrice),
           unitType: i.unitType,
           unitFactor: Number(i.unitFactor) || 1,
         }))
@@ -1266,9 +1354,26 @@ export function NewQuote() {
                           <p className="text-sm font-black text-[var(--primary)] mt-1">${item.subtotal.toFixed(4)}</p>
                         </div>
                     </div>
-                    {item.marginPercent < 5 && item.marginPercent >= 0 && (
-                      <p className="text-[10px] font-bold text-rose-500 mt-1">Margen bajo: {item.marginPercent.toFixed(1)}%</p>
-                    )}
+                    <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-[var(--border)]/50 mt-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">Costo</span>
+                        <div className="flex items-center bg-[var(--card)] border border-emerald-500/30 rounded px-1.5 focus-within:border-emerald-500">
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">$</span>
+                          <input
+                            type="number"
+                            value={Number(((item.costPrice || 0) * item.unitFactor).toFixed(4))}
+                            onChange={(e) => updateCartCost(item.cartId, parseFloat(e.target.value) || 0)}
+                            className="w-16 h-5 text-right text-[11px] font-mono bg-transparent outline-none text-emerald-600 dark:text-emerald-400 font-bold [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                            step="0.01"
+                            min="0"
+                            title="Modificar costo únicamente para esta cotización"
+                          />
+                        </div>
+                      </div>
+                      <span className={cn("text-[10px] font-bold", item.marginPercent < 5 ? "text-rose-500" : "text-emerald-600 dark:text-emerald-400")}>
+                        Margen: {item.marginPercent.toFixed(1)}%
+                      </span>
+                    </div>
                   </div>
                 ))}
                 {cart.length === 0 && (
@@ -1345,9 +1450,36 @@ export function NewQuote() {
                   </div>
                 )}
 
-                <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                  <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Costo por {formatUnitLabel(marginForm.unitType || selectedProduct.unit)}</span>
-                  <span className="text-lg font-black text-emerald-700">${((Number(selectedProduct.costPrice) || 0) * marginForm.unitFactor).toFixed(4)}</span>
+                <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Percent size={13} />
+                      Costo por {formatUnitLabel(marginForm.unitType || selectedProduct.unit)} (Cotización)
+                    </Label>
+                    {Math.abs(marginForm.costPrice - (Number(selectedProduct.costPrice) || 0)) > 0.0001 && (
+                      <button
+                        type="button"
+                        onClick={handleResetCost}
+                        className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline uppercase transition-colors"
+                        title="Restablecer al costo original de inventario"
+                      >
+                        Restablecer original (${((Number(selectedProduct.costPrice) || 0) * marginForm.unitFactor).toFixed(4)})
+                      </button>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-emerald-700 dark:text-emerald-400 pointer-events-none">$</span>
+                    <NumberInput
+                      value={marginForm.costPerUnit}
+                      onValueChange={handleCustomCostChange}
+                      className="h-10 pl-7 text-base font-black bg-[var(--bg)] border-emerald-500/30 text-emerald-700 dark:text-emerald-300 focus:ring-emerald-500 focus:border-emerald-500 rounded-lg"
+                      min={0}
+                      step={0.0001}
+                    />
+                  </div>
+                  <p className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80 font-medium">
+                    * Modifica el costo únicamente para esta cotización sin alterar el inventario.
+                  </p>
                 </div>
 
                 <div className="space-y-3">
