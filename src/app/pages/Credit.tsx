@@ -85,7 +85,7 @@ export function Credit() {
   const [selectedSpecificCredit, setSelectedSpecificCredit] = useState<CreditSale | null>(null);
   const [specificPayments, setSpecificPayments] = useState<CreditPayment[]>([]);
   const [specificPaymentsPage, setSpecificPaymentsPage] = useState(1);
-  const [specificDetailTab, setSpecificDetailTab] = useState<'abonos' | 'factura'>('abonos');
+  const [specificDetailTab, setSpecificDetailTab] = useState<'abonos' | 'factura'>('factura');
 
   // Inner Modal Filters
   const [innerStatusFilter, setInnerStatusFilter] = useState('all');
@@ -205,7 +205,7 @@ export function Credit() {
       setSpecificPayments(Array.isArray(creditPayments) ? creditPayments : []);
       setSpecificSaleDetail(saleDetail);
       setSpecificPaymentsPage(1);
-      setSpecificDetailTab('abonos');
+      setSpecificDetailTab(sale.saleId ? 'factura' : 'abonos');
       setSpecificDetailModalOpen(true);
     } catch (e) {
       toast.error('Error al cargar detalle del crédito');
@@ -1233,7 +1233,7 @@ export function Credit() {
                                 <TableCell className="text-center">{getStatusBadge(s.status)}</TableCell>
                                 <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                                   <div className="flex justify-center gap-1">
-                                    <Button variant="ghost" size="icon" onClick={() => handleOpenSpecificDetail(s)} className="text-[var(--primary)] hover:bg-[var(--primary)]/10" title="Ver Historial de Abonos">
+                                    <Button variant="ghost" size="icon" onClick={() => handleOpenSpecificDetail(s)} className="text-[var(--primary)] hover:bg-[var(--primary)]/10" title="Ver Detalle de Factura">
                                       <Eye size={16} />
                                     </Button>
                                     {s.status !== 'PAGADO' && s.status !== 'ANULADO' && (
@@ -1780,17 +1780,6 @@ export function Credit() {
               </DialogHeader>
 
               <div className="flex px-6 pt-2 gap-4 border-b shrink-0 bg-[var(--bg)]/30">
-                <button
-                  className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors flex items-center justify-center gap-2 ${
-                    specificDetailTab === 'abonos'
-                      ? 'border-[var(--primary)] text-[var(--primary)]'
-                      : 'border-transparent text-[var(--text-sec)] hover:text-[var(--text-main)]'
-                  }`}
-                  onClick={() => setSpecificDetailTab('abonos')}
-                >
-                  <History size={16} />
-                  Historial de Abonos
-                </button>
                 {selectedSpecificCredit.saleId && (
                   <button
                     className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors flex items-center justify-center gap-2 ${
@@ -1804,6 +1793,17 @@ export function Credit() {
                     Detalle de Factura
                   </button>
                 )}
+                <button
+                  className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors flex items-center justify-center gap-2 ${
+                    specificDetailTab === 'abonos'
+                      ? 'border-[var(--primary)] text-[var(--primary)]'
+                      : 'border-transparent text-[var(--text-sec)] hover:text-[var(--text-main)]'
+                  }`}
+                  onClick={() => setSpecificDetailTab('abonos')}
+                >
+                  <History size={16} />
+                  Historial de Pagos
+                </button>
               </div>
 
               <div className="p-6 overflow-y-auto flex-1 custom-scrollbar min-h-0">
