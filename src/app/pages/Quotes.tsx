@@ -1050,6 +1050,7 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                         <TableHead>Cant</TableHead>
                         <TableHead>Producto</TableHead>
                         {showMargin && <TableHead className="text-right text-emerald-700 dark:text-emerald-400">Costo Unit.</TableHead>}
+                        {showMargin && <TableHead className="text-right text-emerald-700 dark:text-emerald-400">Margen</TableHead>}
                         <TableHead className="text-right">Precio</TableHead>
                         <TableHead className="text-right">Total</TableHead>
                       </TableRow>
@@ -1084,20 +1085,27 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                                   <span className="font-bold text-emerald-600 dark:text-emerald-400">
                                     ${unitCost.toFixed(4)}
                                   </span>
-                                  <div className="flex items-center gap-1 mt-0.5">
-                                    <span className={cn("text-[9px] font-semibold", lineMargin < 5 ? "text-rose-500" : "text-emerald-600/80")}>
-                                      {lineMargin.toFixed(1)}% mg.
+                                  {isCustomCost && (
+                                    <span
+                                      className="text-[9px] font-bold px-1 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 mt-0.5"
+                                      title={`Costo ajustado para esta cotización (Original: $${(originalBase * factor).toFixed(4)})`}
+                                    >
+                                      Ajustado
                                     </span>
-                                    {isCustomCost && (
-                                      <span
-                                        className="text-[9px] font-bold px-1 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
-                                        title={`Costo ajustado para esta cotización (Original: $${(originalBase * factor).toFixed(4)})`}
-                                      >
-                                        Ajustado
-                                      </span>
-                                    )}
-                                  </div>
+                                  )}
                                 </div>
+                              </TableCell>
+                            )}
+                            {showMargin && (
+                              <TableCell className="text-right">
+                                <span className={cn(
+                                  "font-bold text-xs px-1.5 py-0.5 rounded",
+                                  lineMargin < 5 
+                                    ? "bg-rose-500/10 text-rose-500" 
+                                    : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                )}>
+                                  {lineMargin.toFixed(1)}%
+                                </span>
                               </TableCell>
                             )}
                             <TableCell className="text-right">${unitPrice.toFixed(4)}</TableCell>

@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router";
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, User, CheckCircle2,
   X, ArrowLeft, Percent, Package, Loader2, Award, Tag, PlusCircle,
-  Calendar as CalendarIcon, Check
+  Calendar as CalendarIcon, Check, Edit3
 } from "lucide-react";
 import { apiRequest } from "../config/api";
 import { quotesService } from "../services/quotes.service";
@@ -78,6 +78,7 @@ interface CartItem extends Product {
   costTotal: number;
   unitType: string;
   unitFactor: number;
+  originalCostPrice?: number;
 }
 
 function formatExpirationDate(dateStr: string): string {
@@ -142,9 +143,10 @@ export function NewQuote() {
             const qty = Number(item.quantity);
             const price = Number(item.unitPrice);
             const factor = item.unitFactor || 1;
+            const catalogCost = Number(item.product?.costPrice) || 0;
             const baseCost = item.costPrice !== null && item.costPrice !== undefined
               ? Number(item.costPrice)
-              : (Number(item.product?.costPrice) || 0);
+              : catalogCost;
             const costPerUnit = baseCost * factor;
             const subtotal = qty * price;
             let margin = 0;
@@ -154,6 +156,7 @@ export function NewQuote() {
             return {
               ...item.product,
               costPrice: baseCost,
+              originalCostPrice: catalogCost > 0 ? catalogCost : baseCost,
               cartId: Math.random().toString(36).substr(2, 9),
               id: item.productId,
               imageUrl: item.product?.imageUrl || null,
@@ -217,6 +220,7 @@ export function NewQuote() {
   // Add Product Modal (Margin Calculator)
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [editingCartId, setEditingCartId] = useState<string | null>(null);
   const [marginForm, setMarginForm] = useState({
     quantity: 1,
     unitPrice: 0,
@@ -470,6 +474,7 @@ export function NewQuote() {
 
   const openAddProductModal = (product: Product) => {
     setSelectedProduct(product);
+    setEditingCartId(null);
     const existingInCart = cart.find(i => i.id === product.id && i.unitType === product.unit);
     const baseCost = existingInCart ? Number(existingInCart.costPrice) : (Number(product.costPrice) || 0);
     const initialPrice = existingInCart ? Number(existingInCart.unitPrice) : (Number(product.price) || 0);
@@ -485,6 +490,24 @@ export function NewQuote() {
       unitFactor: 1,
       costPrice: baseCost,
       costPerUnit: baseCost,
+    });
+    setShowAddModal(true);
+  };
+
+  const handleEditCartItem = (item: CartItem) => {
+    setSelectedProduct(item);
+    setEditingCartId(item.cartId);
+    const factor = item.unitFactor || 1;
+    const baseCost = item.costPrice !== undefined && item.costPrice !== null ? Number(item.costPrice) : (Number(item.price) || 0);
+    const costPerUnit = baseCost * factor;
+    setMarginForm({
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      marginPercent: item.marginPercent,
+      unitType: item.unitType,
+      unitFactor: factor,
+      costPrice: baseCost,
+      costPerUnit: costPerUnit,
     });
     setShowAddModal(true);
   };
@@ -559,7 +582,9 @@ export function NewQuote() {
 
   const handleResetCost = () => {
     if (!selectedProduct) return;
-    const originalBase = Number(selectedProduct.costPrice) || 0;
+    const originalBase = (selectedProduct as any).originalCostPrice !== undefined
+      ? Number((selectedProduct as any).originalCostPrice)
+      : (Number(selectedProduct.costPrice) || 0);
     const factor = marginForm.unitFactor || 1;
     const originalUnitCost = originalBase * factor;
     
@@ -595,6 +620,29 @@ export function NewQuote() {
 
     const costPerUnit = marginForm.costPerUnit;
     const baseCostPrice = marginForm.costPrice;
+    const origCost = (selectedProduct as any).originalCostPrice !== undefined 
+      ? Number((selectedProduct as any).originalCostPrice) 
+      : (Number(selectedProduct.costPrice) || 0);
+
+    if (editingCartId) {
+      setCart(cart.map(i => i.cartId === editingCartId ? {
+        ...i,
+        costPrice: baseCostPrice,
+        originalCostPrice: i.originalCostPrice !== undefined ? i.originalCostPrice : origCost,
+        quantity: marginForm.quantity,
+        unitPrice: marginForm.unitPrice,
+        subtotal: marginForm.quantity * marginForm.unitPrice,
+        marginPercent: marginForm.marginPercent,
+        costTotal: marginForm.quantity * costPerUnit,
+        unitType: marginForm.unitType,
+        unitFactor: marginForm.unitFactor,
+      } : i));
+      setEditingCartId(null);
+      setShowAddModal(false);
+      setSelectedProduct(null);
+      return;
+    }
+
     const cartId = `${selectedProduct.id}-${marginForm.unitType}`;
 
     const existing = cart.find(i => i.cartId === cartId);
@@ -603,6 +651,7 @@ export function NewQuote() {
       setCart(cart.map(i => i.cartId === cartId ? {
         ...i,
         costPrice: baseCostPrice,
+        originalCostPrice: i.originalCostPrice !== undefined ? i.originalCostPrice : origCost,
         quantity: newQty,
         subtotal: newQty * marginForm.unitPrice,
         unitPrice: marginForm.unitPrice,
@@ -613,6 +662,7 @@ export function NewQuote() {
       setCart([{
         ...selectedProduct,
         costPrice: baseCostPrice,
+        originalCostPrice: origCost,
         cartId,
         quantity: marginForm.quantity,
         unitPrice: marginForm.unitPrice,
@@ -627,22 +677,20 @@ export function NewQuote() {
     setSelectedProduct(null);
   };
 
+  const removeCartItem = (cartId: string) => {
+    setCart(cart.filter(i => i.cartId !== cartId));
+  };
+
   const updateCartQuantity = (cartId: string, qty: number) => {
     const item = cart.find(i => i.cartId === cartId);
     if (!item) return;
-    if (qty <= 0) {
-      setCart(cart.filter(i => i.cartId !== cartId));
-      return;
-    }
-
-    // Stock validation removed for quotes
-
+    const safeQty = Math.max(0, qty);
     const costPerUnit = (Number(item.costPrice) || 0) * item.unitFactor;
     setCart(cart.map(i => i.cartId === cartId ? {
       ...i,
-      quantity: qty,
-      subtotal: qty * i.unitPrice,
-      costTotal: qty * costPerUnit
+      quantity: safeQty,
+      subtotal: safeQty * i.unitPrice,
+      costTotal: safeQty * costPerUnit
     } : i));
   };
 
@@ -1309,73 +1357,118 @@ export function NewQuote() {
                 {cart.length > 0 && <Button variant="ghost" size="sm" onClick={() => setCart([])} className="h-6 px-2 text-[10px] text-rose-500 hover:text-rose-600 hover:bg-rose-500/10">Vaciar</Button>}
               </Label>
               <div className="space-y-2">
-                {cart.map(item => (
-                  <div key={item.cartId} className="bg-[var(--bg)] border border-[var(--border)] p-3 rounded-xl flex flex-col gap-2 relative group">
-                    <Button
-                      variant="ghost" size="icon"
-                      className="absolute top-1 right-1 w-6 h-6 text-[var(--text-sec)] opacity-0 group-hover:opacity-100 hover:text-red-500 hover:bg-red-500/10 transition-all z-10"
-                      onClick={() => updateCartQuantity(item.cartId, 0)}
+                {cart.map(item => {
+                  const unitCost = (Number(item.costPrice) || 0) * item.unitFactor;
+                  const itemMargin = unitCost > 0 
+                    ? ((item.unitPrice - unitCost) / unitCost) * 100 
+                    : (item.unitPrice > 0 ? 100 : 0);
+
+                  return (
+                    <div
+                      key={item.cartId}
+                      onClick={() => handleEditCartItem(item)}
+                      className="bg-[var(--bg)] border border-[var(--border)] p-3 rounded-xl flex flex-col gap-2 relative group hover:border-[var(--primary)]/50 hover:bg-[var(--card)]/40 transition-all cursor-pointer shadow-xs"
+                      title="Haz clic para editar costos, márgenes y precio"
                     >
-                      <X size={12} />
-                    </Button>
-                    <div className="flex items-start gap-2.5 pr-6">
-                      <div className="w-10 h-10 rounded-lg overflow-hidden bg-[var(--card)] border border-[var(--border)] shrink-0 flex items-center justify-center">
-                        {item.imageUrl ? (
-                          <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center opacity-25 text-[var(--text-sec)]">
-                            <Package size={16} />
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-bold text-sm text-[var(--text-main)] leading-tight truncate">{item.name}</p>
-                        <span className="text-[10px] font-bold text-[var(--primary)] uppercase tracking-wide">{formatUnitLabel(item.unitType)}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center border border-[var(--border)] rounded-lg overflow-hidden bg-[var(--card)] shadow-sm">
-                        <Button variant="ghost" size="icon" className="w-7 h-7 rounded-none hover:bg-[var(--primary)]/10 hover:text-[var(--primary)]" onClick={() => updateCartQuantity(item.cartId, item.quantity - 1)}><Minus size={12} /></Button>
-                        <div className="w-10 text-center text-xs font-black bg-[var(--bg)]/50 h-full flex items-center justify-center border-x border-[var(--border)]">{item.quantity}</div>
-                        <Button variant="ghost" size="icon" className="w-7 h-7 rounded-none hover:bg-[var(--primary)]/10 hover:text-[var(--primary)]" onClick={() => updateCartQuantity(item.cartId, item.quantity + 1)}><Plus size={12} /></Button>
-                      </div>
-                      <div className="flex flex-col items-end gap-0.5">
-                          <div className="flex items-center gap-1 group/price relative bg-[var(--card)] border border-[var(--border)] rounded-md overflow-hidden focus-within:border-[var(--primary)] transition-colors pr-1 pl-2">
-                            <span className="text-[10px] text-[var(--text-sec)] font-bold">$</span>
-                            <input
-                              type="number"
-                              value={item.unitPrice}
-                              onChange={(e) => updateCartPrice(item.cartId, Number(e.target.value))}
-                              className="w-16 h-6 px-1 py-0 text-right text-xs font-mono bg-transparent outline-none text-[var(--text-sec)] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                              step="0.01"
-                              min="0"
-                            />
-                          </div>
-                          <p className="text-sm font-black text-[var(--primary)] mt-1">${item.subtotal.toFixed(4)}</p>
+                      <Button
+                        variant="ghost" size="icon"
+                        className="absolute top-1 right-1 w-6 h-6 text-[var(--text-sec)] opacity-0 group-hover:opacity-100 hover:text-red-500 hover:bg-red-500/10 transition-all z-10"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeCartItem(item.cartId);
+                        }}
+                        title="Eliminar de la cotización"
+                      >
+                        <X size={12} />
+                      </Button>
+                      <div className="flex items-start gap-2.5 pr-6">
+                        <div className="w-10 h-10 rounded-lg overflow-hidden bg-[var(--card)] border border-[var(--border)] shrink-0 flex items-center justify-center">
+                          {item.imageUrl ? (
+                            <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center opacity-25 text-[var(--text-sec)]">
+                              <Package size={16} />
+                            </div>
+                          )}
                         </div>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-[var(--border)]/50 mt-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">Costo</span>
-                        <div className="flex items-center bg-[var(--card)] border border-emerald-500/30 rounded px-1.5 focus-within:border-emerald-500">
-                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">$</span>
-                          <input
-                            type="number"
-                            value={Number(((item.costPrice || 0) * item.unitFactor).toFixed(4))}
-                            onChange={(e) => updateCartCost(item.cartId, parseFloat(e.target.value) || 0)}
-                            className="w-16 h-5 text-right text-[11px] font-mono bg-transparent outline-none text-emerald-600 dark:text-emerald-400 font-bold [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                            step="0.01"
-                            min="0"
-                            title="Modificar costo únicamente para esta cotización"
-                          />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-sm text-[var(--text-main)] leading-tight truncate">{item.name}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[10px] font-bold text-[var(--primary)] uppercase tracking-wide">{formatUnitLabel(item.unitType)}</span>
+                            {item.originalCostPrice !== undefined && Math.abs(item.costPrice - item.originalCostPrice) > 0.0001 && (
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-bold">
+                                Costo modif.
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                       </div>
-                      <span className={cn("text-[10px] font-bold", item.marginPercent < 5 ? "text-rose-500" : "text-emerald-600 dark:text-emerald-400")}>
-                        Margen: {item.marginPercent.toFixed(1)}%
-                      </span>
+                      <div className="flex items-center justify-between">
+                        <div 
+                          className="flex items-center border border-[var(--border)] rounded-lg overflow-hidden bg-[var(--card)] shadow-xs"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="w-7 h-7 rounded-none hover:bg-[var(--primary)]/10 hover:text-[var(--primary)]" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateCartQuantity(item.cartId, item.quantity - 1);
+                            }}
+                          >
+                            <Minus size={12} />
+                          </Button>
+                          <div className="w-10 text-center text-xs font-black bg-[var(--bg)]/50 h-full flex items-center justify-center border-x border-[var(--border)]">
+                            {item.quantity}
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="w-7 h-7 rounded-none hover:bg-[var(--primary)]/10 hover:text-[var(--primary)]" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateCartQuantity(item.cartId, item.quantity + 1);
+                            }}
+                          >
+                            <Plus size={12} />
+                          </Button>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] text-[var(--text-sec)] font-semibold block leading-none">Subtotal</span>
+                          <p className="text-sm font-black text-[var(--primary)] mt-0.5">${item.subtotal.toFixed(4)}</p>
+                        </div>
+                      </div>
+
+                      {/* Resumen: Costo, Precio de Venta y Margen de ganancia */}
+                      <div className="flex items-center justify-between text-[10px] pt-1.5 border-t border-[var(--border)]/40 mt-0.5">
+                        <div className="flex items-center gap-1">
+                          <span className="text-[var(--text-sec)]">Costo:</span>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                            ${unitCost.toFixed(4)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[var(--text-sec)]">Precio:</span>
+                          <span className="font-bold text-[var(--text-main)]">
+                            ${item.unitPrice.toFixed(4)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[var(--text-sec)]">Margen:</span>
+                          <span className={cn(
+                            "font-bold px-1.5 py-0.5 rounded text-[10px]",
+                            itemMargin < 5 
+                              ? "bg-rose-500/10 text-rose-500" 
+                              : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          )}>
+                            {itemMargin.toFixed(1)}%
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {cart.length === 0 && (
                   <div className="py-8 text-center text-[var(--text-sec)] border-2 border-dashed border-[var(--border)] rounded-xl bg-[var(--bg)]/50">
                     <ShoppingCart size={32} className="mx-auto mb-2 opacity-50" />
@@ -1411,7 +1504,13 @@ export function NewQuote() {
       </div>
 
       {/* MODAL MARGEN */}
-      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+      <Dialog open={showAddModal} onOpenChange={(open) => {
+        setShowAddModal(open);
+        if (!open) {
+          setEditingCartId(null);
+          setSelectedProduct(null);
+        }
+      }}>
         <DialogContent className="max-w-md bg-[var(--card)] border-[var(--border)] p-0 overflow-hidden shadow-2xl">
           {selectedProduct && (
             <>
@@ -1426,7 +1525,14 @@ export function NewQuote() {
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <DialogTitle className="text-lg font-black text-[var(--text-main)] leading-tight mb-1 truncate">{selectedProduct.name}</DialogTitle>
+                  <div className="flex items-center gap-2">
+                    <DialogTitle className="text-lg font-black text-[var(--text-main)] leading-tight mb-1 truncate">{selectedProduct.name}</DialogTitle>
+                    {editingCartId && (
+                      <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 text-[10px] font-bold">
+                        Editando
+                      </Badge>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 text-sm flex-wrap">
                     <Badge variant="outline" className="font-mono text-[10px]">{selectedProduct.internalCode}</Badge>
                     <span className="text-[var(--text-sec)] font-bold text-xs">{selectedProduct.stock} {selectedProduct.unit} disp.</span>
@@ -1456,16 +1562,24 @@ export function NewQuote() {
                       <Percent size={13} />
                       Costo por {formatUnitLabel(marginForm.unitType || selectedProduct.unit)} (Cotización)
                     </Label>
-                    {Math.abs(marginForm.costPrice - (Number(selectedProduct.costPrice) || 0)) > 0.0001 && (
-                      <button
-                        type="button"
-                        onClick={handleResetCost}
-                        className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline uppercase transition-colors"
-                        title="Restablecer al costo original de inventario"
-                      >
-                        Restablecer original (${((Number(selectedProduct.costPrice) || 0) * marginForm.unitFactor).toFixed(4)})
-                      </button>
-                    )}
+                    {(() => {
+                      const origBase = (selectedProduct as any).originalCostPrice !== undefined
+                        ? Number((selectedProduct as any).originalCostPrice)
+                        : (Number(selectedProduct.costPrice) || 0);
+                      if (Math.abs(marginForm.costPrice - origBase) > 0.0001) {
+                        return (
+                          <button
+                            type="button"
+                            onClick={handleResetCost}
+                            className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline uppercase transition-colors"
+                            title="Restablecer al costo original de inventario"
+                          >
+                            Restablecer original (${(origBase * marginForm.unitFactor).toFixed(4)})
+                          </button>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-emerald-700 dark:text-emerald-400 pointer-events-none">$</span>
@@ -1541,9 +1655,21 @@ export function NewQuote() {
                 </div>
               </div>
               <div className="p-4 border-t border-[var(--border)] bg-[var(--bg)]/50 flex gap-3">
-                <Button variant="outline" className="flex-1 font-bold h-12" onClick={() => setShowAddModal(false)}>Cancelar</Button>
-                <Button className="flex-1 font-black h-12 bg-[var(--primary)] text-white" onClick={addProductToCart}>
-                  <ShoppingCart size={18} className="mr-2"/> Agregar
+                <Button variant="outline" className="flex-1 font-bold h-12" onClick={() => {
+                  setShowAddModal(false);
+                  setEditingCartId(null);
+                  setSelectedProduct(null);
+                }}>Cancelar</Button>
+                <Button className="flex-1 font-black h-12 bg-[var(--primary)] text-white shadow-md shadow-[var(--primary)]/20" onClick={addProductToCart}>
+                  {editingCartId ? (
+                    <>
+                      <Check size={18} className="mr-2" /> Actualizar Producto
+                    </>
+                  ) : (
+                    <>
+                      <ShoppingCart size={18} className="mr-2"/> Agregar
+                    </>
+                  )}
                 </Button>
               </div>
             </>
