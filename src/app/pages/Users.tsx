@@ -495,15 +495,17 @@ export function Users() {
               </div>
             </div>
 
-            {!editingUser && (
-              <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase opacity-70">Contraseña Temporal</Label>
+            {(!editingUser || (editingUser && (currentUser?.roleId === 1 || currentUser?.roleId === 2 || ['PROPIETARIO', 'ADMINISTRADOR'].includes(currentUser?.role?.toUpperCase() || '')))) && (
+              <div className="space-y-2 mt-4 pt-4 border-t border-[var(--border)]">
+                <Label className="text-xs font-bold uppercase opacity-70">
+                  {editingUser ? "Nueva Contraseña (Opcional)" : "Contraseña Temporal"}
+                </Label>
                 <Input
                   type="password"
-                  required
+                  required={!editingUser}
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  placeholder="••••••••"
+                  placeholder={editingUser ? "Dejar en blanco para mantener la actual" : "••••••••"}
                 />
               </div>
             )}

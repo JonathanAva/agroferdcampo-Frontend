@@ -1,4 +1,4 @@
-import { Search, Moon, Sun, LogOut, MapPin, Menu } from "lucide-react";
+import { Search, Moon, Sun, LogOut, MapPin, Menu, User } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { Button } from "../ui/button";
 import { useAuth } from "../../context/AuthContext";
@@ -7,6 +7,14 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { NotificationsBell } from "./NotificationsBell";
 import { GlobalSearch } from "./GlobalSearch";
+import { ProfileDialog } from "./ProfileDialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -17,6 +25,8 @@ export function Header({ onMenuClick }: HeaderProps) {
   const { user, logout, selectBranch } = useAuth();
   const { branches, selectedBranch, setSelectedBranch } = useBranch();
   const navigate = useNavigate();
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+
   useEffect(() => {
     // Scroll lock logic or other future effects can go here
   }, []);
@@ -104,32 +114,52 @@ export function Header({ onMenuClick }: HeaderProps) {
           </div>
         </button>
 
-        {/* User Info & Logout */}
-        <div className="flex items-center gap-2 md:gap-3">
-          <div className="text-right hidden sm:block">
-            <p
-              className="font-semibold text-xs md:text-sm truncate max-w-[80px] md:max-w-none"
-              style={{ color: "var(--text-main)" }}
+        {/* User Info & Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              className="flex items-center gap-2 md:gap-3 h-auto p-2 bg-[var(--bg)] hover:bg-[var(--bg)]/80 border border-transparent hover:border-[var(--border)] rounded-xl transition-all"
             >
-              {user?.name}
-            </p>
-            <p
-              className="text-[10px] md:text-xs font-bold uppercase tracking-wider"
-              style={{ color: "var(--color-primary)" }}
+              <div className="text-right hidden sm:block">
+                <p
+                  className="font-semibold text-xs md:text-sm truncate max-w-[80px] md:max-w-none"
+                  style={{ color: "var(--text-main)" }}
+                >
+                  {user?.name}
+                </p>
+                <p
+                  className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-left"
+                  style={{ color: "var(--color-primary)" }}
+                >
+                  {user?.role || "Empleado"}
+                </p>
+              </div>
+              <div className="size-8 rounded-lg flex items-center justify-center font-black text-xs bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/20 shadow-sm">
+                {user?.name?.charAt(0).toUpperCase() || "U"}
+              </div>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48 bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
+            <DropdownMenuItem 
+              onClick={() => setIsProfileOpen(true)}
+              className="cursor-pointer focus:bg-[var(--bg)] focus:text-[var(--text-main)] font-medium gap-2"
             >
-              {user?.role || "Empleado"}
-            </p>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleLogout}
-            className="text-muted-foreground hover:text-[var(--color-primary)] bg-[var(--bg)]"
-            title="Cerrar Sesión"
-          >
-            <LogOut size={20} />
-          </Button>
-        </div>
+              <User size={16} className="text-[var(--primary)]" />
+              Mi Perfil
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="bg-[var(--border)]" />
+            <DropdownMenuItem 
+              onClick={handleLogout}
+              className="cursor-pointer focus:bg-destructive/10 focus:text-destructive text-destructive font-bold gap-2"
+            >
+              <LogOut size={16} />
+              Cerrar Sesión
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <ProfileDialog open={isProfileOpen} onOpenChange={setIsProfileOpen} />
       </div>
     </header>
   );
