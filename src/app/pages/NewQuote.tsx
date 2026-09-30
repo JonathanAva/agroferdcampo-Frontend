@@ -1511,10 +1511,10 @@ export function NewQuote() {
           setSelectedProduct(null);
         }
       }}>
-        <DialogContent className="max-w-md bg-[var(--card)] border-[var(--border)] p-0 overflow-hidden shadow-2xl">
+        <DialogContent className="sm:max-w-lg bg-[var(--card)] border-[var(--border)] p-0 overflow-hidden shadow-2xl">
           {selectedProduct && (
             <>
-              <div className="p-5 bg-[var(--bg)]/50 border-b border-[var(--border)] flex items-center gap-4">
+              <div className="p-5 pr-12 bg-[var(--bg)]/50 border-b border-[var(--border)] flex items-center gap-4">
                 <div className="w-14 h-14 rounded-xl overflow-hidden bg-[var(--card)] border border-[var(--border)] shrink-0 flex items-center justify-center">
                   {selectedProduct.imageUrl ? (
                     <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="w-full h-full object-cover" />
@@ -1525,10 +1525,12 @@ export function NewQuote() {
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <DialogTitle className="text-lg font-black text-[var(--text-main)] leading-tight mb-1 truncate">{selectedProduct.name}</DialogTitle>
+                  <div className="flex items-start justify-between gap-2 min-w-0 mb-1">
+                    <DialogTitle className="text-lg font-black text-[var(--text-main)] leading-tight break-words">
+                      {selectedProduct.name}
+                    </DialogTitle>
                     {editingCartId && (
-                      <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 text-[10px] font-bold">
+                      <Badge className="shrink-0 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 text-[10px] font-bold mt-1">
                         Editando
                       </Badge>
                     )}
