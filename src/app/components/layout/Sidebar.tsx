@@ -23,6 +23,7 @@ import {
   History,
   ShieldAlert,
   Banknote,
+  Share2,
 } from "lucide-react";
 
 // roleId: 1=PROPIETARIO, 2=ADMINISTRADOR, 3=SUPERVISOR, 4=CAJERO, 5=BODEGUERO, 6=VENDEDOR
@@ -32,6 +33,7 @@ const navLinks = [
   { path: "/caja", icon: Banknote, label: "Caja (Cobros)", roles: [1, 2, 3, 4] },
   { path: "/sales", icon: History, label: "Historial de Ventas", roles: [1, 2, 3, 4] },
   { path: "/quotes", icon: FileText, label: "Cotizaciones", roles: [1, 2, 3, 4, 6] },
+  { path: "/product-cards", icon: Share2, label: "Fichas de Productos", roles: [1, 2, 3, 4, 6] },
   { path: "/inventory", icon: Package, label: "Inventario", roles: [1, 2, 3, 5] },
   { path: "/purchases", icon: ShoppingBag, label: "Compras a Prov.", roles: [1, 2, 5] },
   { path: "/delivery-notes", icon: TruckIcon, label: "Albaranes", roles: [1, 2, 3, 5] },

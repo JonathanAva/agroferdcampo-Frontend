@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import logo from "../../assets/logo.png";
 import { useNavigate } from "react-router";
 import {
+  Vault,
   Search,
   Plus,
   Minus,
@@ -42,12 +43,15 @@ import { createPreSale, PreSaleTicket } from "../services/pre-sales.service";
 import { uploadsService } from "../services/uploads.service";
 import { cashShiftsService, CashShift, BillsBreakdown, CoinsBreakdown, OpenShiftPayload, CloseShiftPayload } from "../services/cash-shifts.service";
 import { quotesService } from "../services/quotes.service";
+import { UNIVERSAL_PRODUCT_UNITS } from "../utils/universalProduct";
 import { getLotCostSummary, LotCostSummary } from "../services/purchases.service";
 import { toast } from "sonner";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { NumberInput } from "../components/ui/number-input";
+import { SafeTransferDialog } from "../components/safe/SafeTransferDialog";
+import { printSafePackageTicket } from "../utils/printSafeTicket";
 import { CustomerQuickCreate } from "../components/customers/CustomerQuickCreate";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../components/ui/dialog";
 import { cn } from "../components/ui/utils";
@@ -103,12 +107,6 @@ interface Product {
     priceMayorista?: number;
   }[];
 }
-
-const UNIVERSAL_PRODUCT_UNITS = [
-  "UNIDAD", "KG", "LB", "QUINTAL", "CAJA", "LITRO", "ARROBA", "KINTALE",
-  "METRO", "YARDA", "PIE", "GALON", "CUBETA", "CUARTO_GALON", "GRAMO",
-  "CENTIMETRO", "PULGADA", "ONZA", "SACO", "MEDIA_ARROBA", "PAQUETE", "TONELADA",
-];
 
 interface POSSubcategory {
   id: number;
@@ -422,6 +420,9 @@ export function POS() {
   const [closeBills, setCloseBills] = useState<BillsBreakdown>({ d100:0, d50:0, d20:0, d10:0, d5:0, d1:0 });
   const [closeCoins, setCloseCoins] = useState<CoinsBreakdown>({ c25:0, c10:0, c5:0, c1:0 });
   const [closeNotes, setCloseNotes] = useState("");
+  // Caja fuerte: entrega al cerrar y traslados durante el turno
+  const [closeSafeDrop, setCloseSafeDrop] = useState<number | undefined>(undefined);
+  const [safeTransferOpen, setSafeTransferOpen] = useState(false);
   const [closeSummary, setCloseSummary] = useState<{ expectedAmount: number; countedCash: number; difference: number } | null>(null);
   const [closeExpectedTotals, setCloseExpectedTotals] = useState<{ expectedAmount: number; expectedTarjeta: number; expectedTransferencia: number } | null>(null);
 
@@ -655,15 +656,26 @@ export function POS() {
       toast.error("El desglose debe sumar al menos $0.01");
       return;
     }
+    if (closeSafeDrop && closeSafeDrop > total) {
+      toast.error(`No puedes enviar a caja fuerte más del efectivo contado ($${total.toFixed(2)})`);
+      return;
+    }
     try {
       setLoadingShift(true);
       const res = await cashShiftsService.closeShift({
         breakdown: { bills: closeBills, coins: closeCoins },
         notes: closeNotes || undefined,
+        ...(closeSafeDrop ? { safeDropAmount: Math.round(closeSafeDrop * 100) / 100 } : {}),
       });
       setCloseSummary(res.summary);
       setActiveShift(null);
       toast.success("Caja cerrada exitosamente");
+      // Entrega a caja fuerte al cerrar: imprimir el ticket del paquete para firmar
+      if (res.safePackage) {
+        toast.success(`Paquete ${res.safePackage.code} enviado a caja fuerte`);
+        try { printSafePackageTicket(res.safePackage, sysConfig); } catch (e: any) { toast.error(e.message); }
+      }
+      setCloseSafeDrop(undefined);
     } catch (error: any) {
       toast.error(error.message || "Error al cerrar caja");
     } finally {
@@ -788,6 +800,10 @@ export function POS() {
             productId: i.id,
             quantity: Number(s.quantity),
             unitPrice: Number(s.price),
+            unitType: s.unitType,
+            unitFactor: Number(s.unitFactor) || 1,
+            ...(s.customName ? { customName: s.customName } : {}),
+            ...(s.unitCost !== undefined ? { costPrice: Number(s.unitCost) } : {}),
           }))
         ),
         ...(transportData && transportData.requiresTransport ? {
@@ -1730,6 +1746,16 @@ ${paymentConditionHtml}
               <DollarSign size={14} className="mr-2 hidden sm:inline" /> Transferir a Caja Fuerte
             </Button>
           )} */}
+          {activeShift && !activeShift.closeRequested && (
+            <Button
+              variant="outline"
+              className="font-bold"
+              onClick={() => setSafeTransferOpen(true)}
+              title="Trasladar efectivo de tu caja a caja fuerte (genera paquete y ticket)"
+            >
+              <Vault size={14} className="mr-2" /> <span className="hidden sm:inline">Enviar a </span>caja fuerte
+            </Button>
+          )}
           {activeShift && (
             <Button
               disabled={activeShift.closeRequested}
@@ -2848,10 +2874,28 @@ ${paymentConditionHtml}
                     </SelectItem>
                   ))}
                   {availableRegisters.length === 0 && (
-                    <div className="p-2 text-sm text-[var(--text-sec)]">No hay cajas disponibles</div>
+                    <div className="p-2 text-sm text-[var(--text-sec)]">No hay cajas disponibles. Créalas en Finanzas y Cajas.</div>
                   )}
                 </SelectContent>
               </Select>
+              {(() => {
+                const reg = availableRegisters.find(r => r.id.toString() === selectedRegisterId);
+                if (!reg || reg.cashBalance === undefined) return null;
+                const counted = calcBreakdownTotal(openBills, openCoins);
+                const diff = counted - Number(reg.cashBalance);
+                return (
+                  <div className="text-xs text-[var(--text-sec)] space-y-1 pt-1">
+                    <p>
+                      Saldo de esta caja en Finanzas y Cajas: <span className="font-bold text-[var(--text-main)]">${Number(reg.cashBalance).toFixed(2)}</span>
+                    </p>
+                    {counted > 0 && Math.abs(diff) >= 0.01 && (
+                      <p className="text-amber-600 font-semibold">
+                        El fondo contado difiere en ${diff.toFixed(2)}; se registrará como ajuste de apertura en la caja.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
@@ -3125,6 +3169,23 @@ ${paymentConditionHtml}
                       className="h-12 sm:h-16 rounded-xl sm:rounded-2xl text-sm sm:text-base px-4 bg-[var(--card)] border-[var(--border)] shadow-sm"
                     />
                   </div>
+                  {canCloseDirectly && (
+                    <div className="space-y-2">
+                      <label className="text-xs sm:text-sm font-bold text-[var(--text-sec)] uppercase tracking-widest flex items-center gap-1.5">
+                        <Vault size={14} /> Entregar a caja fuerte (Opcional)
+                      </label>
+                      <NumberInput
+                        value={closeSafeDrop}
+                        onValueChange={setCloseSafeDrop}
+                        min={0}
+                        placeholder="0.00"
+                        className="h-12 rounded-xl bg-[var(--card)] border-[var(--border)] font-bold"
+                      />
+                      <p className="text-[11px] text-[var(--text-sec)]">
+                        Parte del efectivo contado que se entrega a caja fuerte. Se crea un paquete y se imprime su ticket para firmar.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -3663,6 +3724,13 @@ ${paymentConditionHtml}
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SafeTransferDialog
+        open={safeTransferOpen}
+        onOpenChange={setSafeTransferOpen}
+        registerName={activeShift?.cashRegister?.name}
+        sysConfig={sysConfig}
+      />
 
       <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
     </div>

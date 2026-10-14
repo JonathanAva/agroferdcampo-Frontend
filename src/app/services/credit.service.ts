@@ -20,6 +20,11 @@ export interface CreditPayment {
   user?: { id?: number; fullName: string };
   customer?: { id: number; name: string };
   creditSale?: { id: number; saleId?: number | null };
+  /** ANULADO: el abono se conserva, pero su monto volvió al saldo del crédito */
+  status?: 'ACTIVO' | 'ANULADO';
+  voidedAt?: string | null;
+  voidReason?: string | null;
+  voidedBy?: { id?: number; fullName: string } | null;
 }
 
 export interface CreditSale {
@@ -210,6 +215,14 @@ export const creditService = {
       });
     }
     return apiRequest<{ data: CreditPayment[]; total: number; page: number; limit: number; totalPages: number }>(`/credit/payments?${query.toString()}`);
+  },
+
+  /** Anula un abono: su monto vuelve al saldo del crédito y su movimiento de caja queda ANULADO */
+  voidPayment: (paymentId: number, reason: string) => {
+    return apiRequest<CreditPayment>(`/credit/payments/${paymentId}/void`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
   },
 
   registerPayment: (id: number, data: RegisterPaymentDto) => {

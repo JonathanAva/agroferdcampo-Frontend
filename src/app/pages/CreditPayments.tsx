@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, History, Banknote, CreditCard, Smartphone, Package } from 'lucide-react';
+import { ArrowLeft, History, Banknote, CreditCard, Smartphone, Package, Ban } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { VoidRecordDialog } from '../components/common/VoidRecordDialog';
 import { useNavigate, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 
@@ -47,6 +49,11 @@ export function CreditPayments() {
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
   const [totalCollected, setTotalCollected] = useState(0);
 
+  // Anulación de abonos: solo propietario, administrador y supervisor (el servidor también lo valida)
+  const { user } = useAuth();
+  const canVoid = !!user?.roleId && user.roleId <= 3;
+  const [voidingPayment, setVoidingPayment] = useState<CreditPayment | null>(null);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchPayments();
@@ -70,7 +77,7 @@ export function CreditPayments() {
         total: res.total || 0,
         totalPages: res.totalPages || 1,
       });
-      setTotalCollected((res.data || []).reduce((sum, p) => sum + Number(p.amount), 0));
+      setTotalCollected((res.data || []).filter((p) => p.status !== 'ANULADO').reduce((sum, p) => sum + Number(p.amount), 0));
     } catch (e) {
       toast.error('Error al cargar el historial de pagos');
     } finally {
@@ -116,18 +123,19 @@ export function CreditPayments() {
                 <TableHead>Método</TableHead>
                 <TableHead>Responsable</TableHead>
                 <TableHead className="text-right">Monto</TableHead>
+                {canVoid && <TableHead className="text-center w-24">Acciones</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading && payments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center text-[var(--text-sec)] animate-pulse">
+                  <TableCell colSpan={canVoid ? 6 : 5} className="h-32 text-center text-[var(--text-sec)] animate-pulse">
                     Cargando pagos...
                   </TableCell>
                 </TableRow>
               ) : payments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center text-[var(--text-sec)] font-medium">
+                  <TableCell colSpan={canVoid ? 6 : 5} className="h-32 text-center text-[var(--text-sec)] font-medium">
                     <div className="flex flex-col items-center gap-2">
                       <Package size={28} className="opacity-30" />
                       No se encontraron pagos con estos filtros
@@ -135,8 +143,10 @@ export function CreditPayments() {
                   </TableCell>
                 </TableRow>
               ) : (
-                payments.map(p => (
-                  <TableRow key={p.id} className="hover:bg-[var(--bg)]/30">
+                payments.map(p => {
+                  const voided = p.status === 'ANULADO';
+                  return (
+                  <TableRow key={p.id} className={cn("hover:bg-[var(--bg)]/30", voided && "opacity-60")}>
                     <TableCell className="text-sm">
                       <span className="font-medium text-[var(--text-main)] block">
                         {new Date(p.createdAt).toLocaleDateString('es-SV')}
@@ -146,7 +156,15 @@ export function CreditPayments() {
                       </span>
                     </TableCell>
                     <TableCell className="font-bold text-[var(--text-main)]">
+                      {voided && <Badge variant="destructive" className="mr-2 text-[10px]">ANULADO</Badge>}
                       {p.customer?.name || '—'}
+                      {voided && (
+                        <span className="block text-[11px] font-normal text-rose-600 mt-0.5">
+                          Anulado por {p.voidedBy?.fullName || 'usuario'}
+                          {p.voidedAt ? ` el ${new Date(p.voidedAt).toLocaleString('es-SV')}` : ''}
+                          {p.voidReason ? ` · ${p.voidReason}` : ''}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <PaymentMethodBadge method={p.paymentMethod} />
@@ -154,11 +172,26 @@ export function CreditPayments() {
                     <TableCell className="text-sm text-[var(--text-sec)]">
                       {p.user?.fullName || 'Sistema'}
                     </TableCell>
-                    <TableCell className="text-right font-black text-emerald-600">
+                    <TableCell className={cn("text-right font-black", voided ? "line-through text-[var(--text-sec)]" : "text-emerald-600")}>
                       ${Number(p.amount).toFixed(4)}
                     </TableCell>
+                    {canVoid && (
+                      <TableCell className="text-center">
+                        {!voided && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setVoidingPayment(p)}
+                            className="text-rose-600 hover:text-rose-700 hover:bg-rose-500/10"
+                          >
+                            <Ban size={14} className="mr-1" /> Anular
+                          </Button>
+                        )}
+                      </TableCell>
+                    )}
                   </TableRow>
-                ))
+                  );
+                })
               )}
             </TableBody>
           </Table>
@@ -188,6 +221,28 @@ export function CreditPayments() {
           </div>
         )}
       </div>
+
+      <VoidRecordDialog
+        open={!!voidingPayment}
+        onOpenChange={(open) => !open && setVoidingPayment(null)}
+        title="Anular abono"
+        summary={voidingPayment && (
+          <div className="space-y-0.5">
+            <p className="font-bold">{voidingPayment.customer?.name || 'Cliente'}</p>
+            <p className="text-xs text-[var(--text-sec)]">
+              {new Date(voidingPayment.createdAt).toLocaleString('es-SV')} · {voidingPayment.paymentMethod}
+              {voidingPayment.creditSale?.saleId ? ` · Venta #${voidingPayment.creditSale.saleId}` : ''}
+            </p>
+            <p className="font-black text-emerald-600">${Number(voidingPayment.amount).toFixed(2)}</p>
+          </div>
+        )}
+        consequence="El monto volverá al saldo pendiente del cliente y su movimiento de caja quedará anulado. Luego puedes registrar el abono correcto."
+        onConfirm={async (reason) => {
+          await creditService.voidPayment(voidingPayment!.id, reason);
+          toast.success('Abono anulado');
+          fetchPayments();
+        }}
+      />
     </div>
   );
 }

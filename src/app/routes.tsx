@@ -24,6 +24,7 @@ import { SalesHistory } from "./pages/SalesHistory";
 import { SystemConfig } from "./pages/SystemConfig";
 import { Quotes } from "./pages/Quotes";
 import { NewQuote } from "./pages/NewQuote";
+import { ProductCards } from "./pages/ProductCards";
 import { Purchases } from "./pages/Purchases";
 import { DeliveryNotes } from "./pages/DeliveryNotes";
 import { Credit } from "./pages/Credit";
@@ -86,6 +87,7 @@ export const router = createBrowserRouter([
           { path: "quotes", element: <Quotes /> },
           { path: "quotes/new", element: <NewQuote /> },
           { path: "quotes/edit/:id", element: <NewQuote /> },
+          { path: "product-cards", element: <ProductCards /> },
           { path: "customers", element: <Customers /> },
         ],
       },

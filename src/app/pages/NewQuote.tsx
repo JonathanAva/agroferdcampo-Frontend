@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router";
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, User, CheckCircle2,
   X, ArrowLeft, Percent, Package, Loader2, Award, Tag, PlusCircle,
-  Calendar as CalendarIcon, Check, Edit3
+  Calendar as CalendarIcon, Check, Edit3, Lock, EyeOff
 } from "lucide-react";
 import { apiRequest } from "../config/api";
 import { quotesService } from "../services/quotes.service";
@@ -22,6 +22,9 @@ import { Switch } from "../components/ui/switch";
 import { TransportSelector, TransportData } from "../components/transport/TransportSelector";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
+import { UNIVERSAL_PRODUCT_UNITS } from "../utils/universalProduct";
+import { CostAccessDialog } from "../components/quotes/CostAccessDialog";
+import type { CostAccessResponse } from "../services/quotes.service";
 
 interface POSBrand {
   id: number;
@@ -79,6 +82,12 @@ interface CartItem extends Product {
   unitType: string;
   unitFactor: number;
   originalCostPrice?: number;
+  /** Nombre libre de la línea; solo lo tienen las líneas del Producto Universal */
+  customName?: string;
+  /** false si el costo de la línea no se conoce (cotización cargada sin autorizar costos) */
+  costKnown?: boolean;
+  /** id de la línea en la cotización guardada, para asociar los costos al autorizar */
+  quoteItemId?: number;
 }
 
 function formatExpirationDate(dateStr: string): string {
@@ -139,24 +148,20 @@ export function NewQuote() {
         
         // Cargar productos
         if (quote.items) {
+          // El servidor no envía costos en el detalle: las líneas cargadas quedan con costo
+          // desconocido hasta que alguien autorizado desbloquee costos y márgenes.
           const newCart = quote.items.map((item: any) => {
             const qty = Number(item.quantity);
             const price = Number(item.unitPrice);
             const factor = item.unitFactor || 1;
-            const catalogCost = Number(item.product?.costPrice) || 0;
-            const baseCost = item.costPrice !== null && item.costPrice !== undefined
-              ? Number(item.costPrice)
-              : catalogCost;
-            const costPerUnit = baseCost * factor;
             const subtotal = qty * price;
-            let margin = 0;
-            if (costPerUnit > 0 && price > costPerUnit) {
-              margin = ((price - costPerUnit) / costPerUnit) * 100;
-            }
             return {
               ...item.product,
-              costPrice: baseCost,
-              originalCostPrice: catalogCost > 0 ? catalogCost : baseCost,
+              costPrice: 0,
+              originalCostPrice: undefined,
+              costKnown: false,
+              // Al clonar se crea otra cotización: los costos se piden a la cotización de origen
+              quoteItemId: item.id,
               cartId: Math.random().toString(36).substr(2, 9),
               id: item.productId,
               imageUrl: item.product?.imageUrl || null,
@@ -164,11 +169,12 @@ export function NewQuote() {
               name: item.product?.name || "Producto",
               unitType: item.unitType || item.product?.unit || "UNIDAD",
               unitFactor: factor,
+              ...(item.customName ? { customName: item.customName } : {}),
               unitPrice: price,
-              costTotal: qty * costPerUnit,
+              costTotal: 0,
               quantity: qty,
               subtotal,
-              marginPercent: margin,
+              marginPercent: 0,
             };
           });
           setCart(newCart as any);
@@ -233,6 +239,47 @@ export function NewQuote() {
 
   const [savingQuote, setSavingQuote] = useState(false);
 
+  // Costos y márgenes: ocultos por defecto en cada apertura; se desbloquean con contraseña
+  // (verificada y auditada en el servidor) y se pierden al salir de la pantalla.
+  const [costsUnlocked, setCostsUnlocked] = useState(false);
+  const [costAuthorizedBy, setCostAuthorizedBy] = useState<string | null>(null);
+  const [costDialogOpen, setCostDialogOpen] = useState(false);
+  const costSourceQuoteId = id ? Number(id) : cloneId ? Number(cloneId) : null;
+
+  const handleCostsGranted = (result: CostAccessResponse) => {
+    setCostsUnlocked(true);
+    setCostAuthorizedBy(result.authorizedBy);
+    if (result.items.length === 0) return;
+    const byId = new Map(result.items.map((c) => [c.id, c]));
+    setCart((prev) => prev.map((item) => {
+      if (item.costKnown !== false || item.quoteItemId === undefined) return item;
+      const info = byId.get(item.quoteItemId);
+      if (!info) return item;
+      const baseCost = info.costPrice ?? info.catalogCostPrice ?? 0;
+      const costPerUnit = baseCost * (item.unitFactor || 1);
+      return {
+        ...item,
+        costKnown: true,
+        costPrice: baseCost,
+        originalCostPrice: info.catalogCostPrice ?? baseCost,
+        costTotal: item.quantity * costPerUnit,
+        marginPercent: costPerUnit > 0 ? ((item.unitPrice - costPerUnit) / costPerUnit) * 100 : (item.unitPrice > 0 ? 100 : 0),
+      };
+    }));
+  };
+
+  const lockCosts = () => {
+    setCostsUnlocked(false);
+    setCostAuthorizedBy(null);
+  };
+
+  // Producto Universal: artículo no registrado en inventario, configurado a mano por línea
+  const [universalProduct, setUniversalProduct] = useState<Product | null>(null);
+  const [showUniversalModal, setShowUniversalModal] = useState(false);
+  const [editingUniversalCartId, setEditingUniversalCartId] = useState<string | null>(null);
+  const emptyUniversalForm = { nombre: "", medida: "UNIDAD", cantidad: "1", precio: "", costo: "" };
+  const [universalForm, setUniversalForm] = useState(emptyUniversalForm);
+
   const isDirty = cart.length > 0 || selectedCustomer !== null || notes.trim().length > 0;
   const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
 
@@ -273,10 +320,30 @@ export function NewQuote() {
     }
   };
 
+  const loadUniversalProduct = async () => {
+    try {
+      const data = await apiRequest<any>("/catalog/products/universal");
+      setUniversalProduct(data ? {
+        id: data.id,
+        internalCode: data.internalCode || "S/C",
+        name: data.name,
+        price: 0,
+        costPrice: 0,
+        stock: 0,
+        category: { name: "General" },
+        unit: data.unit,
+        imageUrl: data.imageUrl || null,
+      } : null);
+    } catch {
+      setUniversalProduct(null);
+    }
+  };
+
   useEffect(() => {
     loadCategories();
     loadBrands();
     loadTags();
+    loadUniversalProduct();
   }, []);
 
   const PAGE_SIZE = 40;
@@ -494,7 +561,84 @@ export function NewQuote() {
     setShowAddModal(true);
   };
 
+  const openUniversalModal = (item?: CartItem) => {
+    if (item) {
+      setEditingUniversalCartId(item.cartId);
+      setUniversalForm({
+        nombre: item.customName || "",
+        medida: item.unitType || "UNIDAD",
+        cantidad: String(item.quantity),
+        precio: String(item.unitPrice),
+        costo: costsUnlocked && item.costKnown !== false && item.costPrice ? String(item.costPrice) : "",
+      });
+    } else {
+      setEditingUniversalCartId(null);
+      setUniversalForm(emptyUniversalForm);
+    }
+    setShowUniversalModal(true);
+  };
+
+  /**
+   * Agrega (o actualiza) una línea del Producto Universal. Cada línea es independiente:
+   * mismo producto comodín, distinto nombre/medida/precio, igual que en el POS.
+   */
+  const saveUniversalLine = () => {
+    if (!universalProduct) return;
+    const nombre = universalForm.nombre.trim();
+    const cantidad = Number(universalForm.cantidad);
+    const precio = Number(universalForm.precio);
+    const costo = Math.max(0, Number(universalForm.costo) || 0);
+    if (!nombre) {
+      toast.error("Ingresa el nombre o descripción del producto");
+      return;
+    }
+    if (!cantidad || cantidad <= 0) {
+      toast.error("Ingresa una cantidad válida");
+      return;
+    }
+    if (!precio || precio <= 0) {
+      toast.error("Ingresa un precio de venta válido");
+      return;
+    }
+
+    const marginPercent = costo > 0 ? ((precio - costo) / costo) * 100 : 100;
+    const line = {
+      customName: nombre,
+      unitType: universalForm.medida,
+      unitFactor: 1,
+      quantity: cantidad,
+      unitPrice: precio,
+      subtotal: cantidad * precio,
+    };
+    // Con los costos ocultos el campo de costo no se muestra: no se toca el costo de la línea
+    const costFields = costsUnlocked
+      ? { costPrice: costo, originalCostPrice: costo, costTotal: cantidad * costo, marginPercent, costKnown: true }
+      : {};
+
+    if (editingUniversalCartId) {
+      setCart(cart.map(i => i.cartId === editingUniversalCartId ? { ...i, ...line, ...costFields } : i));
+    } else {
+      setCart([{
+        ...universalProduct,
+        ...line,
+        costPrice: 0,
+        originalCostPrice: 0,
+        costTotal: 0,
+        marginPercent: 0,
+        costKnown: false,
+        ...costFields,
+        cartId: `universal-${Math.random().toString(36).substring(2, 9)}`,
+      }, ...cart]);
+    }
+    setShowUniversalModal(false);
+    setEditingUniversalCartId(null);
+  };
+
   const handleEditCartItem = (item: CartItem) => {
+    if (item.customName !== undefined) {
+      openUniversalModal(item);
+      return;
+    }
     setSelectedProduct(item);
     setEditingCartId(item.cartId);
     const factor = item.unitFactor || 1;
@@ -636,6 +780,8 @@ export function NewQuote() {
         costTotal: marginForm.quantity * costPerUnit,
         unitType: marginForm.unitType,
         unitFactor: marginForm.unitFactor,
+        // Si el costo estaba oculto y no se desbloqueó, la línea sigue con costo desconocido
+        ...(costsUnlocked ? { costKnown: true } : {}),
       } : i));
       setEditingCartId(null);
       setShowAddModal(false);
@@ -759,9 +905,11 @@ export function NewQuote() {
           productId: i.id,
           quantity: Number(i.quantity),
           unitPrice: Number(i.unitPrice),
-          costPrice: Number(i.costPrice),
+          // Costo desconocido (no autorizado): no se envía y el servidor conserva el que ya tenía la línea
+          ...(i.costKnown !== false ? { costPrice: Number(i.costPrice) } : {}),
           unitType: i.unitType,
           unitFactor: Number(i.unitFactor) || 1,
+          ...(i.customName ? { customName: i.customName } : {}),
         }))
       };
 
@@ -787,7 +935,10 @@ export function NewQuote() {
   const marginOptions = [10, 15, 20, 30, 50]; // Normal margins
 
   const displayedProducts = products.filter(
-    (product) => !showExpiringSoonOnly || (product.expirationDate && isNearExpiration(product.expirationDate))
+    (product) =>
+      // El Producto Universal se ofrece con su propia tarjeta, no como producto normal del catálogo
+      product.id !== universalProduct?.id &&
+      (!showExpiringSoonOnly || (product.expirationDate && isNearExpiration(product.expirationDate)))
   );
 
   return (
@@ -1097,8 +1248,22 @@ export function NewQuote() {
               {displayedProducts.length} {displayedProducts.length === 1 ? 'producto encontrado' : 'productos encontrados'}
             </div>
           )}
-          {displayedProducts.length > 0 ? (
+          {displayedProducts.length > 0 || universalProduct ? (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
+              {universalProduct && (
+                <div
+                  onClick={() => openUniversalModal()}
+                  className="relative p-3 rounded-xl border-2 border-dashed border-[var(--primary)] bg-[var(--primary)]/5 hover:bg-[var(--primary)]/10 hover:shadow-md transition-all flex flex-col items-center justify-center text-center gap-2 cursor-pointer min-h-[180px]"
+                >
+                  <div className="size-12 rounded-full bg-[var(--primary)]/15 text-[var(--primary)] flex items-center justify-center">
+                    <Plus size={22} />
+                  </div>
+                  <h3 className="font-black text-sm leading-tight text-[var(--primary)]">{universalProduct.name}</h3>
+                  <p className="text-[9px] font-bold uppercase text-[var(--text-sec)]">
+                    Artículo no registrado — nombre, medida y precio libres
+                  </p>
+                </div>
+              )}
               {displayedProducts.map((product) => {
                 const stock = Number(product.stock);
                 return (
@@ -1229,10 +1394,12 @@ export function NewQuote() {
                     )}
                     
                     <div className="mt-auto flex items-center justify-between pt-2 border-t border-[var(--border)] border-dashed">
-                      <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider flex items-center">
-                        <Percent size={10} className="mr-0.5"/> 
-                        ${Number(product.costPrice || 0).toFixed(4)}
-                      </span>
+                      {costsUnlocked ? (
+                        <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider flex items-center">
+                          <Percent size={10} className="mr-0.5"/>
+                          ${Number(product.costPrice || 0).toFixed(4)}
+                        </span>
+                      ) : <span />}
                       <span className="text-sm font-black text-[var(--primary)]">
                         ${Number(product.price).toFixed(4)}
                       </span>
@@ -1354,7 +1521,25 @@ export function NewQuote() {
             <div className="border-t border-[var(--border)] pt-4">
               <Label className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider mb-3 flex items-center justify-between">
                 <span>Productos ({cart.length})</span>
-                {cart.length > 0 && <Button variant="ghost" size="sm" onClick={() => setCart([])} className="h-6 px-2 text-[10px] text-rose-500 hover:text-rose-600 hover:bg-rose-500/10">Vaciar</Button>}
+                <span className="flex items-center gap-1">
+                  {cart.length > 0 && <Button variant="ghost" size="sm" onClick={() => setCart([])} className="h-6 px-2 text-[10px] text-rose-500 hover:text-rose-600 hover:bg-rose-500/10">Vaciar</Button>}
+                  {costsUnlocked ? (
+                    <Button variant="ghost" size="sm" onClick={lockCosts} className="h-6 px-2 text-[10px] text-amber-600" title={`Costos visibles · autorizado por ${costAuthorizedBy}`}>
+                      <EyeOff size={12} className="mr-1" /> Ocultar costos
+                    </Button>
+                  ) : (
+                    // Acceso discreto a la información interna (requiere contraseña)
+                    <button
+                      type="button"
+                      onClick={() => setCostDialogOpen(true)}
+                      title="Información interna"
+                      aria-label="Información interna"
+                      className="size-6 flex items-center justify-center rounded text-[var(--text-sec)]/40 hover:text-[var(--text-sec)] hover:bg-[var(--bg)]"
+                    >
+                      <Lock size={12} />
+                    </button>
+                  )}
+                </span>
               </Label>
               <div className="space-y-2">
                 {cart.map(item => {
@@ -1368,7 +1553,7 @@ export function NewQuote() {
                       key={item.cartId}
                       onClick={() => handleEditCartItem(item)}
                       className="bg-[var(--bg)] border border-[var(--border)] p-3 rounded-xl flex flex-col gap-2 relative group hover:border-[var(--primary)]/50 hover:bg-[var(--card)]/40 transition-all cursor-pointer shadow-xs"
-                      title="Haz clic para editar costos, márgenes y precio"
+                      title={costsUnlocked ? "Haz clic para editar costos, márgenes y precio" : "Haz clic para editar cantidad y precio"}
                     >
                       <Button
                         variant="ghost" size="icon"
@@ -1392,10 +1577,15 @@ export function NewQuote() {
                           )}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="font-bold text-sm text-[var(--text-main)] leading-tight truncate">{item.name}</p>
+                          <p className="font-bold text-sm text-[var(--text-main)] leading-tight truncate" title={item.customName || item.name}>{item.customName || item.name}</p>
                           <div className="flex items-center gap-1.5 mt-0.5">
                             <span className="text-[10px] font-bold text-[var(--primary)] uppercase tracking-wide">{formatUnitLabel(item.unitType)}</span>
-                            {item.originalCostPrice !== undefined && Math.abs(item.costPrice - item.originalCostPrice) > 0.0001 && (
+                            {item.customName !== undefined && (
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-[var(--primary)]/30 text-[var(--primary)] font-bold">
+                                Universal
+                              </Badge>
+                            )}
+                            {costsUnlocked && item.costKnown !== false && item.originalCostPrice !== undefined && Math.abs(item.costPrice - item.originalCostPrice) > 0.0001 && (
                               <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-bold">
                                 Costo modif.
                               </Badge>
@@ -1440,31 +1630,35 @@ export function NewQuote() {
                         </div>
                       </div>
 
-                      {/* Resumen: Costo, Precio de Venta y Margen de ganancia */}
+                      {/* Resumen: Costo, Precio de Venta y Margen de ganancia (costo/margen solo si están desbloqueados) */}
                       <div className="flex items-center justify-between text-[10px] pt-1.5 border-t border-[var(--border)]/40 mt-0.5">
-                        <div className="flex items-center gap-1">
-                          <span className="text-[var(--text-sec)]">Costo:</span>
-                          <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                            ${unitCost.toFixed(4)}
-                          </span>
-                        </div>
+                        {costsUnlocked && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-[var(--text-sec)]">Costo:</span>
+                            <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                              {item.costKnown === false ? "—" : `$${unitCost.toFixed(4)}`}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex items-center gap-1">
                           <span className="text-[var(--text-sec)]">Precio:</span>
                           <span className="font-bold text-[var(--text-main)]">
                             ${item.unitPrice.toFixed(4)}
                           </span>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-[var(--text-sec)]">Margen:</span>
-                          <span className={cn(
-                            "font-bold px-1.5 py-0.5 rounded text-[10px]",
-                            itemMargin < 5 
-                              ? "bg-rose-500/10 text-rose-500" 
-                              : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                          )}>
-                            {itemMargin.toFixed(1)}%
-                          </span>
-                        </div>
+                        {costsUnlocked && item.costKnown !== false && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-[var(--text-sec)]">Margen:</span>
+                            <span className={cn(
+                              "font-bold px-1.5 py-0.5 rounded text-[10px]",
+                              itemMargin < 5
+                                ? "bg-rose-500/10 text-rose-500"
+                                : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            )}>
+                              {itemMargin.toFixed(1)}%
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -1481,14 +1675,22 @@ export function NewQuote() {
         </div>
 
         <div className="bg-[var(--card)] border-t border-[var(--border)] p-4 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)] relative z-10 space-y-3">
-          <div className="flex justify-between text-xs font-bold text-[var(--text-sec)]">
-            <span>Costo Total</span>
-            <span>${cartCost.toFixed(4)}</span>
-          </div>
-          <div className="flex justify-between text-xs font-bold text-emerald-600">
-            <span>Ganancia Est.</span>
-            <span>${estimatedProfit.toFixed(4)}</span>
-          </div>
+          {costsUnlocked && (
+            cart.some(i => i.costKnown === false) ? (
+              <p className="text-[11px] text-amber-600 font-semibold">Algunas líneas no tienen costo disponible; la ganancia no se puede estimar.</p>
+            ) : (
+              <>
+                <div className="flex justify-between text-xs font-bold text-[var(--text-sec)]">
+                  <span>Costo Total</span>
+                  <span>${cartCost.toFixed(4)}</span>
+                </div>
+                <div className="flex justify-between text-xs font-bold text-emerald-600">
+                  <span>Ganancia Est.</span>
+                  <span>${estimatedProfit.toFixed(4)}</span>
+                </div>
+              </>
+            )
+          )}
           <div className="flex justify-between text-xl font-black text-[var(--primary)] border-t border-[var(--border)] pt-2">
             <span>TOTAL</span>
             <span>${cartTotal.toFixed(4)}</span>
@@ -1558,6 +1760,7 @@ export function NewQuote() {
                   </div>
                 )}
 
+                {costsUnlocked && (<>
                 <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 space-y-2">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -1617,6 +1820,7 @@ export function NewQuote() {
                     ))}
                   </div>
                 </div>
+                </>)}
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -1639,15 +1843,17 @@ export function NewQuote() {
                 </div>
 
                 <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--bg)] flex justify-between items-center">
-                  <div>
-                    <span className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider block mb-1">Margen Actual</span>
-                    <span className={cn(
-                      "text-xl font-black", 
-                      marginForm.marginPercent < 5 ? "text-rose-500" : "text-emerald-600"
-                    )}>
-                      {marginForm.marginPercent.toFixed(1)}%
-                    </span>
-                  </div>
+                  {costsUnlocked ? (
+                    <div>
+                      <span className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider block mb-1">Margen Actual</span>
+                      <span className={cn(
+                        "text-xl font-black",
+                        marginForm.marginPercent < 5 ? "text-rose-500" : "text-emerald-600"
+                      )}>
+                        {marginForm.marginPercent.toFixed(1)}%
+                      </span>
+                    </div>
+                  ) : <span />}
                   <div className="text-right">
                     <span className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider block mb-1">Total Item</span>
                     <span className="text-xl font-black text-[var(--primary)]">
@@ -1678,6 +1884,112 @@ export function NewQuote() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* MODAL PRODUCTO UNIVERSAL */}
+      <Dialog open={showUniversalModal} onOpenChange={(open) => {
+        setShowUniversalModal(open);
+        if (!open) setEditingUniversalCartId(null);
+      }}>
+        <DialogContent className="sm:max-w-md bg-[var(--card)] border-[var(--border)]">
+          <DialogHeader>
+            <DialogTitle>{editingUniversalCartId ? "Editar Producto Universal" : "Producto Universal"}</DialogTitle>
+            <DialogDescription>
+              Cotiza un artículo especial o no registrado sin crearlo en inventario.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Nombre / descripción <span className="text-rose-500">*</span></Label>
+              <Input
+                autoFocus
+                value={universalForm.nombre}
+                onChange={(e) => setUniversalForm({ ...universalForm, nombre: e.target.value })}
+                placeholder="Ej. Portón metálico 3x2 m a la medida"
+                maxLength={255}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Medida</Label>
+                <select
+                  value={universalForm.medida}
+                  onChange={(e) => setUniversalForm({ ...universalForm, medida: e.target.value })}
+                  className="w-full h-10 px-3 rounded-md border bg-[var(--bg)] border-[var(--border)] text-sm"
+                >
+                  {UNIVERSAL_PRODUCT_UNITS.map((u) => (
+                    <option key={u} value={u}>{formatUnitLabel(u)}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Cantidad <span className="text-rose-500">*</span></Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={universalForm.cantidad}
+                  onChange={(e) => setUniversalForm({ ...universalForm, cantidad: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              {costsUnlocked && (
+              <div className="space-y-2">
+                <Label>Costo <span className="font-normal text-[var(--text-sec)]">(opcional)</span></Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={universalForm.costo}
+                    onChange={(e) => setUniversalForm({ ...universalForm, costo: e.target.value })}
+                    placeholder="0.00"
+                    className="pl-7"
+                  />
+                </div>
+              </div>
+              )}
+              <div className={cn("space-y-2", !costsUnlocked && "col-span-2")}>
+                <Label>Precio de venta <span className="text-rose-500">*</span></Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={universalForm.precio}
+                    onChange={(e) => setUniversalForm({ ...universalForm, precio: e.target.value })}
+                    placeholder="0.00"
+                    className="pl-7"
+                  />
+                </div>
+              </div>
+            </div>
+            {Number(universalForm.cantidad) > 0 && Number(universalForm.precio) > 0 && (
+              <div className="p-3 rounded-xl border border-[var(--border)] bg-[var(--bg)] flex justify-between text-sm">
+                <span className="font-bold text-[var(--text-sec)]">Total línea</span>
+                <span className="font-black text-[var(--primary)]">
+                  ${(Number(universalForm.cantidad) * Number(universalForm.precio)).toFixed(4)}
+                </span>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowUniversalModal(false); setEditingUniversalCartId(null); }}>Cancelar</Button>
+            <Button className="bg-[var(--primary)] text-white" onClick={saveUniversalLine}>
+              {editingUniversalCartId ? "Actualizar" : "Agregar a la cotización"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <CostAccessDialog
+        open={costDialogOpen}
+        onOpenChange={setCostDialogOpen}
+        quoteId={costSourceQuoteId}
+        onGranted={handleCostsGranted}
+      />
 
       <CustomerQuickCreate open={isQuickCreateOpen} onOpenChange={setIsQuickCreateOpen} onSuccess={(c) => setSelectedCustomer(c)} />
 

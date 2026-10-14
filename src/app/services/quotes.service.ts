@@ -10,6 +10,20 @@ export interface QuoteItemDto {
   costPrice?: number;
   unitType?: string;
   unitFactor?: number;
+  /** Nombre libre de la línea (obligatorio para el Producto Universal) */
+  customName?: string;
+}
+
+export interface CostAccessPayload {
+  password: string;
+  /** Correo de un administrador que autoriza en lugar del usuario actual */
+  authorizerEmail?: string;
+}
+
+export interface CostAccessResponse {
+  authorizedBy: string;
+  /** Costos por línea de la cotización (vacío si se autorizó para una cotización nueva) */
+  items: { id: number; costPrice: number | null; catalogCostPrice: number | null }[];
 }
 
 export interface CreateQuoteDto {
@@ -69,12 +83,14 @@ export interface QuoteResponse {
     costPrice?: string | number;
     unitType?: string | null;
     unitFactor?: string | number | null;
+    customName?: string | null;
     product?: {
       id: number;
       name: string;
       internalCode?: string;
       costPrice?: string | number;
       unit?: string;
+      isUniversal?: boolean;
     };
   }>;
 }
@@ -122,6 +138,18 @@ export const quotesService = {
 
   getQuoteDetail: async (id: number): Promise<QuoteResponse> => {
     return await apiRequest<QuoteResponse>(`${BASE}/${id}`);
+  },
+
+  /**
+   * Autoriza la vista de costos y márgenes (contraseña propia o de un administrador). El acceso
+   * queda registrado en auditoría. Con quoteId devuelve los costos de esa cotización.
+   */
+  grantCostAccess: async (quoteId: number | null, payload: CostAccessPayload): Promise<CostAccessResponse> => {
+    const url = quoteId ? `${BASE}/${quoteId}/cost-access` : `${BASE}/cost-access`;
+    return await apiRequest<CostAccessResponse>(url, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
 
   updateQuote: async (id: number, data: any): Promise<QuoteResponse> => {

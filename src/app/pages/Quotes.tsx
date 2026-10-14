@@ -3,10 +3,11 @@ import logo from '../../assets/logo.png';
 import {
   Search, FileText, Eye, EyeOff, CheckCircle2, AlertCircle, Calendar as CalendarIcon, RefreshCcw, Filter, X,
   Mail, UserCog, Clock, Send, Plus, Banknote, CreditCard, Smartphone, Trash2, Truck as TruckIcon, Printer, PackageCheck, Edit3, Copy
-, Store, Layers, Loader2
+, Store, Layers, Loader2, Lock
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { quotesService, QuoteResponse } from '../services/quotes.service';
+import { quotesService, QuoteResponse, CostAccessResponse } from '../services/quotes.service';
+import { CostAccessDialog } from '../components/quotes/CostAccessDialog';
 import { cashRegistersService } from '../services/cash-registers.service';
 import { CashRegister } from '../services/cash-shifts.service';
 import { toast } from 'sonner';
@@ -36,6 +37,7 @@ import {
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { UnsavedChangesDialog } from '../components/ui/unsaved-changes-dialog';
 import { printSaleTicket as printSaleTicketUtil } from '../utils/printSaleTicket';
+import { printSaleInvoiceLetter, printQuoteLetter } from '../utils/printLetterDocuments';
 import { Checkbox } from '../components/ui/checkbox';
 import { printSequentialQuoteTickets } from '../utils/printBatchDocuments';
 
@@ -100,7 +102,12 @@ export function Quotes() {
   // Modales
   const [selectedQuote, setSelectedQuote] = useState<QuoteResponse | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
-  const [showMargin, setShowMargin] = useState(true);
+  // Costos y márgenes: siempre ocultos al abrir; solo se cargan tras autorizar con contraseña
+  // (el servidor no los envía en el detalle normal) y se descartan al cerrar el detalle.
+  const [costAccess, setCostAccess] = useState<CostAccessResponse | null>(null);
+  const [costDialogOpen, setCostDialogOpen] = useState(false);
+  const showMargin = costAccess !== null;
+  const hideCosts = () => setCostAccess(null);
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [cancelingId, setCancelingId] = useState<number | null>(null);
 
@@ -390,7 +397,7 @@ ${customerEmail ? `<div class="row"><span>Correo:</span><span>${customerEmail}</
   <tbody>
     ${fullQuote.items.map(i => `<tr>
       <td>${Number(i.quantity)}${i.unitType ? ` ${formatUnitLabel(i.unitType)}` : ''}</td>
-      <td>${i.product?.name || ''}</td>
+      <td>${i.customName || i.product?.name || ''}</td>
       <td class="tr">${fmt(Number(i.unitPrice))}</td>
       <td class="tr">${fmt(Number(i.totalPrice))}</td>
     </tr>`).join('')}
@@ -435,11 +442,38 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
     }
   };
 
+  /** Cotización en tamaño carta (el ticket de 80mm sigue disponible con printQuote) */
+  const printQuoteLetterDoc = async (quote: QuoteResponse) => {
+    try {
+      const fullQuote = await quotesService.getQuoteDetail(quote.id);
+      printQuoteLetter(fullQuote, sysConfig);
+    } catch (e: any) {
+      toast.error(e.message || 'Error al cargar la cotización');
+    }
+  };
+
+  /** Factura / comprobante de venta en tamaño carta, sin datos del DTE */
+  const [printingInvoiceId, setPrintingInvoiceId] = useState<number | null>(null);
+  const printQuoteSaleInvoice = async (quote: QuoteResponse) => {
+    if (!quote.sale?.id) {
+      toast.error('Esta cotización todavía no tiene una venta asociada');
+      return;
+    }
+    setPrintingInvoiceId(quote.id);
+    try {
+      await printSaleInvoiceLetter({ id: quote.sale.id } as any, sysConfig);
+    } catch {
+      toast.error('Error al cargar los datos de la venta para imprimir la factura');
+    } finally {
+      setPrintingInvoiceId(null);
+    }
+  };
+
   const handleOpenDetail = async (quote: QuoteResponse) => {
     try {
       const fullQuote = await quotesService.getQuoteDetail(quote.id);
+      hideCosts();
       setSelectedQuote(fullQuote);
-      setShowMargin(true);
       setDetailModalOpen(true);
     } catch (e) {
       toast.error('Error al cargar detalles de la cotización');
@@ -819,17 +853,30 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                             <Eye size={14} className="mr-2 text-[var(--primary)]" /> Ver Detalle
                           </DropdownMenuItem>
 
-                          {quote.status === 'CONFIRMADA' ? (
-                            <DropdownMenuItem
-                              onClick={() => printQuoteSaleTicket(quote)}
-                              disabled={printingSaleTicketId === quote.id}
-                              className="font-bold cursor-pointer"
-                            >
-                              <Printer size={14} className="mr-2 text-blue-600" /> Imprimir Ticket de Venta
-                            </DropdownMenuItem>
-                          ) : (
+                          {quote.status === 'CONFIRMADA' && quote.sale?.id && (
+                            <>
+                              <DropdownMenuItem
+                                onClick={() => printQuoteSaleInvoice(quote)}
+                                disabled={printingInvoiceId === quote.id}
+                                className="font-bold cursor-pointer"
+                              >
+                                <FileText size={14} className="mr-2 text-emerald-600" /> Imprimir Factura (Carta)
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => printQuoteSaleTicket(quote)}
+                                disabled={printingSaleTicketId === quote.id}
+                                className="font-bold cursor-pointer"
+                              >
+                                <Printer size={14} className="mr-2 text-blue-600" /> Imprimir Ticket de Venta
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                          <DropdownMenuItem onClick={() => printQuoteLetterDoc(quote)} className="font-bold cursor-pointer">
+                            <FileText size={14} className="mr-2 text-blue-600" /> Imprimir Cotización (Carta)
+                          </DropdownMenuItem>
+                          {quote.status !== 'CONFIRMADA' && (
                             <DropdownMenuItem onClick={() => printQuote(quote)} className="font-bold cursor-pointer">
-                              <Printer size={14} className="mr-2 text-blue-600" /> Imprimir Cotización
+                              <Printer size={14} className="mr-2 text-blue-600" /> Imprimir Cotización (Ticket)
                             </DropdownMenuItem>
                           )}
 
@@ -969,7 +1016,10 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
         </div>
       )}
 
-      <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
+      <Dialog open={detailModalOpen} onOpenChange={(open) => {
+        setDetailModalOpen(open);
+        if (!open) hideCosts();
+      }}>
         <DialogContent
           className="flex flex-col p-0 overflow-hidden bg-[var(--card)] border-[var(--border)] sm:max-w-4xl w-full max-h-[90vh]"
         >
@@ -1058,12 +1108,11 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                     <TableBody>
                       {selectedQuote.items?.map(item => {
                         const factor = Number(item.unitFactor) || 1;
-                        const itemBaseCost = item.costPrice !== null && item.costPrice !== undefined
-                          ? Number(item.costPrice)
-                          : (Number(item.product?.costPrice) || 0);
+                        const costInfo = costAccess?.items.find(c => c.id === item.id);
+                        const itemBaseCost = costInfo?.costPrice ?? costInfo?.catalogCostPrice ?? 0;
                         const unitCost = itemBaseCost * factor;
-                        const originalBase = Number(item.product?.costPrice) || 0;
-                        const isCustomCost = item.costPrice !== null && item.costPrice !== undefined && Math.abs(Number(item.costPrice) - originalBase) > 0.0001;
+                        const originalBase = costInfo?.catalogCostPrice ?? 0;
+                        const isCustomCost = costInfo?.costPrice != null && Math.abs(costInfo.costPrice - originalBase) > 0.0001;
                         const unitPrice = Number(item.unitPrice) || 0;
                         const lineMargin = unitCost > 0 ? ((unitPrice - unitCost) / unitCost) * 100 : (unitPrice > 0 ? 100 : 0);
 
@@ -1074,7 +1123,7 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                               {item.unitType && <span className="ml-1 text-[10px] font-bold text-[var(--text-sec)] uppercase">{formatUnitLabel(item.unitType)}</span>}
                             </TableCell>
                             <TableCell>
-                              <div className="font-medium text-[var(--text-main)]">{item.product?.name}</div>
+                              <div className="font-medium text-[var(--text-main)]">{item.customName || item.product?.name}</div>
                               {item.product?.internalCode && (
                                 <span className="text-[10px] text-[var(--text-sec)] font-mono">{item.product.internalCode}</span>
                               )}
@@ -1121,7 +1170,8 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                         (() => {
                           let totalCost = 0;
                           selectedQuote.items?.forEach(i => {
-                            const cost = Number(i.costPrice) || Number(i.product?.costPrice) || 0;
+                            const c = costAccess?.items.find(x => x.id === i.id);
+                            const cost = c?.costPrice ?? c?.catalogCostPrice ?? 0;
                             const factor = Number(i.unitFactor) || 1;
                             totalCost += cost * factor * Number(i.quantity);
                           });
@@ -1143,26 +1193,29 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                                   </span>
                                 </div>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => setShowMargin(false)}
-                                title="Ocultar costos y márgenes (modo cliente)"
-                                className="text-[var(--text-sec)]/50 hover:text-[var(--text-sec)] p-1 rounded hover:bg-[var(--bg)] transition-colors -mt-1 -mr-1"
-                              >
-                                <EyeOff size={15} />
-                              </button>
+                              <div className="flex flex-col items-end gap-1 -mt-1 -mr-1">
+                                <button
+                                  type="button"
+                                  onClick={hideCosts}
+                                  className="h-7 px-2 text-[11px] font-bold rounded-md border border-[var(--border)] text-[var(--text-main)] hover:bg-[var(--bg)] flex items-center gap-1"
+                                >
+                                  <EyeOff size={13} /> Ocultar
+                                </button>
+                                <span className="text-[9px] font-normal text-amber-600">Autorizado por {costAccess?.authorizedBy}</span>
+                              </div>
                             </div>
                           );
                         })()
                       ) : (
+                        // Acceso discreto: solo un candado, sin texto que invite a activarlo frente al cliente
                         <button
                           type="button"
-                          onClick={() => setShowMargin(true)}
-                          title="Mostrar costos y márgenes (Usuario del sistema)"
-                          className="h-8 px-2.5 text-xs font-semibold text-[var(--text-sec)] hover:text-[var(--text-main)] flex items-center gap-1.5 rounded-lg border border-dashed border-[var(--border)] hover:bg-[var(--card)] transition-colors"
+                          onClick={() => setCostDialogOpen(true)}
+                          title="Información interna"
+                          aria-label="Información interna"
+                          className="size-7 flex items-center justify-center rounded-md text-[var(--text-sec)]/40 hover:text-[var(--text-sec)] hover:bg-[var(--card)] transition-colors"
                         >
-                          <Eye size={14} className="text-emerald-600" />
-                          <span>Ver Costos / Márgenes</span>
+                          <Lock size={13} />
                         </button>
                       )}
                     </div>
@@ -1979,6 +2032,13 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <CostAccessDialog
+        open={costDialogOpen}
+        onOpenChange={setCostDialogOpen}
+        quoteId={selectedQuote?.id ?? null}
+        onGranted={setCostAccess}
+      />
 
       <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
     </div>

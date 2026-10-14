@@ -28,6 +28,19 @@ export interface ReceivePurchaseDto {
   notes?: string;
   items: ReceivePurchaseItemDto[];
   linkedCashEntryId?: number;
+  /** URL devuelta por uploadsService.uploadSupplierInvoice */
+  invoiceUrl?: string;
+  invoiceNumber?: string;
+}
+
+/** Recepción de mercadería de una orden, con la factura del proveedor si se adjuntó */
+export interface PurchaseReceipt {
+  id: number;
+  receivedAt: string;
+  notes?: string | null;
+  invoiceUrl?: string | null;
+  invoiceNumber?: string | null;
+  items?: { productId: number; received: number | string }[];
 }
 
 export interface Lot {
@@ -111,6 +124,7 @@ export interface PurchaseResponse {
       internalCode?: string;
     };
   }>;
+  receipts?: PurchaseReceipt[];
 }
 
 export interface PaginatedPurchases {
@@ -182,6 +196,14 @@ export const purchasesService = {
   receivePurchase: async (id: number, payload: ReceivePurchaseDto): Promise<PurchaseResponse> => {
     return await apiRequest<PurchaseResponse>(`/purchases/${id}/receive`, {
       method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Adjunta o reemplaza la factura del proveedor de una recepción ya registrada */
+  attachReceiptInvoice: async (purchaseId: number, receiptId: number, payload: { invoiceUrl: string; invoiceNumber?: string }): Promise<PurchaseReceipt> => {
+    return await apiRequest<PurchaseReceipt>(`/purchases/${purchaseId}/receipts/${receiptId}/invoice`, {
+      method: 'PATCH',
       body: JSON.stringify(payload),
     });
   },

@@ -2,7 +2,7 @@ import { SaleResponse, getSaleDetail } from '../services/sales.service';
 import type { SystemConfigData } from '../pages/SystemConfig';
 import logoUrl from '../../assets/logo.png';
 
-const PAYMENT_METHOD_LABEL: Record<string, string> = {
+export const PAYMENT_METHOD_LABEL: Record<string, string> = {
   EFECTIVO: 'Efectivo',
   TARJETA: 'Tarjeta',
   TRANSFERENCIA: 'Transferencia',
@@ -29,7 +29,7 @@ function enteroALetras(n: number): string {
   return n.toString();
 }
 
-function numerosALetras(n: number): string {
+export function numerosALetras(n: number): string {
   const intPart = Math.floor(n);
   const cents = Math.round((n - intPart) * 100);
   return `${enteroALetras(intPart)} dólares${cents > 0 ? ` con ${cents}/100` : ''}`;

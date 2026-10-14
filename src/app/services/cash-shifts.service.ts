@@ -1,5 +1,6 @@
 // src/app/services/cash-shifts.service.ts
 import { apiRequest } from '../config/api';
+import type { SafePackage } from './safe.service';
 
 const BASE = '/cash-shifts';
 
@@ -29,14 +30,21 @@ export interface CashRegister {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  isOpen?: boolean;
+  openedBy?: string | null;
+  /** Saldo de efectivo de la caja en Finanzas y Cajas (solo en available-registers) */
+  cashBalance?: number;
 }
 
 export interface CloseShiftResponse {
   shift: CashShift;
+  /** Paquete creado si al cerrar se entregó efectivo a caja fuerte */
+  safePackage?: SafePackage | null;
   summary: {
     expectedAmount: number;
     countedCash: number;
     difference: number;
+    safeDropAmount?: number;
   };
 }
 
@@ -56,7 +64,7 @@ export interface DenominationBreakdown {
 }
 
 export interface OpenShiftPayload {
-  cashRegisterId?: number;
+  cashRegisterId: number;
   breakdown: DenominationBreakdown;
   notes?: string;
 }
@@ -67,6 +75,9 @@ export interface CloseShiftPayload {
   countedTarjeta?: number;
   countedTransferencia?: number;
   notes?: string;
+  /** Efectivo que se entrega a caja fuerte al cerrar (crea un paquete) */
+  safeDropAmount?: number;
+  safeDropReceivedBy?: string;
 }
 
 export interface ExpectedTotals {
@@ -124,8 +135,8 @@ export const cashShiftsService = {
     });
   },
 
-  closeShiftById: async (id: number, payload: CloseShiftPayload): Promise<{ summary: any }> => {
-    return await apiRequest<{ summary: any }>(`${BASE}/${id}/close`, {
+  closeShiftById: async (id: number, payload: CloseShiftPayload): Promise<CloseShiftResponse> => {
+    return await apiRequest<CloseShiftResponse>(`${BASE}/${id}/close`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });

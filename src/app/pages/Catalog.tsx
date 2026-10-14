@@ -12,6 +12,7 @@ import {
   ToggleRight,
   Upload,
   ImageIcon,
+  Truck,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 import { apiRequest } from "../config/api";
@@ -87,6 +88,7 @@ interface CatalogProduct {
   brand?: { id: number; name: string } | null;
   brandId?: number | null;
   tags?: { id: number; name: string }[];
+  suppliers?: ProductSupplierLink[];
   nearestExpirationDate?: string | null;
   prices: ProductPrice[];
   units?: {
@@ -115,6 +117,21 @@ interface Subcategory {
 interface ProductBrand {
   id: number;
   name: string;
+}
+
+interface SupplierOption {
+  id: number;
+  name: string;
+  isActive?: boolean;
+}
+
+/** Proveedor asociado a un producto (manual o registrado al recibir una compra) */
+interface ProductSupplierLink {
+  supplierId: number;
+  source: "MANUAL" | "COMPRA";
+  lastPurchaseAt?: string | null;
+  lastPurchaseCost?: number | string | null;
+  supplier: { id: number; name: string; phone?: string | null; isActive?: boolean };
 }
 
 interface ProductTag {
@@ -176,6 +193,7 @@ const productSchema = z.object({
   subcategoryId: z.string(),
   brandId: z.string().optional(),
   tagIds: z.array(z.string()),
+  supplierIds: z.array(z.string()),
   expirationDate: z.string(),
   costPrice: z.string(),
   trackStock: z.boolean(),
@@ -313,6 +331,8 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   const [newTagName, setNewTagName] = useState("");
   const [quickTagName, setQuickTagName] = useState("");
   const [tagFilterQuery, setTagFilterQuery] = useState("");
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
+  const [supplierFilterQuery, setSupplierFilterQuery] = useState("");
   const [productImageUrl, setProductImageUrl] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
 
@@ -340,6 +360,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       subcategoryId: "",
       brandId: "",
       tagIds: [],
+      supplierIds: [],
       expirationDate: "",
       costPrice: "",
       trackStock: true,
@@ -385,6 +406,23 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   const watchCategoryId = watch("categoryId");
   const watchBrandId = watch("brandId");
   const watchTagIds = watch("tagIds") || [];
+  const watchSupplierIds = watch("supplierIds") || [];
+
+  // Proveedores activos + los ya asociados al producto aunque estén inactivos (para poder verlos/quitarlos)
+  const filteredFormSuppliers = useMemo(() => {
+    const visible = suppliers.filter((s) => s.isActive !== false || watchSupplierIds.includes(String(s.id)));
+    const query = supplierFilterQuery.toLowerCase().trim();
+    return query ? visible.filter((s) => s.name.toLowerCase().includes(query)) : visible;
+  }, [suppliers, supplierFilterQuery, watchSupplierIds]);
+
+  const toggleSupplier = (supplierId: string) => {
+    const current = watch("supplierIds") || [];
+    setValue(
+      "supplierIds",
+      current.includes(supplierId) ? current.filter((s) => s !== supplierId) : [...current, supplierId],
+      { shouldDirty: true },
+    );
+  };
 
   const availableSubcategories = useMemo(
     () => subcategories.filter((s) => String(s.categoryId) === watchCategoryId),
@@ -538,7 +576,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       }
       queryParams.append("isActive", showInactive ? "false" : "true");
 
-      const [prodData, catData, subcatData, brandData, tagData, brData] =
+      const [prodData, catData, subcatData, brandData, tagData, brData, supplierData] =
         await Promise.all([
           apiRequest<{ data: CatalogProduct[]; total: number }>(
             `/catalog/products?${queryParams.toString()}`,
@@ -548,6 +586,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
           apiRequest<ProductBrand[]>("/catalog/brands").catch(() => []),
           apiRequest<ProductTag[]>("/catalog/tags").catch(() => []),
           apiRequest<Branch[]>("/branches").catch(() => []),
+          apiRequest<SupplierOption[]>("/suppliers").catch(() => []),
         ]);
 
       setProducts(prodData?.data || []);
@@ -557,6 +596,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       setSubcategories(Array.isArray(subcatData) ? subcatData : []);
       setTags(Array.isArray(tagData) ? tagData : []);
       setBranches(Array.isArray(brData) ? brData : []);
+      setSuppliers(Array.isArray(supplierData) ? supplierData : []);
     } catch {
       toast.error("Error al cargar el catálogo");
     } finally {
@@ -581,6 +621,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
     setQuickTagName("");
     setBrandFilterQuery("");
     setQuickBrandName("");
+    setSupplierFilterQuery("");
     if (product) {
       setEditingProduct(product);
       setProductImageUrl(product.imageUrl || null);
@@ -600,6 +641,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
             ? String(product.brandId)
             : "",
         tagIds: product.tags?.map((t) => String(t.id)) || [],
+        supplierIds: product.suppliers?.map((s) => String(s.supplierId)) || [],
         expirationDate: "",
         costPrice: product.costPrice?.toString() || "",
         trackStock: product.trackStock,
@@ -641,6 +683,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         subcategoryId: "",
         brandId: "",
         tagIds: [],
+        supplierIds: [],
         expirationDate: "",
         costPrice: "",
         trackStock: true,
@@ -676,6 +719,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
           ? String(product.brandId)
           : "",
       tagIds: product.tags?.map((t) => String(t.id)) || [],
+      supplierIds: product.suppliers?.map((s) => String(s.supplierId)) || [],
       expirationDate: "",
       costPrice: product.costPrice?.toString() || "",
       trackStock: product.trackStock,
@@ -739,6 +783,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       subcategoryId: data.subcategoryId ? Number(data.subcategoryId) : null,
       brandId: data.brandId ? Number(data.brandId) : null,
       tagIds: data.tagIds.map(Number),
+      supplierIds: (data.supplierIds || []).map(Number),
       costPrice: data.costPrice ? Number(data.costPrice) : null,
       internalCode: data.internalCode?.trim() || undefined,
       barcode: data.barcode?.trim() || undefined,
@@ -1619,6 +1664,116 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                     </div>
                     <p className="text-[10px] opacity-60 ml-1">
                       Asigna la marca comercial para facilitar la búsqueda y clasificación de productos.
+                    </p>
+                  </div>
+
+                  {/* Proveedores */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-bold flex items-center gap-1.5">
+                        <Truck size={15} className="text-sky-600" />
+                        Proveedores
+                      </Label>
+                      {watchSupplierIds.length > 0 && (
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-500/20">
+                          {watchSupplierIds.length} seleccionado{watchSupplierIds.length !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+                    <div className="p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-3">
+                      {/* Proveedores asociados, con su última compra */}
+                      {watchSupplierIds.length > 0 && (
+                        <div className="space-y-1.5">
+                          {watchSupplierIds.map((sid) => {
+                            const link = editingProduct?.suppliers?.find((s) => String(s.supplierId) === sid);
+                            const name = link?.supplier.name || suppliers.find((s) => String(s.id) === sid)?.name || `Proveedor #${sid}`;
+                            return (
+                              <div key={sid} className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-sky-500/5 border border-sky-500/20">
+                                <div className="min-w-0">
+                                  <p className="text-xs font-bold truncate">{name}</p>
+                                  <p className="text-[10px] text-[var(--text-sec)]">
+                                    {link?.lastPurchaseAt
+                                      ? `Última compra: ${new Date(link.lastPurchaseAt).toLocaleDateString()}${link.lastPurchaseCost != null ? ` · $${Number(link.lastPurchaseCost).toFixed(2)}` : ""}`
+                                      : link
+                                        ? "Asignado manualmente"
+                                        : "Se agregará al guardar"}
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleSupplier(sid)}
+                                  className="text-muted-foreground hover:text-red-500 p-0.5 rounded shrink-0"
+                                  title="Quitar proveedor"
+                                >
+                                  <X size={13} />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Buscador de proveedores */}
+                      {suppliers.length > 0 && (
+                        <div className="relative">
+                          <Search
+                            size={14}
+                            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+                          />
+                          <Input
+                            value={supplierFilterQuery}
+                            onChange={(e) => setSupplierFilterQuery(e.target.value)}
+                            placeholder="Buscar proveedores por nombre..."
+                            className="h-8 pl-8 pr-8 text-xs rounded-lg bg-[var(--bg)] border-[var(--border)]"
+                          />
+                          {supplierFilterQuery && (
+                            <button
+                              type="button"
+                              onClick={() => setSupplierFilterQuery("")}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded"
+                              title="Limpiar búsqueda"
+                            >
+                              <X size={13} />
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Lista de proveedores registrados */}
+                      <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto pr-1">
+                        {suppliers.length === 0 ? (
+                          <p className="text-[10px] opacity-50 py-1">
+                            Sin proveedores registrados todavía. Regístralos en Compras a Proveedores.
+                          </p>
+                        ) : filteredFormSuppliers.length === 0 ? (
+                          <p className="text-xs text-[var(--text-sec)] py-2 w-full text-center">
+                            No se encontraron proveedores con "{supplierFilterQuery}".
+                          </p>
+                        ) : (
+                          filteredFormSuppliers.map((s) => {
+                            const selected = watchSupplierIds.includes(String(s.id));
+                            return (
+                              <button
+                                type="button"
+                                key={s.id}
+                                onClick={() => toggleSupplier(String(s.id))}
+                                className={cn(
+                                  "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
+                                  selected
+                                    ? "bg-sky-600 text-white border-sky-600 shadow-sm"
+                                    : "bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-sky-500 hover:text-foreground",
+                                )}
+                              >
+                                {selected && <Check size={11} className="stroke-[3]" />}
+                                {s.name}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-[10px] opacity-60 ml-1">
+                      Puedes asignar varios. Al recibir una compra, su proveedor se agrega aquí automáticamente.
                     </p>
                   </div>
 

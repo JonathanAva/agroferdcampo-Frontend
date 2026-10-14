@@ -22,6 +22,25 @@ export const uploadsService = {
     return body && body.success === true && 'data' in body ? body.data : body;
   },
 
+  /** Foto o PDF de la factura de un proveedor (recepción de mercadería) */
+  uploadSupplierInvoice: async (file: File): Promise<{ url: string }> => {
+    const token = localStorage.getItem('agro-token');
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE_URL}/uploads/supplier-invoice`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body.message || 'Error al subir la factura');
+    }
+    return body && body.success === true && 'data' in body ? body.data : body;
+  },
+
   uploadProductImage: async (file: File): Promise<{ url: string }> => {
     const token = localStorage.getItem('agro-token');
     const formData = new FormData();

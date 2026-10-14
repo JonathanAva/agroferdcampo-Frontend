@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
 import { 
   Wallet, DollarSign, TrendingUp, Search, 
-  ArrowDownCircle, ArrowUpCircle, Filter, CheckCircle2, XCircle, Clock, FileDown, FileSpreadsheet, FileText, Printer
+  ArrowDownCircle, ArrowUpCircle, Filter, CheckCircle2, XCircle, Clock, FileDown, FileSpreadsheet, FileText, Printer, Ban, Vault
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
-import { 
-  generalCashService, GeneralCashEntry, GeneralCashSummary 
+import {
+  generalCashService, GeneralCashEntry, GeneralCashSummary, cashEntryVoidBlocker
 } from '../services/general-cash.service';
+import { VoidRecordDialog } from '../components/common/VoidRecordDialog';
+import { SafeBoxPanel } from '../components/safe/SafeBoxPanel';
+import { SafeTransferDialog } from '../components/safe/SafeTransferDialog';
+import { printSafePackageTicket } from '../utils/printSafeTicket';
 import { pettyCashService, PettyCashStatus, PettyCashMovement, PettyCashReplenishment } from '../services/petty-cash.service';
 import { cashShiftsService } from '../services/cash-shifts.service';
 import { reportsService } from '../services/reports.service';
@@ -45,6 +49,12 @@ const financeFilters: FilterConfig[] = [
 export function Finance() {
   const { user } = useAuth();
   const [cashRegisters, setCashRegisters] = useState<any[]>([]);
+  // Datos de la empresa para los tickets de caja fuerte
+  const [sysConfig, setSysConfig] = useState<any>(null);
+  useEffect(() => {
+    apiRequest<any>('/system-config').then(setSysConfig).catch(() => {});
+  }, []);
+  const [safeTransferOpen, setSafeTransferOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('general');
 
   // --- SHIFT STATE ---
@@ -138,6 +148,7 @@ export function Finance() {
   const [adminCloseLoading, setAdminCloseLoading] = useState(false);
   const [adminCloseCash, setAdminCloseCash] = useState<number | ''>('');
   const [adminCloseNotes, setAdminCloseNotes] = useState("");
+  const [adminSafeDrop, setAdminSafeDrop] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     if (activeTab === 'general' || activeTab.startsWith('register_')) {
@@ -177,6 +188,18 @@ export function Finance() {
     }
   }, [newGeneralEntry.category]);
 
+  // --- ANULACIÓN DE MOVIMIENTOS ---
+  // Solo propietario, administrador y supervisor (el servidor también lo valida)
+  const canVoidRecords = !!user?.roleId && user.roleId <= 3;
+  const [voidingEntry, setVoidingEntry] = useState<GeneralCashEntry | null>(null);
+
+  const handleVoidEntry = async (reason: string) => {
+    if (!voidingEntry) return;
+    await generalCashService.voidEntry(voidingEntry.id, reason);
+    toast.success('Movimiento anulado');
+    fetchGeneralCash();
+  };
+
   // --- GENERAL CASH LOGIC ---
   const fetchGeneralCash = async () => {
     setGeneralLoading(true);
@@ -188,6 +211,8 @@ export function Finance() {
         registerIdParam
       );
       setGeneralSummary(summary);
+      // Refresca el estado de turnos (pueden abrirse/cerrarse desde el POS)
+      apiRequest<any[]>('/cash-registers').then(setCashRegisters).catch(() => {});
 
       const filters: any = { page: generalFilters.page, limit: generalFilters.limit };
       if (typeFilter !== 'all') filters.type = typeFilter;
@@ -393,12 +418,18 @@ export function Finance() {
     if (!adminCloseShiftId) return;
     try {
       setAdminCloseLoading(true);
-      await cashShiftsService.closeShiftById(adminCloseShiftId, {
+      const res = await cashShiftsService.closeShiftById(adminCloseShiftId, {
         countedCash: Number(adminCloseCash),
         notes: adminCloseNotes,
-        breakdown: adminCloseTotals?.closingBreakdown
+        breakdown: adminCloseTotals?.closingBreakdown,
+        ...(adminSafeDrop ? { safeDropAmount: adminSafeDrop, safeDropReceivedBy: user?.name } : {}),
       });
       toast.success('Cierre de caja aprobado exitosamente');
+      if (res.safePackage) {
+        toast.success(`Paquete ${res.safePackage.code} enviado a caja fuerte`);
+        try { printSafePackageTicket(res.safePackage, sysConfig); } catch (e: any) { toast.error(e.message); }
+      }
+      setAdminSafeDrop(undefined);
       setAdminCloseShiftId(null);
       setAdminCloseTotals(null);
       fetchShiftsHistory();
@@ -544,9 +575,32 @@ export function Finance() {
                 </div>
                 <h3 className="text-sm font-bold text-[var(--text-sec)]">{activeTab === 'general' ? 'Saldo Caja General' : cashRegisters.find(r => r.id.toString() === activeTab.replace('register_', ''))?.name || 'Saldo'}</h3>
               </div>
-              <p className={`text-3xl font-black ${generalSummary && generalSummary.balance >= 0 ? 'text-[var(--primary)]' : 'text-red-500'}`}>
-                ${generalSummary?.balance?.toFixed(4) || '0.00'}
-              </p>
+              {(() => {
+                const saldo = generalSummary?.currentCashBalance ?? generalSummary?.balance ?? 0;
+                const register = cashRegisters.find(r => `register_${r.id}` === activeTab);
+                const openShift = register?.shifts?.[0];
+                const nonCash = (generalSummary?.byPaymentMethod || []).filter(m => m.paymentMethod !== 'EFECTIVO' && m.net !== 0);
+                return (
+                  <>
+                    <p className={`text-3xl font-black ${saldo >= 0 ? 'text-[var(--primary)]' : 'text-red-500'}`}>
+                      ${Number(saldo).toFixed(4)}
+                    </p>
+                    <p className="text-xs text-[var(--text-sec)] mt-1">Efectivo físico actual (mismo saldo que usa el POS)</p>
+                    {register && (
+                      <p className="text-xs mt-1 font-semibold">
+                        {openShift
+                          ? <span className="text-emerald-600">Turno abierto por {openShift.user?.fullName || 'usuario'} · fondo inicial ${Number(openShift.initialAmount).toFixed(2)}</span>
+                          : <span className="text-[var(--text-sec)]">Sin turno abierto</span>}
+                      </p>
+                    )}
+                    {nonCash.map(m => (
+                      <p key={m.paymentMethod} className="text-xs text-[var(--text-sec)]">
+                        {m.paymentMethod === 'TARJETA' ? 'Tarjeta' : m.paymentMethod === 'TRANSFERENCIA' ? 'Transferencia' : m.paymentMethod} (periodo, no suma al efectivo): ${m.net.toFixed(2)}
+                      </p>
+                    ))}
+                  </>
+                );
+              })()}
             </Card>
             <Card className="p-6 bg-[var(--card)] border-[var(--border)] shadow-sm">
               <div className="flex items-center gap-3 mb-2">
@@ -577,16 +631,28 @@ export function Finance() {
             <div className="flex-1 bg-[var(--card)] p-4 rounded-xl border border-[var(--border)] shadow-sm">
               <SmartFilter config={financeFilters} />
             </div>
-            {user?.roleId !== 4 && (
-              <Button 
-                onClick={() => setShowAddGeneralModal(true)} 
-                disabled={checkingShift || !hasActiveShift}
-                title={!hasActiveShift ? "Debes abrir caja para registrar movimientos" : ""}
-                className="font-bold whitespace-nowrap h-fit"
-              >
-                Registrar Movimiento
-              </Button>
-            )}
+            <div className="flex gap-2">
+              {activeTab.startsWith('register_') && canVoidRecords && (
+                <Button
+                  variant="outline"
+                  onClick={() => setSafeTransferOpen(true)}
+                  className="font-bold whitespace-nowrap h-fit"
+                  title="Trasladar efectivo de esta caja a caja fuerte (genera paquete y ticket)"
+                >
+                  <Vault size={16} className="mr-2" /> Enviar a caja fuerte
+                </Button>
+              )}
+              {user?.roleId !== 4 && (
+                <Button
+                  onClick={() => setShowAddGeneralModal(true)}
+                  disabled={checkingShift || !hasActiveShift}
+                  title={!hasActiveShift ? "Debes abrir caja para registrar movimientos" : ""}
+                  className="font-bold whitespace-nowrap h-fit"
+                >
+                  Registrar Movimiento
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* TABLA GENERAL */}
@@ -600,33 +666,71 @@ export function Finance() {
                   <TableHead className="text-right">Saldo Anterior</TableHead>
                   <TableHead className="text-right">Ajuste</TableHead>
                   <TableHead className="text-right">Saldo Nuevo</TableHead>
+                  {canVoidRecords && <TableHead className="text-center w-24">Acciones</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {generalLoading ? (
-                  <TableRow><TableCell colSpan={5} className="text-center h-24">Cargando...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={canVoidRecords ? 7 : 6} className="text-center h-24">Cargando...</TableCell></TableRow>
                 ) : generalMovements.length === 0 ? (
-                  <TableRow><TableCell colSpan={5} className="text-center h-24">No hay movimientos</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={canVoidRecords ? 7 : 6} className="text-center h-24">No hay movimientos</TableCell></TableRow>
                 ) : (
-                  generalMovements.map(m => (
-                    <TableRow key={m.id}>
+                  generalMovements.map(m => {
+                    const voided = m.status === 'ANULADO';
+                    const blocker = cashEntryVoidBlocker(m);
+                    return (
+                    <TableRow key={m.id} className={voided ? 'opacity-60' : undefined}>
                       <TableCell>{new Date(m.date || m.createdAt).toLocaleString()}</TableCell>
-                      <TableCell>{m.category}</TableCell>
                       <TableCell>
-                        <p className="font-medium text-[var(--text-main)]">{m.description}</p>
+                        {voided && (
+                          <Badge variant="destructive" className="mr-2 text-[10px]">ANULADO</Badge>
+                        )}
+                        {m.category}
+                        {m.paymentMethod && (
+                          <Badge variant={m.paymentMethod === 'EFECTIVO' ? 'secondary' : 'outline'} className="ml-2 text-[10px]">
+                            {m.paymentMethod}
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <p className={`font-medium text-[var(--text-main)] ${voided ? 'line-through' : ''}`}>{m.description}</p>
                         {m.reference && <p className="text-xs text-[var(--text-sec)]">Ref: {m.reference}</p>}
+                        {voided && (
+                          <p className="text-[11px] text-rose-600 mt-0.5">
+                            Anulado por {m.voidedBy?.fullName || 'usuario'}
+                            {m.voidedAt ? ` el ${new Date(m.voidedAt).toLocaleString()}` : ''}
+                            {m.voidReason ? ` · Motivo: ${m.voidReason}` : ''}
+                          </p>
+                        )}
                       </TableCell>
                       <TableCell className="text-right font-mono text-[var(--text-sec)]">
                         {Number(m.previousBalance || 0) === 0 && Number(m.newBalance || 0) === 0 ? '—' : `${Number(m.previousBalance || 0).toFixed(4)}`}
                       </TableCell>
-                      <TableCell className={`text-right font-bold ${m.type === 'INGRESO' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      <TableCell className={`text-right font-bold ${voided ? 'line-through text-[var(--text-sec)]' : m.type === 'INGRESO' ? 'text-emerald-600' : 'text-rose-600'}`}>
                         {m.type === 'INGRESO' ? '+' : '-'}${Number(m.amount).toFixed(4)}
                       </TableCell>
                       <TableCell className="text-right font-mono font-bold text-[var(--primary)]">
                         {Number(m.previousBalance || 0) === 0 && Number(m.newBalance || 0) === 0 ? '—' : `${Number(m.newBalance || 0).toFixed(4)}`}
                       </TableCell>
+                      {canVoidRecords && (
+                        <TableCell className="text-center">
+                          {!voided && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={!!blocker}
+                              title={blocker || 'Anular este movimiento'}
+                              onClick={() => setVoidingEntry(m)}
+                              className="text-rose-600 hover:text-rose-700 hover:bg-rose-500/10 disabled:opacity-40"
+                            >
+                              <Ban size={14} className="mr-1" /> Anular
+                            </Button>
+                          )}
+                        </TableCell>
+                      )}
                     </TableRow>
-                  ))
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
@@ -675,28 +779,17 @@ export function Finance() {
             </Card>
           ) : (
             <>
-              {/* STATS PETTY */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card className="p-6 bg-[var(--card)] border-[var(--border)] shadow-sm">
-                  <h3 className="text-sm font-bold text-[var(--text-sec)] mb-2">Saldo Actual</h3>
-                  <p className={`text-3xl font-black ${isPettyLow ? 'text-amber-500' : 'text-[var(--primary)]'}`}>
-                    ${Number(pettyStatus.currentBalance).toFixed(4)}
-                  </p>
-                  {isPettyLow && <p className="text-xs text-amber-500 font-bold mt-1">Saldo bajo mínimo</p>}
-                </Card>
-                <Card className="p-6 bg-[var(--card)] border-[var(--border)] shadow-sm">
-                  <h3 className="text-sm font-bold text-[var(--text-sec)] mb-2">Límite Máximo</h3>
-                  <p className="text-3xl font-black text-[var(--text-main)]">${Number(pettyStatus.maxBalance).toFixed(4)}</p>
-                </Card>
-              </div>
+              {/* Caja fuerte por paquetes de efectivo */}
+              <SafeBoxPanel sysConfig={sysConfig} canManage={canVoidRecords} onChanged={fetchPettyCash} />
 
-              <div className="flex gap-4">
-                <Button onClick={() => setShowExpenseModal(true)} variant="destructive" className="font-bold">
-                  Registrar Gasto (Egreso)
+              <div className="flex flex-wrap items-center gap-3">
+                {isPettyLow && <span className="text-xs text-amber-600 font-bold">Saldo bajo el mínimo configurado (${Number(pettyStatus.minBalance).toFixed(2)})</span>}
+                <Button onClick={() => setShowExpenseModal(true)} variant="outline" className="font-bold" title="Descuenta automáticamente de los paquetes abiertos y luego de los más antiguos">
+                  Gasto rápido
                 </Button>
-                <Button 
-                  onClick={() => setShowReplenishModal(true)} 
-                  variant="outline" 
+                <Button
+                  onClick={() => setShowReplenishModal(true)}
+                  variant="outline"
                   className={isPettyLow ? 'border-amber-500 text-amber-600' : ''}
                 >
                   Solicitar Reposición
@@ -1143,6 +1236,16 @@ export function Finance() {
                       className="bg-white dark:bg-black"
                     />
                   </div>
+                  <div>
+                    <label className="text-sm font-bold text-blue-900 dark:text-blue-300">Enviar a caja fuerte ($) (Opcional)</label>
+                    <p className="text-xs text-[var(--text-sec)] mb-2">Parte del efectivo contado que pasa a caja fuerte como paquete (imprime ticket).</p>
+                    <NumberInput
+                      value={adminSafeDrop}
+                      onValueChange={setAdminSafeDrop}
+                      min={0}
+                      className="bg-white dark:bg-black"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1200,6 +1303,42 @@ export function Finance() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {activeTab.startsWith('register_') && (
+        <SafeTransferDialog
+          open={safeTransferOpen}
+          onOpenChange={setSafeTransferOpen}
+          cashRegisterId={Number(activeTab.replace('register_', ''))}
+          registerName={cashRegisters.find(r => `register_${r.id}` === activeTab)?.name}
+          availableCash={generalSummary?.currentCashBalance ?? null}
+          sysConfig={sysConfig}
+          onDone={() => fetchGeneralCash()}
+        />
+      )}
+
+      <VoidRecordDialog
+        open={!!voidingEntry}
+        onOpenChange={(open) => !open && setVoidingEntry(null)}
+        title="Anular movimiento de caja"
+        summary={voidingEntry && (
+          <div className="space-y-0.5">
+            <p className="font-bold">{voidingEntry.description}</p>
+            <p className="text-xs text-[var(--text-sec)]">
+              {new Date(voidingEntry.date || voidingEntry.createdAt).toLocaleString()} · {voidingEntry.category}
+              {voidingEntry.paymentMethod ? ` · ${voidingEntry.paymentMethod}` : ''}
+            </p>
+            <p className={`font-black ${voidingEntry.type === 'INGRESO' ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {voidingEntry.type === 'INGRESO' ? '+' : '-'}${Number(voidingEntry.amount).toFixed(2)}
+            </p>
+          </div>
+        )}
+        consequence={
+          voidingEntry?.purchaseId
+            ? 'Está vinculado a una orden de compra: la compra volverá a quedar pendiente de pago por este monto.'
+            : 'Dejará de contar en el saldo de la caja y en los totales. Luego puedes registrar el movimiento correcto.'
+        }
+        onConfirm={handleVoidEntry}
+      />
 
       <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
     </div>

@@ -2,13 +2,15 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, FileText, CheckCircle2, AlertCircle, Eye, Plus, 
   Trash2, RefreshCcw, Filter, Calendar as CalendarIcon, Store, Package, Download, X,
-  ArrowDownToLine, DollarSign, Printer, Check, ChevronsUpDown
+  ArrowDownToLine, DollarSign, Printer, Check, ChevronsUpDown, Paperclip, Loader2
 } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { SupplierManager } from '../components/suppliers/SupplierManager';
 import { Payables } from './Payables';
 import { purchasesService, PurchaseResponse, CreatePurchaseDto, getSuppliers, UnlinkedPayment } from '../services/purchases.service';
 import { searchProducts } from '../services/sales.service';
+import { uploadsService } from '../services/uploads.service';
+import { SupplierInvoiceViewer } from '../components/purchases/SupplierInvoiceViewer';
 import { toast } from 'sonner';
 import { Button } from '../components/ui/button';
 import { cn } from '../components/ui/utils';
@@ -152,11 +154,47 @@ export function Purchases() {
   const [loadingUnlinkedPayments, setLoadingUnlinkedPayments] = useState(false);
   const [selectedLinkedPaymentId, setSelectedLinkedPaymentId] = useState<string>('');
 
+  // Factura del proveedor (foto o PDF) adjunta a la recepción
+  const [receiveInvoiceFile, setReceiveInvoiceFile] = useState<File | null>(null);
+  const [viewingInvoice, setViewingInvoice] = useState<{ url: string; subtitle: string } | null>(null);
+  const [attachingReceiptId, setAttachingReceiptId] = useState<number | null>(null);
+
+  const validateInvoiceFile = (file: File | undefined | null) => {
+    if (!file) return null;
+    if (!/^(image\/(jpeg|png|webp)|application\/pdf)$/.test(file.type)) {
+      toast.error('La factura debe ser una imagen (JPG, PNG, WEBP) o un PDF');
+      return null;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('La factura no puede pesar más de 10 MB');
+      return null;
+    }
+    return file;
+  };
+
+  /** Adjunta (o reemplaza) la factura de una recepción ya registrada, desde el detalle de la compra */
+  const handleAttachInvoiceToReceipt = async (receiptId: number, file: File | undefined) => {
+    const valid = validateInvoiceFile(file);
+    if (!valid || !selectedPurchase) return;
+    setAttachingReceiptId(receiptId);
+    try {
+      const { url } = await uploadsService.uploadSupplierInvoice(valid);
+      await purchasesService.attachReceiptInvoice(selectedPurchase.id, receiptId, { invoiceUrl: url });
+      setSelectedPurchase(await purchasesService.getPurchaseDetail(selectedPurchase.id));
+      toast.success('Factura adjuntada a la recepción');
+    } catch (e: any) {
+      toast.error(e.message || 'Error al adjuntar la factura');
+    } finally {
+      setAttachingReceiptId(null);
+    }
+  };
+
   const isDirty =
     (createModalOpen && ((newPurchase.items?.length ?? 0) > 0 || !!newPurchase.supplierId)) ||
     (receiveModalOpen && (
       !!receiveForm.documentNumber?.trim() ||
       !!receiveForm.notes?.trim() ||
+      !!receiveInvoiceFile ||
       receivedItems.some((i) => !!i.expirationDate || !!i.lotCode || i.received !== i.quantity)
     ));
   const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
@@ -271,6 +309,7 @@ export function Purchases() {
         }))
       );
       setReceiveForm({ documentType: 'FACTURA', documentNumber: '', notes: '' });
+      setReceiveInvoiceFile(null);
       setSelectedLinkedPaymentId('');
 
       setLoadingUnlinkedPayments(true);
@@ -309,8 +348,15 @@ export function Purchases() {
 
     setReceiving(true);
     try {
+      // Primero se sube la factura; si falla, no se registra la recepción a medias
+      const invoiceUrl = receiveInvoiceFile
+        ? (await uploadsService.uploadSupplierInvoice(receiveInvoiceFile)).url
+        : undefined;
+
       const payload = {
         notes: receiveForm.notes || `Doc: ${receiveForm.documentType} ${receiveForm.documentNumber}`,
+        invoiceNumber: `${receiveForm.documentType} ${receiveForm.documentNumber}`.trim(),
+        ...(invoiceUrl ? { invoiceUrl } : {}),
         items: receivedItems.map((item) => ({
           productId: item.productId,
           received: Number(item.received),
@@ -1364,11 +1410,70 @@ export function Purchases() {
                 <div className="flex justify-end p-4 border-t">
                   <p className="text-xl font-black">Total: <span className="text-[var(--primary)]">${Number(selectedPurchase.totalAmount).toFixed(4)}</span></p>
                 </div>
+
+                {/* Recepciones de mercadería y su factura adjunta */}
+                {(selectedPurchase.receipts?.length ?? 0) > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)]">Recepciones de mercadería</h3>
+                    {selectedPurchase.receipts!.map((receipt, idx) => (
+                      <div key={receipt.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold">
+                            Recepción #{idx + 1} · {new Date(receipt.receivedAt).toLocaleString()}
+                          </p>
+                          <p className="text-xs text-[var(--text-sec)] truncate">
+                            {receipt.invoiceNumber ? `Documento: ${receipt.invoiceNumber}` : receipt.notes || 'Sin número de documento'}
+                          </p>
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                          {receipt.invoiceUrl && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-emerald-300 text-emerald-700"
+                              onClick={() => setViewingInvoice({
+                                url: receipt.invoiceUrl!,
+                                subtitle: `OC-${selectedPurchase.id.toString().padStart(6, '0')} · ${selectedPurchase.supplier?.name || ''}${receipt.invoiceNumber ? ` · ${receipt.invoiceNumber}` : ''}`,
+                              })}
+                            >
+                              <Eye size={14} className="mr-1.5" /> Ver factura adjunta
+                            </Button>
+                          )}
+                          <label className={cn(
+                            "inline-flex items-center gap-1.5 h-8 px-3 rounded-md border text-xs font-medium cursor-pointer hover:bg-[var(--card)]",
+                            attachingReceiptId === receipt.id && "pointer-events-none opacity-60",
+                          )}>
+                            {attachingReceiptId === receipt.id
+                              ? <Loader2 size={14} className="animate-spin" />
+                              : <Paperclip size={14} />}
+                            {receipt.invoiceUrl ? 'Reemplazar' : 'Adjuntar factura'}
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp,application/pdf"
+                              className="hidden"
+                              onChange={(e) => {
+                                handleAttachInvoiceToReceipt(receipt.id, e.target.files?.[0]);
+                                e.target.value = '';
+                              }}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </>
           )}
         </DialogContent>
       </Dialog>
+
+      <SupplierInvoiceViewer
+        url={viewingInvoice?.url ?? null}
+        title="Factura del proveedor"
+        subtitle={viewingInvoice?.subtitle}
+        onOpenChange={(open) => !open && setViewingInvoice(null)}
+      />
 
       {/* --- MODAL RECIBIR MERCADERÍA --- */}
       <Dialog open={receiveModalOpen} onOpenChange={(o) => o ? setReceiveModalOpen(true) : confirmExit(() => setReceiveModalOpen(false))}>
@@ -1445,6 +1550,37 @@ export function Purchases() {
               <p className="text-xs text-[var(--text-sec)]">
                 Si ya registraste el pago a este proveedor en caja, puedes vincularlo aquí.
               </p>
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label className="flex items-center gap-1">
+                <Paperclip size={14} /> Factura del proveedor
+                <span className="text-[var(--text-sec)] font-normal text-xs">(Foto o PDF · opcional)</span>
+              </Label>
+              {receiveInvoiceFile ? (
+                <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5">
+                  <span className="text-sm font-medium truncate">
+                    {receiveInvoiceFile.name}{' '}
+                    <span className="text-xs text-[var(--text-sec)]">({(receiveInvoiceFile.size / 1024 / 1024).toFixed(1)} MB)</span>
+                  </span>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setReceiveInvoiceFile(null)}>
+                    <X size={14} className="mr-1" /> Quitar
+                  </Button>
+                </div>
+              ) : (
+                <label className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-[var(--border)] hover:border-emerald-500 cursor-pointer text-sm text-[var(--text-sec)] bg-[var(--card)]">
+                  <Paperclip size={16} /> Adjuntar foto de la factura (se puede tomar con la cámara del celular)
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      setReceiveInvoiceFile(validateInvoiceFile(e.target.files?.[0]));
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              )}
             </div>
           </div>
 

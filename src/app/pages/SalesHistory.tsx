@@ -257,6 +257,8 @@ export function SalesHistory() {
 
   // --- Estados de Devoluciones ---
   const { user } = useAuth();
+  // Anular ventas: solo propietario, administrador y supervisor (el servidor también lo valida)
+  const canVoidSales = !!user?.roleId && user.roleId <= 3;
   const [returnsList, setReturnsList] = useState<ReturnResponse[]>([]);
   const [returnsLoading, setReturnsLoading] = useState(true);
   const [returnsPagination, setReturnsPagination] = useState({
@@ -692,13 +694,16 @@ export function SalesHistory() {
     }
   };
 
+  // Solo las ventas con DTE procesado requieren los datos de invalidación ante Hacienda
+  const saleNeedsDteVoid = selectedSale?.dteResponse?.estado === "PROCESADO";
+
   const handleVoidSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSale) return;
     setVoiding(true);
     try {
       await voidSale(selectedSale.id, voidForm);
-      toast.success("Factura anulada correctamente");
+      toast.success(saleNeedsDteVoid ? "Factura anulada correctamente" : "Venta anulada correctamente");
       setVoidModalOpen(false);
       fetchSales();
     } catch (error: any) {
@@ -1272,8 +1277,17 @@ export function SalesHistory() {
                                 : "destructive"
                             }
                           >
-                            {sale.status}
+                            {sale.status === "CANCELADA" ? "ANULADA" : sale.status}
                           </Badge>
+                          {sale.status === "CANCELADA" && (sale as any).voidedAt && (
+                            <p
+                              className="text-[10px] text-rose-600 mt-1 max-w-[180px] mx-auto leading-tight"
+                              title={(sale as any).voidReason || undefined}
+                            >
+                              {(sale as any).voidedBy?.fullName || "Usuario"} · {new Date((sale as any).voidedAt).toLocaleString("es-SV")}
+                              {(sale as any).voidReason && <span className="block truncate">Motivo: {(sale as any).voidReason}</span>}
+                            </p>
+                          )}
                         </TableCell>
                         <TableCell className="text-center">
                           {!sale.dteResponse ? (
@@ -1409,16 +1423,18 @@ export function SalesHistory() {
                                     />{" "}
                                     Registrar Devolución
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      setSelectedSale(sale);
-                                      setVoidModalOpen(true);
-                                    }}
-                                    className="font-bold text-destructive focus:bg-destructive/10 cursor-pointer"
-                                  >
-                                    <Trash2 size={14} className="mr-2" /> Anular
-                                    Factura
-                                  </DropdownMenuItem>
+                                  {canVoidSales && (
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        setSelectedSale(sale);
+                                        setVoidModalOpen(true);
+                                      }}
+                                      className="font-bold text-destructive focus:bg-destructive/10 cursor-pointer"
+                                    >
+                                      <Trash2 size={14} className="mr-2" />
+                                      {sale.dteResponse?.estado === "PROCESADO" ? "Anular Factura" : "Anular Venta"}
+                                    </DropdownMenuItem>
+                                  )}
                                 </>
                               )}
                             </DropdownMenuContent>
@@ -2108,7 +2124,7 @@ export function SalesHistory() {
             </div>
             <div>
               <h2 className="text-lg font-black text-[var(--text-main)] uppercase tracking-wide">
-                Anular Factura
+                {saleNeedsDteVoid ? "Anular Factura" : "Anular Venta"}
               </h2>
               <p className="text-sm font-mono text-[var(--text-sec)]">
                 {selectedSale?.dteResponse?.codigoGeneracion ||
@@ -2122,8 +2138,11 @@ export function SalesHistory() {
             <div className="flex items-center gap-3 p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 text-amber-600">
               <AlertCircle size={20} className="shrink-0" />
               <p className="text-sm font-medium">
-                Esta acción enviará una solicitud de <b>Invalidación</b> a
-                Hacienda. Completa los datos requeridos.
+                {saleNeedsDteVoid ? (
+                  <>Esta acción enviará una solicitud de <b>Invalidación</b> a Hacienda. Completa los datos requeridos.</>
+                ) : (
+                  <>La venta quedará <b>ANULADA</b> con tu usuario, la fecha y el motivo. Se devuelve el stock y se revierte su movimiento de caja.</>
+                )}
               </p>
             </div>
 
@@ -2147,6 +2166,7 @@ export function SalesHistory() {
                 />
               </div>
 
+              {saleNeedsDteVoid && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* RESPONSABLE */}
                 <div className="space-y-4">
@@ -2274,6 +2294,7 @@ export function SalesHistory() {
                   </div>
                 </div>
               </div>
+              )}
 
               <div className="pt-6 grid grid-cols-2 gap-4">
                 <Button
@@ -2290,7 +2311,7 @@ export function SalesHistory() {
                   className="font-bold py-6"
                   disabled={voiding}
                 >
-                  {voiding ? "PROCESANDO..." : "INVALIDAR DOCUMENTO"}
+                  {voiding ? "PROCESANDO..." : saleNeedsDteVoid ? "INVALIDAR DOCUMENTO" : "ANULAR VENTA"}
                 </Button>
               </div>
             </form>

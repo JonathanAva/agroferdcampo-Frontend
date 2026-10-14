@@ -36,6 +36,61 @@ interface SmartFilterProps {
   className?: string;
 }
 
+const SEARCH_THRESHOLD = 8;
+
+/**
+ * Lista de opciones de un filtro dentro del popover: limita su alto al espacio disponible en
+ * pantalla (con barra de desplazamiento), agrega buscador si hay muchas opciones y deja el
+ * pie (ej. "Limpiar") siempre visible.
+ */
+function FilterOptionsPanel({
+  options,
+  renderOption,
+  header,
+  footer,
+}: {
+  options: FilterOption[];
+  renderOption: (opt: FilterOption) => React.ReactNode;
+  header?: React.ReactNode;
+  footer?: React.ReactNode;
+}) {
+  const [query, setQuery] = useState('');
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options;
+  }, [options, query]);
+
+  return (
+    <div
+      className="flex flex-col"
+      style={{ maxHeight: 'min(420px, calc(var(--radix-popover-content-available-height, 420px) - 8px))' }}
+    >
+      {options.length > SEARCH_THRESHOLD && (
+        <div className="p-2 pb-1 border-b shrink-0">
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar..."
+              className="h-8 pl-7 text-xs"
+              autoFocus
+            />
+          </div>
+        </div>
+      )}
+      <div className="p-2 space-y-1 overflow-y-auto overscroll-contain min-h-0 flex-1">
+        {header}
+        {filtered.map((opt) => renderOption(opt))}
+        {filtered.length === 0 && (
+          <p className="text-xs text-muted-foreground text-center py-3">Sin resultados</p>
+        )}
+      </div>
+      {footer && <div className="p-2 pt-0 shrink-0">{footer}</div>}
+    </div>
+  );
+}
+
 // --- Debounce Hook ---
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
@@ -168,17 +223,20 @@ export function SmartFilter({ config, className }: SmartFilterProps) {
                         )}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="p-0" style={{ width: 'max-content', minWidth: '120px', maxWidth: '350px' }} align="start">
-                      <div className="p-2 space-y-1">
-                        <Button
-                          variant="ghost"
-                          className="w-full justify-between font-normal h-8 px-2 gap-4"
-                          onClick={() => setFilter(c.id, null)}
-                        >
-                          <span className="truncate text-left">Todos</span>
-                          {!currentVal ? <Check className="h-4 w-4 shrink-0" /> : <div className="w-4 h-4 shrink-0" />}
-                        </Button>
-                        {c.options?.map(opt => (
+                    <PopoverContent className="p-0" style={{ width: 'max-content', minWidth: '180px', maxWidth: '350px' }} align="start" collisionPadding={8}>
+                      <FilterOptionsPanel
+                        options={c.options || []}
+                        header={
+                          <Button
+                            variant="ghost"
+                            className="w-full justify-between font-normal h-8 px-2 gap-4"
+                            onClick={() => setFilter(c.id, null)}
+                          >
+                            <span className="truncate text-left">Todos</span>
+                            {!currentVal ? <Check className="h-4 w-4 shrink-0" /> : <div className="w-4 h-4 shrink-0" />}
+                          </Button>
+                        }
+                        renderOption={(opt) => (
                           <Button
                             key={opt.value}
                             variant="ghost"
@@ -189,8 +247,8 @@ export function SmartFilter({ config, className }: SmartFilterProps) {
                             <span className="truncate text-left">{opt.label}</span>
                             {currentVal === opt.value ? <Check className="h-4 w-4 shrink-0" /> : <div className="w-4 h-4 shrink-0" />}
                           </Button>
-                        ))}
-                      </div>
+                        )}
+                      />
                     </PopoverContent>
                   </Popover>
                 );
@@ -295,9 +353,10 @@ export function SmartFilter({ config, className }: SmartFilterProps) {
                         )}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="p-0" style={{ width: 'max-content', minWidth: '150px', maxWidth: '350px' }} align="start">
-                      <div className="p-2 space-y-1">
-                        {c.options?.map(opt => (
+                    <PopoverContent className="p-0" style={{ width: 'max-content', minWidth: '200px', maxWidth: '350px' }} align="start" collisionPadding={8}>
+                      <FilterOptionsPanel
+                        options={c.options || []}
+                        renderOption={(opt) => (
                           <Button
                             key={opt.value}
                             variant="ghost"
@@ -310,15 +369,15 @@ export function SmartFilter({ config, className }: SmartFilterProps) {
                             </div>
                             <span className="truncate text-left">{opt.label}</span>
                           </Button>
-                        ))}
-                        {currentVals.length > 0 && (
-                          <div className="pt-2 mt-2 border-t">
+                        )}
+                        footer={currentVals.length > 0 && (
+                          <div className="pt-2 border-t">
                             <Button variant="ghost" size="sm" className="w-full h-8 text-xs text-muted-foreground" onClick={() => setFilter(c.id, null)}>
-                              Limpiar
+                              Limpiar ({currentVals.length})
                             </Button>
                           </div>
                         )}
-                      </div>
+                      />
                     </PopoverContent>
                   </Popover>
                 );

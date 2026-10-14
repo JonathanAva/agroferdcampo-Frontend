@@ -1829,12 +1829,19 @@ export function Credit() {
                           </TableRow>
                         ) : (
                           currentSpecificPayments.map(p => (
-                            <TableRow key={p.id}>
-                              <TableCell>{new Date(p.createdAt).toLocaleString()}</TableCell>
+                            <TableRow key={p.id} className={p.status === 'ANULADO' ? 'opacity-60' : undefined}>
+                              <TableCell>
+                                {new Date(p.createdAt).toLocaleString()}
+                                {p.status === 'ANULADO' && (
+                                  <span className="block text-[11px] text-rose-600" title={p.voidReason || undefined}>
+                                    ANULADO por {p.voidedBy?.fullName || 'usuario'}{p.voidReason ? ` · ${p.voidReason}` : ''}
+                                  </span>
+                                )}
+                              </TableCell>
                               <TableCell>{p.paymentMethod}</TableCell>
                               <TableCell>{p.reference || '-'}</TableCell>
                               <TableCell>{p.user?.fullName || '-'}</TableCell>
-                              <TableCell className="text-right font-bold text-emerald-600">
+                              <TableCell className={`text-right font-bold ${p.status === 'ANULADO' ? 'line-through text-[var(--text-sec)]' : 'text-emerald-600'}`}>
                                 ${Number(p.amount).toFixed(4)}
                               </TableCell>
                               <TableCell className="text-center">
