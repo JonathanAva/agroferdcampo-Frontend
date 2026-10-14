@@ -99,15 +99,26 @@ export function Quotes() {
 
   const navigate = useNavigate();
 
+  const canSeeCosts = !!user && (
+    (user.roleId !== undefined && user.roleId <= 3) ||
+    ["PROPIETARIO", "ADMINISTRADOR", "SUPERVISOR"].includes(user.role?.toUpperCase() || "")
+  );
+
   // Modales
   const [selectedQuote, setSelectedQuote] = useState<QuoteResponse | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
-  // Costos y márgenes: siempre ocultos al abrir; solo se cargan tras autorizar con contraseña
-  // (el servidor no los envía en el detalle normal) y se descartan al cerrar el detalle.
+  // Costos y márgenes: visibles por defecto para roles autorizados; para otros roles requieren autorización
   const [costAccess, setCostAccess] = useState<CostAccessResponse | null>(null);
   const [costDialogOpen, setCostDialogOpen] = useState(false);
-  const showMargin = costAccess !== null;
-  const hideCosts = () => setCostAccess(null);
+  const [marginHiddenManually, setMarginHiddenManually] = useState(false);
+  const showMargin = !marginHiddenManually && (canSeeCosts || costAccess !== null);
+  const hideCosts = () => {
+    setCostAccess(null);
+    setMarginHiddenManually(true);
+  };
+  const showCosts = () => {
+    setMarginHiddenManually(false);
+  };
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [cancelingId, setCancelingId] = useState<number | null>(null);
 
@@ -472,7 +483,8 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
   const handleOpenDetail = async (quote: QuoteResponse) => {
     try {
       const fullQuote = await quotesService.getQuoteDetail(quote.id);
-      hideCosts();
+      setCostAccess(null);
+      setMarginHiddenManually(false);
       setSelectedQuote(fullQuote);
       setDetailModalOpen(true);
     } catch (e) {
@@ -1109,10 +1121,12 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                       {selectedQuote.items?.map(item => {
                         const factor = Number(item.unitFactor) || 1;
                         const costInfo = costAccess?.items.find(c => c.id === item.id);
-                        const itemBaseCost = costInfo?.costPrice ?? costInfo?.catalogCostPrice ?? 0;
+                        const fallbackCost = item.costPrice !== null && item.costPrice !== undefined ? Number(item.costPrice) : (Number(item.product?.costPrice) || 0);
+                        const itemBaseCost = costInfo?.costPrice ?? costInfo?.catalogCostPrice ?? fallbackCost;
                         const unitCost = itemBaseCost * factor;
-                        const originalBase = costInfo?.catalogCostPrice ?? 0;
-                        const isCustomCost = costInfo?.costPrice != null && Math.abs(costInfo.costPrice - originalBase) > 0.0001;
+                        const originalBase = costInfo?.catalogCostPrice ?? (Number(item.product?.costPrice) || 0);
+                        const isCustomCost = (costInfo?.costPrice != null && Math.abs(costInfo.costPrice - originalBase) > 0.0001) ||
+                          (!costInfo && item.costPrice !== null && item.costPrice !== undefined && Math.abs(Number(item.costPrice) - originalBase) > 0.0001);
                         const unitPrice = Number(item.unitPrice) || 0;
                         const lineMargin = unitCost > 0 ? ((unitPrice - unitCost) / unitCost) * 100 : (unitPrice > 0 ? 100 : 0);
 
@@ -1171,7 +1185,8 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                           let totalCost = 0;
                           selectedQuote.items?.forEach(i => {
                             const c = costAccess?.items.find(x => x.id === i.id);
-                            const cost = c?.costPrice ?? c?.catalogCostPrice ?? 0;
+                            const fallbackCost = i.costPrice !== null && i.costPrice !== undefined ? Number(i.costPrice) : (Number(i.product?.costPrice) || 0);
+                            const cost = c?.costPrice ?? c?.catalogCostPrice ?? fallbackCost;
                             const factor = Number(i.unitFactor) || 1;
                             totalCost += cost * factor * Number(i.quantity);
                           });
@@ -1201,22 +1216,35 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                                 >
                                   <EyeOff size={13} /> Ocultar
                                 </button>
-                                <span className="text-[9px] font-normal text-amber-600">Autorizado por {costAccess?.authorizedBy}</span>
+                                {costAccess?.authorizedBy && (
+                                  <span className="text-[9px] font-normal text-amber-600">Autorizado por {costAccess.authorizedBy}</span>
+                                )}
                               </div>
                             </div>
                           );
                         })()
                       ) : (
-                        // Acceso discreto: solo un candado, sin texto que invite a activarlo frente al cliente
-                        <button
-                          type="button"
-                          onClick={() => setCostDialogOpen(true)}
-                          title="Información interna"
-                          aria-label="Información interna"
-                          className="size-7 flex items-center justify-center rounded-md text-[var(--text-sec)]/40 hover:text-[var(--text-sec)] hover:bg-[var(--card)] transition-colors"
-                        >
-                          <Lock size={13} />
-                        </button>
+                        canSeeCosts ? (
+                          <button
+                            type="button"
+                            onClick={showCosts}
+                            className="h-8 px-2.5 text-xs font-semibold text-[var(--text-sec)] hover:text-[var(--text-main)] flex items-center gap-1.5 rounded-lg border border-dashed border-[var(--border)] hover:bg-[var(--card)] transition-colors"
+                          >
+                            <Eye size={14} className="text-emerald-600" />
+                            <span>Ver Costos / Márgenes</span>
+                          </button>
+                        ) : (
+                          // Acceso discreto: solo un candado, sin texto que invite a activarlo frente al cliente
+                          <button
+                            type="button"
+                            onClick={() => setCostDialogOpen(true)}
+                            title="Información interna"
+                            aria-label="Información interna"
+                            className="size-7 flex items-center justify-center rounded-md text-[var(--text-sec)]/40 hover:text-[var(--text-sec)] hover:bg-[var(--card)] transition-colors"
+                          >
+                            <Lock size={13} />
+                          </button>
+                        )
                       )}
                     </div>
                     <div className="text-right">

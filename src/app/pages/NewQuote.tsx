@@ -25,6 +25,7 @@ import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
 import { UNIVERSAL_PRODUCT_UNITS } from "../utils/universalProduct";
 import { CostAccessDialog } from "../components/quotes/CostAccessDialog";
 import type { CostAccessResponse } from "../services/quotes.service";
+import { useAuth } from "../context/AuthContext";
 
 interface POSBrand {
   id: number;
@@ -121,6 +122,12 @@ interface Customer {
 }
 
 export function NewQuote() {
+  const { user } = useAuth();
+  const canSeeCosts = !!user && (
+    (user.roleId !== undefined && user.roleId <= 3) ||
+    ["PROPIETARIO", "ADMINISTRADOR", "SUPERVISOR"].includes(user.role?.toUpperCase() || "")
+  );
+
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
@@ -148,18 +155,25 @@ export function NewQuote() {
         
         // Cargar productos
         if (quote.items) {
-          // El servidor no envía costos en el detalle: las líneas cargadas quedan con costo
-          // desconocido hasta que alguien autorizado desbloquee costos y márgenes.
           const newCart = quote.items.map((item: any) => {
             const qty = Number(item.quantity);
             const price = Number(item.unitPrice);
             const factor = item.unitFactor || 1;
+            const catalogCost = Number(item.product?.costPrice) || 0;
+            const baseCost = item.costPrice !== null && item.costPrice !== undefined
+              ? Number(item.costPrice)
+              : catalogCost;
+            const costPerUnit = baseCost * factor;
             const subtotal = qty * price;
+            let margin = 0;
+            if (costPerUnit > 0 && price > costPerUnit) {
+              margin = ((price - costPerUnit) / costPerUnit) * 100;
+            }
             return {
               ...item.product,
-              costPrice: 0,
-              originalCostPrice: undefined,
-              costKnown: false,
+              costPrice: baseCost,
+              originalCostPrice: catalogCost > 0 ? catalogCost : baseCost,
+              costKnown: canSeeCosts || costsUnlocked ? true : (baseCost > 0),
               // Al clonar se crea otra cotización: los costos se piden a la cotización de origen
               quoteItemId: item.id,
               cartId: Math.random().toString(36).substr(2, 9),
@@ -171,10 +185,10 @@ export function NewQuote() {
               unitFactor: factor,
               ...(item.customName ? { customName: item.customName } : {}),
               unitPrice: price,
-              costTotal: 0,
+              costTotal: qty * costPerUnit,
               quantity: qty,
               subtotal,
-              marginPercent: 0,
+              marginPercent: margin,
             };
           });
           setCart(newCart as any);
@@ -239,9 +253,16 @@ export function NewQuote() {
 
   const [savingQuote, setSavingQuote] = useState(false);
 
-  // Costos y márgenes: ocultos por defecto en cada apertura; se desbloquean con contraseña
-  // (verificada y auditada en el servidor) y se pierden al salir de la pantalla.
-  const [costsUnlocked, setCostsUnlocked] = useState(false);
+  // Costos y márgenes: desbloqueados por defecto para Propietarios, Administradores y Supervisores;
+  // para otros roles permanecen ocultos y se desbloquean con contraseña mediante CostAccessDialog.
+  const [costsUnlocked, setCostsUnlocked] = useState(canSeeCosts);
+
+  useEffect(() => {
+    if (canSeeCosts) {
+      setCostsUnlocked(true);
+    }
+  }, [canSeeCosts]);
+
   const [costAuthorizedBy, setCostAuthorizedBy] = useState<string | null>(null);
   const [costDialogOpen, setCostDialogOpen] = useState(false);
   const costSourceQuoteId = id ? Number(id) : cloneId ? Number(cloneId) : null;
@@ -569,7 +590,7 @@ export function NewQuote() {
         medida: item.unitType || "UNIDAD",
         cantidad: String(item.quantity),
         precio: String(item.unitPrice),
-        costo: costsUnlocked && item.costKnown !== false && item.costPrice ? String(item.costPrice) : "",
+        costo: (costsUnlocked || canSeeCosts) && item.costKnown !== false && item.costPrice ? String(item.costPrice) : "",
       });
     } else {
       setEditingUniversalCartId(null);
@@ -611,7 +632,7 @@ export function NewQuote() {
       subtotal: cantidad * precio,
     };
     // Con los costos ocultos el campo de costo no se muestra: no se toca el costo de la línea
-    const costFields = costsUnlocked
+    const costFields = (costsUnlocked || canSeeCosts)
       ? { costPrice: costo, originalCostPrice: costo, costTotal: cantidad * costo, marginPercent, costKnown: true }
       : {};
 
@@ -781,7 +802,7 @@ export function NewQuote() {
         unitType: marginForm.unitType,
         unitFactor: marginForm.unitFactor,
         // Si el costo estaba oculto y no se desbloqueó, la línea sigue con costo desconocido
-        ...(costsUnlocked ? { costKnown: true } : {}),
+        ...((costsUnlocked || canSeeCosts) ? { costKnown: true } : {}),
       } : i));
       setEditingCartId(null);
       setShowAddModal(false);
@@ -802,7 +823,8 @@ export function NewQuote() {
         subtotal: newQty * marginForm.unitPrice,
         unitPrice: marginForm.unitPrice,
         marginPercent: marginForm.marginPercent,
-        costTotal: newQty * costPerUnit
+        costTotal: newQty * costPerUnit,
+        ...((costsUnlocked || canSeeCosts) ? { costKnown: true } : {}),
       } : i));
     } else {
       setCart([{
@@ -817,6 +839,7 @@ export function NewQuote() {
         costTotal: marginForm.quantity * costPerUnit,
         unitType: marginForm.unitType,
         unitFactor: marginForm.unitFactor,
+        costKnown: (costsUnlocked || canSeeCosts) ? true : undefined,
       }, ...cart]);
     }
     setShowAddModal(false);
@@ -1524,20 +1547,38 @@ export function NewQuote() {
                 <span className="flex items-center gap-1">
                   {cart.length > 0 && <Button variant="ghost" size="sm" onClick={() => setCart([])} className="h-6 px-2 text-[10px] text-rose-500 hover:text-rose-600 hover:bg-rose-500/10">Vaciar</Button>}
                   {costsUnlocked ? (
-                    <Button variant="ghost" size="sm" onClick={lockCosts} className="h-6 px-2 text-[10px] text-amber-600" title={`Costos visibles · autorizado por ${costAuthorizedBy}`}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={lockCosts}
+                      className="h-6 px-2 text-[10px] text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
+                      title={costAuthorizedBy ? `Costos visibles · autorizado por ${costAuthorizedBy}` : "Ocultar costos (modo cliente)"}
+                    >
                       <EyeOff size={12} className="mr-1" /> Ocultar costos
                     </Button>
                   ) : (
-                    // Acceso discreto a la información interna (requiere contraseña)
-                    <button
-                      type="button"
-                      onClick={() => setCostDialogOpen(true)}
-                      title="Información interna"
-                      aria-label="Información interna"
-                      className="size-6 flex items-center justify-center rounded text-[var(--text-sec)]/40 hover:text-[var(--text-sec)] hover:bg-[var(--bg)]"
-                    >
-                      <Lock size={12} />
-                    </button>
+                    canSeeCosts ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setCostsUnlocked(true)}
+                        className="h-6 px-2 text-[10px] text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
+                        title="Mostrar costos y márgenes"
+                      >
+                        <Lock size={12} className="mr-1" /> Ver costos
+                      </Button>
+                    ) : (
+                      // Acceso discreto a la información interna (requiere contraseña)
+                      <button
+                        type="button"
+                        onClick={() => setCostDialogOpen(true)}
+                        title="Información interna"
+                        aria-label="Información interna"
+                        className="size-6 flex items-center justify-center rounded text-[var(--text-sec)]/40 hover:text-[var(--text-sec)] hover:bg-[var(--bg)]"
+                      >
+                        <Lock size={12} />
+                      </button>
+                    )
                   )}
                 </span>
               </Label>
