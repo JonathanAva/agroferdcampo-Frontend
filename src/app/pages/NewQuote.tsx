@@ -160,9 +160,8 @@ export function NewQuote() {
             const price = Number(item.unitPrice);
             const factor = item.unitFactor || 1;
             const catalogCost = Number(item.product?.costPrice) || 0;
-            const baseCost = item.costPrice !== null && item.costPrice !== undefined
-              ? Number(item.costPrice)
-              : catalogCost;
+            const rawCost = item.costPrice !== null && item.costPrice !== undefined ? Number(item.costPrice) : null;
+            const baseCost = (rawCost !== null && rawCost > 0) ? rawCost : catalogCost;
             const costPerUnit = baseCost * factor;
             const subtotal = qty * price;
             let margin = 0;

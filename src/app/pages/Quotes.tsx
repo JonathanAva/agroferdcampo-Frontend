@@ -1121,12 +1121,14 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                       {selectedQuote.items?.map(item => {
                         const factor = Number(item.unitFactor) || 1;
                         const costInfo = costAccess?.items.find(c => c.id === item.id);
-                        const fallbackCost = item.costPrice !== null && item.costPrice !== undefined ? Number(item.costPrice) : (Number(item.product?.costPrice) || 0);
+                        const catalogCost = Number(item.product?.costPrice) || 0;
+                        const rawCost = item.costPrice !== null && item.costPrice !== undefined ? Number(item.costPrice) : null;
+                        const fallbackCost = (rawCost !== null && rawCost > 0) ? rawCost : catalogCost;
                         const itemBaseCost = costInfo?.costPrice ?? costInfo?.catalogCostPrice ?? fallbackCost;
                         const unitCost = itemBaseCost * factor;
                         const originalBase = costInfo?.catalogCostPrice ?? (Number(item.product?.costPrice) || 0);
-                        const isCustomCost = (costInfo?.costPrice != null && Math.abs(costInfo.costPrice - originalBase) > 0.0001) ||
-                          (!costInfo && item.costPrice !== null && item.costPrice !== undefined && Math.abs(Number(item.costPrice) - originalBase) > 0.0001);
+                        const isCustomCost = (costInfo?.costPrice != null && originalBase > 0 && Math.abs(costInfo.costPrice - originalBase) > 0.0001) ||
+                          (!costInfo && item.costPrice !== null && item.costPrice !== undefined && originalBase > 0 && Math.abs(Number(item.costPrice) - originalBase) > 0.0001);
                         const unitPrice = Number(item.unitPrice) || 0;
                         const lineMargin = unitCost > 0 ? ((unitPrice - unitCost) / unitCost) * 100 : (unitPrice > 0 ? 100 : 0);
 
@@ -1185,7 +1187,9 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                           let totalCost = 0;
                           selectedQuote.items?.forEach(i => {
                             const c = costAccess?.items.find(x => x.id === i.id);
-                            const fallbackCost = i.costPrice !== null && i.costPrice !== undefined ? Number(i.costPrice) : (Number(i.product?.costPrice) || 0);
+                            const catalogCost = Number(i.product?.costPrice) || 0;
+                            const rawCost = i.costPrice !== null && i.costPrice !== undefined ? Number(i.costPrice) : null;
+                            const fallbackCost = (rawCost !== null && rawCost > 0) ? rawCost : catalogCost;
                             const cost = c?.costPrice ?? c?.catalogCostPrice ?? fallbackCost;
                             const factor = Number(i.unitFactor) || 1;
                             totalCost += cost * factor * Number(i.quantity);
