@@ -2,12 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, FileText, CheckCircle2, AlertCircle, Eye, Plus, 
   Trash2, RefreshCcw, Filter, Calendar as CalendarIcon, Store, Package, Download, X,
-  ArrowDownToLine, DollarSign, Printer, Check, ChevronsUpDown, Paperclip, Loader2
+  ArrowDownToLine, DollarSign, Printer, Check, ChevronsUpDown, Paperclip, Loader2,
+  Pencil, History, Clock, User as UserIcon, ShieldAlert, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { SupplierManager } from '../components/suppliers/SupplierManager';
 import { Payables } from './Payables';
-import { purchasesService, PurchaseResponse, CreatePurchaseDto, getSuppliers, UnlinkedPayment } from '../services/purchases.service';
+import { purchasesService, PurchaseResponse, CreatePurchaseDto, UpdatePurchaseDto, PurchaseAuditLog, getSuppliers, UnlinkedPayment } from '../services/purchases.service';
 import { searchProducts } from '../services/sales.service';
 import { uploadsService } from '../services/uploads.service';
 import { SupplierInvoiceViewer } from '../components/purchases/SupplierInvoiceViewer';
@@ -15,6 +16,7 @@ import { toast } from 'sonner';
 import { Button } from '../components/ui/button';
 import { cn } from '../components/ui/utils';
 import { Input } from '../components/ui/input';
+import { Textarea } from '../components/ui/textarea';
 import { NumberInput } from '../components/ui/number-input';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -32,6 +34,69 @@ import { UnsavedChangesDialog } from '../components/ui/unsaved-changes-dialog';
 
 import { Checkbox } from '../components/ui/checkbox';
 import { printSequentialPurchaseOrders, printSequentialPurchasePaymentReceipts } from '../utils/printBatchDocuments';
+
+function AuditComparison({ previous, modified }: { previous: any; modified: any }) {
+  const [open, setOpen] = useState(false);
+
+  if (!previous || !modified) return null;
+
+  return (
+    <div className="pt-2 border-t border-[var(--border)]">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={() => setOpen(!open)}
+        className="text-xs font-semibold text-[var(--primary)] hover:underline p-0 h-auto flex items-center gap-1"
+      >
+        {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        {open ? 'Ocultar comparativa completa' : 'Ver comparativa completa (Anterior vs Modificado)'}
+      </Button>
+
+      {open && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 text-xs">
+          <div className="p-3 rounded-lg border border-red-500/20 bg-red-500/5 space-y-2">
+            <p className="font-bold text-red-600 flex items-center gap-1">
+              <span>● Estado Anterior</span>
+            </p>
+            <p><strong>Proveedor:</strong> {previous.supplierName || `ID ${previous.supplierId}`}</p>
+            <p><strong>Total:</strong> ${Number(previous.totalAmount).toFixed(2)}</p>
+            {previous.referenceDoc && <p><strong>Doc Ref:</strong> {previous.referenceDoc}</p>}
+            {previous.notes && <p><strong>Notas:</strong> {previous.notes}</p>}
+            <div className="border-t pt-2 space-y-1">
+              <p className="font-semibold text-muted-foreground text-[11px]">Productos ({previous.items?.length || 0}):</p>
+              {previous.items?.map((item: any, idx: number) => (
+                <div key={idx} className="flex justify-between text-[11px] py-0.5 border-b last:border-0 border-red-500/10">
+                  <span className="truncate pr-2">{item.productName || `Prod #${item.productId}`}</span>
+                  <span className="font-mono shrink-0">{item.quantity} x ${Number(item.unitCost).toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 space-y-2">
+            <p className="font-bold text-emerald-600 flex items-center gap-1">
+              <span>● Estado Modificado</span>
+            </p>
+            <p><strong>Proveedor:</strong> {modified.supplierName || `ID ${modified.supplierId}`}</p>
+            <p><strong>Total:</strong> ${Number(modified.totalAmount).toFixed(2)}</p>
+            {modified.referenceDoc && <p><strong>Doc Ref:</strong> {modified.referenceDoc}</p>}
+            {modified.notes && <p><strong>Notas:</strong> {modified.notes}</p>}
+            <div className="border-t pt-2 space-y-1">
+              <p className="font-semibold text-muted-foreground text-[11px]">Productos ({modified.items?.length || 0}):</p>
+              {modified.items?.map((item: any, idx: number) => (
+                <div key={idx} className="flex justify-between text-[11px] py-0.5 border-b last:border-0 border-emerald-500/10">
+                  <span className="truncate pr-2">{item.productName || `Prod #${item.productId}`}</span>
+                  <span className="font-mono shrink-0">{item.quantity} x ${Number(item.unitCost).toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function Purchases() {
   const [activeTab, setActiveTab] = useState<'compras' | 'proveedores' | 'pagar'>('compras');
@@ -135,9 +200,12 @@ export function Purchases() {
   // Modales
   const [selectedPurchase, setSelectedPurchase] = useState<PurchaseResponse | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [detailTab, setDetailTab] = useState<'items' | 'receipts' | 'audit'>('items');
 
-  // Nueva Compra
+  // Nueva / Editar Compra
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editingPurchase, setEditingPurchase] = useState<PurchaseResponse | null>(null);
+  const [changeReason, setChangeReason] = useState("");
   const [supplierOpen, setSupplierOpen] = useState(false);
   const [newPurchase, setNewPurchase] = useState<Partial<CreatePurchaseDto>>({ items: [] });
   const [productSearch, setProductSearch] = useState("");
@@ -263,14 +331,59 @@ export function Purchases() {
 
 
 
-  const handleOpenDetail = async (purchase: PurchaseResponse) => {
+  const handleOpenDetail = async (purchase: PurchaseResponse, initialTab: 'items' | 'receipts' | 'audit' = 'items') => {
     try {
       const fullPurchase = await purchasesService.getPurchaseDetail(purchase.id);
       setSelectedPurchase(fullPurchase);
+      setDetailTab(initialTab);
       setDetailModalOpen(true);
     } catch (e) {
       toast.error('Error al cargar detalles de la compra');
     }
+  };
+
+  const handleOpenEdit = async (purchase: PurchaseResponse) => {
+    try {
+      const full = await purchasesService.getPurchaseDetail(purchase.id);
+      setEditingPurchase(full);
+      setChangeReason("");
+
+      let refDoc = full.referenceDoc || '';
+      let notes = full.notes || '';
+      if (!refDoc && notes.startsWith('Ref: ')) {
+        const parts = notes.split(' | ');
+        refDoc = parts[0].replace('Ref: ', '');
+        notes = parts.slice(1).join(' | ');
+      }
+
+      setNewPurchase({
+        supplierId: full.supplierId,
+        referenceDoc: refDoc,
+        notes: notes,
+        applyrent: full.applyrent || false,
+        expectedDate: full.expectedDate ? full.expectedDate.split('T')[0] : '',
+        items: (full.items || []).map((i: any) => ({
+          productId: i.productId,
+          productName: i.product?.name || `Producto #${i.productId}`,
+          quantity: Number(i.quantity),
+          unitCost: Number(i.unitCost),
+          unitType: i.unitType || (i.product?.unit || 'UNIDAD'),
+          unitFactor: Number(i.unitFactor) || 1,
+          baseUnit: i.product?.unit || 'UNIDAD',
+          productUnits: (i.product as any)?.units || [],
+        }))
+      });
+      setCreateModalOpen(true);
+    } catch (e: any) {
+      toast.error(e.message || 'Error al cargar los datos de la compra para edición');
+    }
+  };
+
+  const handleOpenCreate = () => {
+    setEditingPurchase(null);
+    setChangeReason("");
+    setNewPurchase({ items: [] });
+    setCreateModalOpen(true);
   };
 
   const handleConfirmPurchase = async (id: number) => {
@@ -377,7 +490,7 @@ export function Purchases() {
     }
   };
 
-  const handleCreatePurchase = async () => {
+  const handleSavePurchase = async (confirmImmediately = false) => {
     if (!newPurchase.supplierId) {
       toast.error("Seleccione un proveedor");
       return;
@@ -386,29 +499,66 @@ export function Purchases() {
       toast.error("Agregue al menos un producto");
       return;
     }
+
+    const isConfirmed = editingPurchase?.status === 'CONFIRMADA';
+    if (isConfirmed && (!changeReason || changeReason.trim().length < 4)) {
+      toast.error("Debe ingresar el motivo de la corrección de la compra confirmada (mínimo 4 caracteres)");
+      return;
+    }
+
     setSavingPurchase(true);
     try {
-      const finalNotes = [
-        newPurchase.referenceDoc ? `Ref: ${newPurchase.referenceDoc}` : '',
-        newPurchase.notes || ''
-      ].filter(Boolean).join(' | ');
-
-      await purchasesService.createPurchase({
+      const payload: any = {
         supplierId: newPurchase.supplierId,
-        notes: finalNotes || undefined,
+        referenceDoc: newPurchase.referenceDoc?.trim() || undefined,
+        notes: newPurchase.notes?.trim() || undefined,
         applyrent: newPurchase.applyrent,
+        expectedDate: newPurchase.expectedDate || undefined,
         items: newPurchase.items.map(i => ({
           productId: Number(i.productId),
           quantity: Number(i.quantity) || 1,
-          unitCost: Number(i.unitCost) || 0
+          unitCost: Number(i.unitCost) || 0,
+          unitType: i.unitType,
+          unitFactor: i.unitFactor ? Number(i.unitFactor) : 1,
         }))
-      });
-      toast.success('Orden de compra creada como borrador');
+      };
+
+      if (editingPurchase) {
+        if (isConfirmed) {
+          payload.changeReason = changeReason.trim();
+        }
+        const updated = await purchasesService.updatePurchase(editingPurchase.id, payload);
+        if (confirmImmediately && updated.status === 'BORRADOR') {
+          await purchasesService.confirmPurchase(updated.id);
+          toast.success(`Compra OC-${updated.id.toString().padStart(6, '0')} actualizada y confirmada`);
+        } else {
+          toast.success(
+            isConfirmed
+              ? `Compra confirmada OC-${updated.id.toString().padStart(6, '0')} corregida con éxito. Auditoría registrada.`
+              : `Borrador OC-${updated.id.toString().padStart(6, '0')} actualizado`
+          );
+        }
+      } else {
+        const created = await purchasesService.createPurchase(payload);
+        if (confirmImmediately) {
+          await purchasesService.confirmPurchase(created.id);
+          toast.success(`Compra OC-${created.id.toString().padStart(6, '0')} creada y confirmada`);
+        } else {
+          toast.success('Orden de compra creada como borrador');
+        }
+      }
+
       setCreateModalOpen(false);
+      setEditingPurchase(null);
+      setChangeReason("");
       setNewPurchase({ items: [] });
       fetchPurchases();
+
+      if (selectedPurchase && editingPurchase && selectedPurchase.id === editingPurchase.id) {
+        setSelectedPurchase(await purchasesService.getPurchaseDetail(editingPurchase.id));
+      }
     } catch (e: any) {
-      toast.error(e.message || 'Error al crear la orden');
+      toast.error(e.message || 'Error al guardar la orden de compra');
     } finally {
       setSavingPurchase(false);
     }
@@ -907,7 +1057,7 @@ export function Purchases() {
       {activeTab === 'compras' && (
         <>
           <div className="flex justify-end">
-            <Button onClick={() => setCreateModalOpen(true)} className="font-bold gap-2" variant="premium">
+            <Button onClick={handleOpenCreate} className="font-bold gap-2" variant="premium">
               <Plus size={18} /> Nueva Orden
             </Button>
           </div>
@@ -991,7 +1141,21 @@ export function Purchases() {
                         ${Number(purchase.totalAmount).toFixed(4)}
                       </TableCell>
                       <TableCell className="text-center">
-                        {getStatusBadge(purchase.status)}
+                        <div className="flex flex-col items-center gap-1">
+                          {getStatusBadge(purchase.status)}
+                          {((purchase as any)._count?.auditLogs > 0 || (purchase.auditLogs?.length ?? 0) > 0) && (
+                            <Badge 
+                              variant="outline" 
+                              className="text-[10px] font-bold text-amber-600 border-amber-300 bg-amber-500/10 cursor-pointer hover:bg-amber-500/20"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenDetail(purchase, 'audit');
+                              }}
+                            >
+                              Modificada ({(purchase as any)._count?.auditLogs || purchase.auditLogs?.length})
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant={purchase.isPaid ? 'success' : 'warning'}>
@@ -1010,6 +1174,33 @@ export function Purchases() {
                             <DropdownMenuItem onClick={() => handleOpenDetail(purchase)} className="font-bold cursor-pointer">
                               <Eye size={14} className="mr-2 text-[var(--primary)]" /> Ver Detalle
                             </DropdownMenuItem>
+
+                            {((purchase as any)._count?.auditLogs > 0 || (purchase.auditLogs?.length ?? 0) > 0) && (
+                              <DropdownMenuItem 
+                                onClick={() => handleOpenDetail(purchase, 'audit')} 
+                                className="font-bold cursor-pointer text-amber-600"
+                              >
+                                <History size={14} className="mr-2" /> Historial de Cambios ({(purchase as any)._count?.auditLogs || purchase.auditLogs?.length})
+                              </DropdownMenuItem>
+                            )}
+
+                            {purchase.status === 'BORRADOR' && (
+                              <DropdownMenuItem 
+                                onClick={() => handleOpenEdit(purchase)}
+                                className="font-bold cursor-pointer text-amber-600"
+                              >
+                                <Pencil size={14} className="mr-2" /> Editar Borrador
+                              </DropdownMenuItem>
+                            )}
+
+                            {purchase.status === 'CONFIRMADA' && (!purchase.receipts || purchase.receipts.length === 0) && (
+                              <DropdownMenuItem 
+                                onClick={() => handleOpenEdit(purchase)}
+                                className="font-bold cursor-pointer text-amber-600"
+                              >
+                                <Pencil size={14} className="mr-2" /> Corregir Compra
+                              </DropdownMenuItem>
+                            )}
 
                             <DropdownMenuItem onClick={() => printPurchaseOrder(purchase)} className="font-bold cursor-pointer text-[var(--primary)]">
                               <Printer size={14} className="mr-2" /> Imprimir Orden
@@ -1146,18 +1337,39 @@ export function Purchases() {
         </div>
       )}
 
-      {/* --- MODAL CREAR ORDEN --- */}
-      <Dialog open={createModalOpen} onOpenChange={(o) => o ? setCreateModalOpen(true) : confirmExit(() => setCreateModalOpen(false))}>
+      <Dialog open={createModalOpen} onOpenChange={(o) => o ? setCreateModalOpen(true) : confirmExit(() => { setCreateModalOpen(false); setEditingPurchase(null); setChangeReason(""); })}>
         <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col p-0">
           <DialogHeader className="p-6 border-b">
             <DialogTitle className="flex items-center gap-2 text-2xl">
               <Package className="text-[var(--primary)]" />
-              Nueva Orden de Compra
+              {editingPurchase
+                ? (editingPurchase.status === 'CONFIRMADA'
+                    ? `Corregir Compra Confirmada OC-${editingPurchase.id.toString().padStart(6, '0')}`
+                    : `Editar Borrador OC-${editingPurchase.id.toString().padStart(6, '0')}`)
+                : 'Nueva Orden de Compra'}
             </DialogTitle>
-            <DialogDescription>Crea un borrador de compra para enviarlo o confirmarlo con el proveedor.</DialogDescription>
+            <DialogDescription>
+              {editingPurchase
+                ? (editingPurchase.status === 'CONFIRMADA'
+                    ? 'Modifica los productos, cantidades, costos o proveedor. Al ser una compra confirmada, es obligatorio detallar el motivo del cambio para el registro de auditoría.'
+                    : 'Edita los productos, cantidades, costos y datos del proveedor en este borrador.')
+                : 'Crea un borrador de compra para enviarlo o confirmarlo con el proveedor.'}
+            </DialogDescription>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[var(--bg)]/50">
+            {editingPurchase?.status === 'CONFIRMADA' && (
+              <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200 space-y-1">
+                <div className="flex items-center gap-2 font-bold text-sm">
+                  <ShieldAlert size={18} className="text-amber-600" />
+                  <span>Atención: Modificación sobre Compra Confirmada</span>
+                </div>
+                <p className="text-xs">
+                  Esta orden ya fue confirmada. Toda modificación en proveedor, productos, cantidades o costos quedará registrada con tu usuario, fecha, hora, estado anterior y nuevo. Es obligatorio detallar el motivo del cambio abajo.
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label>Proveedor</Label>
@@ -1354,112 +1566,354 @@ export function Purchases() {
                 </div>
               </div>
             )}
+
+            {editingPurchase?.status === 'CONFIRMADA' && (
+              <div className="space-y-2 bg-[var(--card)] p-4 rounded-xl border border-amber-500/30 shadow-sm">
+                <Label className="flex items-center gap-1.5 font-bold text-sm text-[var(--text-main)]">
+                  <FileText size={15} className="text-amber-600" />
+                  Motivo de la corrección / cambio <span className="text-destructive">*</span>
+                </Label>
+                <Textarea
+                  placeholder="Ej. Corrección por ajuste de precios de proveedor en factura final, rectificación de cantidad..."
+                  value={changeReason}
+                  onChange={(e) => setChangeReason(e.target.value)}
+                  className="min-h-[80px] bg-[var(--bg)] border-[var(--border)] text-sm"
+                />
+                <p className="text-[11px] text-[var(--text-sec)]">
+                  Mínimo 4 caracteres. Este motivo quedará registrado en el historial de auditoría de la compra con tu usuario, fecha y hora.
+                </p>
+              </div>
+            )}
           </div>
 
-          <DialogFooter className="p-6 border-t bg-[var(--card)]">
-            <Button variant="outline" onClick={() => confirmExit(() => setCreateModalOpen(false))}>Cancelar</Button>
-            <Button onClick={handleCreatePurchase} disabled={savingPurchase || !newPurchase.items?.length}>
-              {savingPurchase ? 'Guardando...' : 'Guardar Borrador'}
+          <DialogFooter className="p-6 border-t bg-[var(--card)] flex flex-wrap gap-2 justify-between sm:justify-end">
+            <Button 
+              variant="outline" 
+              onClick={() => confirmExit(() => {
+                setCreateModalOpen(false);
+                setEditingPurchase(null);
+                setChangeReason("");
+              })}
+            >
+              Cancelar
             </Button>
+
+            {editingPurchase?.status === 'CONFIRMADA' ? (
+              <Button 
+                onClick={() => handleSavePurchase(false)} 
+                disabled={savingPurchase || !newPurchase.items?.length || !changeReason.trim()}
+              >
+                <CheckCircle2 size={16} className="mr-1.5" />
+                {savingPurchase ? 'Guardando Corrección...' : 'Guardar Corrección'}
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline"
+                  onClick={() => handleSavePurchase(false)} 
+                  disabled={savingPurchase || !newPurchase.items?.length}
+                >
+                  {savingPurchase ? 'Guardando...' : (editingPurchase ? 'Actualizar Borrador' : 'Guardar Borrador')}
+                </Button>
+                <Button 
+                  onClick={() => handleSavePurchase(true)} 
+                  disabled={savingPurchase || !newPurchase.items?.length}
+                >
+                  <CheckCircle2 size={16} className="mr-1.5" />
+                  {savingPurchase ? 'Procesando...' : (editingPurchase ? 'Guardar y Confirmar' : 'Confirmar Directamente')}
+                </Button>
+              </div>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* --- MODAL DETALLE --- */}
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
-        <DialogContent className="sm:max-w-3xl flex flex-col p-0">
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col p-0">
           {selectedPurchase && (
             <>
               <DialogHeader className="p-6 border-b">
-                <DialogTitle className="flex items-center justify-between pr-8">
-                  <span>Orden de Compra OC-{selectedPurchase.id.toString().padStart(6, '0')}</span>
-                  {getStatusBadge(selectedPurchase.status)}
-                </DialogTitle>
-                <DialogDescription className="flex flex-col gap-1">
-                  <span>Proveedor: {selectedPurchase.supplier?.name}</span>
-                  {selectedPurchase.dueDate && (
-                    <span className="text-amber-600 font-bold">
-                      Vencimiento de Pago: {new Date(selectedPurchase.dueDate).toLocaleDateString()}
-                    </span>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pr-8">
+                  <div>
+                    <DialogTitle className="flex flex-wrap items-center gap-2 text-xl">
+                      <span>Orden de Compra OC-{selectedPurchase.id.toString().padStart(6, '0')}</span>
+                      {getStatusBadge(selectedPurchase.status)}
+                      {((selectedPurchase as any)._count?.auditLogs > 0 || (selectedPurchase.auditLogs?.length ?? 0) > 0) && (
+                        <Badge variant="outline" className="text-xs font-bold text-amber-600 border-amber-300 bg-amber-500/10">
+                          Modificada ({(selectedPurchase as any)._count?.auditLogs || selectedPurchase.auditLogs?.length})
+                        </Badge>
+                      )}
+                    </DialogTitle>
+                    <DialogDescription className="flex flex-col gap-1 mt-1 text-xs">
+                      <span>Proveedor: <strong>{selectedPurchase.supplier?.name}</strong></span>
+                      {selectedPurchase.referenceDoc && (
+                        <span>Doc. Referencia: <strong>{selectedPurchase.referenceDoc}</strong></span>
+                      )}
+                      {selectedPurchase.dueDate && (
+                        <span className="text-amber-600 font-bold">
+                          Vencimiento de Pago: {new Date(selectedPurchase.dueDate).toLocaleDateString()}
+                        </span>
+                      )}
+                    </DialogDescription>
+                  </div>
+                  {(selectedPurchase.status === 'BORRADOR' || (selectedPurchase.status === 'CONFIRMADA' && (!selectedPurchase.receipts || selectedPurchase.receipts.length === 0))) && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setDetailModalOpen(false);
+                        handleOpenEdit(selectedPurchase);
+                      }}
+                      className="shrink-0 gap-1.5"
+                    >
+                      <Pencil size={14} />
+                      {selectedPurchase.status === 'BORRADOR' ? 'Editar Borrador' : 'Corregir Compra'}
+                    </Button>
                   )}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="p-6 overflow-y-auto space-y-6">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Producto</TableHead>
-                      <TableHead className="text-center">Cant. Solicitada</TableHead>
-                      <TableHead className="text-center">Cant. Recibida</TableHead>
-                      <TableHead className="text-right">Costo Unit.</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {selectedPurchase.items?.map(item => (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-bold">{item.product?.name}</TableCell>
-                        <TableCell className="text-center">{item.quantity}</TableCell>
-                        <TableCell className="text-center text-emerald-600 font-bold">{item.receivedQuantity}</TableCell>
-                        <TableCell className="text-right">${Number(item.unitCost).toFixed(4)}</TableCell>
-                        <TableCell className="text-right font-black">${Number(item.totalCost).toFixed(4)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                <div className="flex justify-end p-4 border-t">
-                  <p className="text-xl font-black">Total: <span className="text-[var(--primary)]">${Number(selectedPurchase.totalAmount).toFixed(4)}</span></p>
                 </div>
+              </DialogHeader>
 
-                {/* Recepciones de mercadería y su factura adjunta */}
-                {(selectedPurchase.receipts?.length ?? 0) > 0 && (
-                  <div className="space-y-2">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-sec)]">Recepciones de mercadería</h3>
-                    {selectedPurchase.receipts!.map((receipt, idx) => (
-                      <div key={receipt.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
-                        <div className="min-w-0">
-                          <p className="text-sm font-bold">
-                            Recepción #{idx + 1} · {new Date(receipt.receivedAt).toLocaleString()}
-                          </p>
-                          <p className="text-xs text-[var(--text-sec)] truncate">
-                            {receipt.invoiceNumber ? `Documento: ${receipt.invoiceNumber}` : receipt.notes || 'Sin número de documento'}
-                          </p>
-                        </div>
-                        <div className="flex gap-2 shrink-0">
-                          {receipt.invoiceUrl && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="border-emerald-300 text-emerald-700"
-                              onClick={() => setViewingInvoice({
-                                url: receipt.invoiceUrl!,
-                                subtitle: `OC-${selectedPurchase.id.toString().padStart(6, '0')} · ${selectedPurchase.supplier?.name || ''}${receipt.invoiceNumber ? ` · ${receipt.invoiceNumber}` : ''}`,
-                              })}
-                            >
-                              <Eye size={14} className="mr-1.5" /> Ver factura adjunta
-                            </Button>
-                          )}
-                          <label className={cn(
-                            "inline-flex items-center gap-1.5 h-8 px-3 rounded-md border text-xs font-medium cursor-pointer hover:bg-[var(--card)]",
-                            attachingReceiptId === receipt.id && "pointer-events-none opacity-60",
-                          )}>
-                            {attachingReceiptId === receipt.id
-                              ? <Loader2 size={14} className="animate-spin" />
-                              : <Paperclip size={14} />}
-                            {receipt.invoiceUrl ? 'Reemplazar' : 'Adjuntar factura'}
-                            <input
-                              type="file"
-                              accept="image/jpeg,image/png,image/webp,application/pdf"
-                              className="hidden"
-                              onChange={(e) => {
-                                handleAttachInvoiceToReceipt(receipt.id, e.target.files?.[0]);
-                                e.target.value = '';
-                              }}
-                            />
-                          </label>
-                        </div>
+              {/* Subtabs de Navegación en el Detalle */}
+              <div className="px-6 pt-3 border-b flex gap-6 bg-[var(--card)] shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setDetailTab('items')}
+                  className={cn(
+                    "pb-3 text-sm font-bold border-b-2 transition-all flex items-center gap-1.5",
+                    detailTab === 'items'
+                      ? "border-[var(--primary)] text-[var(--primary)]"
+                      : "border-transparent text-[var(--text-sec)] hover:text-[var(--text-main)]"
+                  )}
+                >
+                  <Package size={15} /> Productos Solicitados ({selectedPurchase.items?.length || 0})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDetailTab('receipts')}
+                  className={cn(
+                    "pb-3 text-sm font-bold border-b-2 transition-all flex items-center gap-1.5",
+                    detailTab === 'receipts'
+                      ? "border-[var(--primary)] text-[var(--primary)]"
+                      : "border-transparent text-[var(--text-sec)] hover:text-[var(--text-main)]"
+                  )}
+                >
+                  <ArrowDownToLine size={15} /> Recepciones ({selectedPurchase.receipts?.length || 0})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDetailTab('audit')}
+                  className={cn(
+                    "pb-3 text-sm font-bold border-b-2 transition-all flex items-center gap-1.5",
+                    detailTab === 'audit'
+                      ? "border-[var(--primary)] text-[var(--primary)]"
+                      : "border-transparent text-[var(--text-sec)] hover:text-[var(--text-main)]"
+                  )}
+                >
+                  <History size={15} /> Historial de Cambios ({selectedPurchase.auditLogs?.length || (selectedPurchase as any)._count?.auditLogs || 0})
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto space-y-6 flex-1">
+                {detailTab === 'items' && (
+                  <div>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Producto</TableHead>
+                          <TableHead className="text-center">Cant. Solicitada</TableHead>
+                          <TableHead className="text-center">Cant. Recibida</TableHead>
+                          <TableHead className="text-right">Costo Unit.</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedPurchase.items?.map(item => (
+                          <TableRow key={item.id}>
+                            <TableCell className="font-bold">{item.product?.name}</TableCell>
+                            <TableCell className="text-center">{item.quantity}</TableCell>
+                            <TableCell className="text-center text-emerald-600 font-bold">{item.receivedQuantity}</TableCell>
+                            <TableCell className="text-right">${Number(item.unitCost).toFixed(4)}</TableCell>
+                            <TableCell className="text-right font-black">${Number(item.totalCost).toFixed(4)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    <div className="flex justify-end p-4 border-t mt-4">
+                      <p className="text-xl font-black">Total: <span className="text-[var(--primary)]">${Number(selectedPurchase.totalAmount).toFixed(4)}</span></p>
+                    </div>
+                  </div>
+                )}
+
+                {detailTab === 'receipts' && (
+                  <div className="space-y-3">
+                    {(selectedPurchase.receipts?.length ?? 0) === 0 ? (
+                      <div className="text-center py-10 text-[var(--text-sec)]">
+                        <ArrowDownToLine size={36} className="mx-auto mb-2 opacity-30" />
+                        <p className="font-bold text-sm">No se han registrado recepciones aún.</p>
                       </div>
-                    ))}
+                    ) : (
+                      selectedPurchase.receipts!.map((receipt, idx) => (
+                        <div key={receipt.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl border border-[var(--border)] bg-[var(--bg)]">
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold">
+                              Recepción #{idx + 1} · {new Date(receipt.receivedAt).toLocaleString()}
+                            </p>
+                            <p className="text-xs text-[var(--text-sec)] truncate">
+                              {receipt.invoiceNumber ? `Documento: ${receipt.invoiceNumber}` : receipt.notes || 'Sin número de documento'}
+                            </p>
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            {receipt.invoiceUrl && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-emerald-300 text-emerald-700"
+                                onClick={() => setViewingInvoice({
+                                  url: receipt.invoiceUrl!,
+                                  subtitle: `OC-${selectedPurchase.id.toString().padStart(6, '0')} · ${selectedPurchase.supplier?.name || ''}${receipt.invoiceNumber ? ` · ${receipt.invoiceNumber}` : ''}`,
+                                })}
+                              >
+                                <Eye size={14} className="mr-1.5" /> Ver factura adjunta
+                              </Button>
+                            )}
+                            <label className={cn(
+                              "inline-flex items-center gap-1.5 h-8 px-3 rounded-md border text-xs font-medium cursor-pointer hover:bg-[var(--card)]",
+                              attachingReceiptId === receipt.id && "pointer-events-none opacity-60",
+                            )}>
+                              {attachingReceiptId === receipt.id
+                                ? <Loader2 size={14} className="animate-spin" />
+                                : <Paperclip size={14} />}
+                              {receipt.invoiceUrl ? 'Reemplazar' : 'Adjuntar factura'}
+                              <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp,application/pdf"
+                                className="hidden"
+                                onChange={(e) => {
+                                  handleAttachInvoiceToReceipt(receipt.id, e.target.files?.[0]);
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {detailTab === 'audit' && (
+                  <div className="space-y-4">
+                    {(!selectedPurchase.auditLogs || selectedPurchase.auditLogs.length === 0) ? (
+                      <div className="text-center py-10 text-[var(--text-sec)]">
+                        <History size={36} className="mx-auto mb-2 opacity-30" />
+                        <p className="font-bold text-sm">Esta compra no tiene modificaciones registradas.</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Las correcciones realizadas sobre compras confirmadas dejarán registro de usuario, fecha, hora, valores anteriores y nuevos aquí.
+                        </p>
+                      </div>
+                    ) : (
+                      selectedPurchase.auditLogs.map((log: any, idx: number) => (
+                        <Card key={log.id || idx} className="p-4 border-[var(--border)] bg-[var(--card)] space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold text-xs">
+                                #{selectedPurchase.auditLogs!.length - idx}
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-[var(--text-main)] flex items-center gap-1.5">
+                                  <UserIcon size={14} className="text-[var(--primary)]" />
+                                  {log.user?.fullName || 'Usuario'}
+                                </p>
+                                <p className="text-[11px] text-[var(--text-sec)]">
+                                  {log.user?.email}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-sec)]">
+                              <Clock size={13} />
+                              {new Date(log.createdAt).toLocaleString()}
+                            </div>
+                          </div>
+
+                          <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                            <p className="text-xs font-bold text-amber-800 dark:text-amber-300 mb-1 flex items-center gap-1">
+                              <FileText size={13} /> Motivo del cambio:
+                            </p>
+                            <p className="text-xs text-[var(--text-main)] italic">
+                              "{log.reason}"
+                            </p>
+                          </div>
+
+                          {log.changesSummary && Object.keys(log.changesSummary).length > 0 && (
+                            <div className="space-y-2 text-xs">
+                              <p className="font-bold text-[var(--text-sec)] uppercase tracking-wider text-[10px]">
+                                Resumen de Modificaciones:
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {log.changesSummary.supplier && (
+                                  <div className="p-2 rounded border bg-[var(--bg)]/50">
+                                    <span className="font-bold block text-muted-foreground">Proveedor:</span>
+                                    <span className="line-through text-destructive mr-1">{log.changesSummary.supplier.from}</span>
+                                    <span className="text-emerald-600 font-bold">→ {log.changesSummary.supplier.to}</span>
+                                  </div>
+                                )}
+                                {log.changesSummary.totalAmount && (
+                                  <div className="p-2 rounded border bg-[var(--bg)]/50">
+                                    <span className="font-bold block text-muted-foreground">Total de la Compra:</span>
+                                    <span className="line-through text-destructive mr-1">${Number(log.changesSummary.totalAmount.from).toFixed(2)}</span>
+                                    <span className="text-emerald-600 font-bold">→ ${Number(log.changesSummary.totalAmount.to).toFixed(2)}</span>
+                                  </div>
+                                )}
+                                {log.changesSummary.referenceDoc && (
+                                  <div className="p-2 rounded border bg-[var(--bg)]/50">
+                                    <span className="font-bold block text-muted-foreground">Doc. Referencia:</span>
+                                    <span className="line-through text-destructive mr-1">{log.changesSummary.referenceDoc.from || '(sin ref)'}</span>
+                                    <span className="text-emerald-600 font-bold">→ {log.changesSummary.referenceDoc.to || '(sin ref)'}</span>
+                                  </div>
+                                )}
+                                {log.changesSummary.notes && (
+                                  <div className="p-2 rounded border bg-[var(--bg)]/50">
+                                    <span className="font-bold block text-muted-foreground">Notas:</span>
+                                    <span className="line-through text-destructive mr-1">{log.changesSummary.notes.from || '(vacío)'}</span>
+                                    <span className="text-emerald-600 font-bold">→ {log.changesSummary.notes.to || '(vacío)'}</span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {log.changesSummary.items && (
+                                <div className="mt-2 p-2 rounded border bg-[var(--bg)]/50 space-y-1">
+                                  <span className="font-bold block text-muted-foreground">Productos / Items:</span>
+                                  {log.changesSummary.items.modified?.map((m: any, mIdx: number) => (
+                                    <div key={mIdx} className="text-[11px] flex flex-wrap gap-2 items-center">
+                                      <span className="font-bold">{m.productName || `Prod #${m.productId}`}:</span>
+                                      {m.quantity && (
+                                        <span>Cant: <s className="text-destructive">{m.quantity.from}</s> <strong className="text-emerald-600">→ {m.quantity.to}</strong></span>
+                                      )}
+                                      {m.unitCost && (
+                                        <span>Costo: <s className="text-destructive">${Number(m.unitCost.from).toFixed(2)}</s> <strong className="text-emerald-600">→ ${Number(m.unitCost.to).toFixed(2)}</strong></span>
+                                      )}
+                                    </div>
+                                  ))}
+                                  {log.changesSummary.items.added?.map((a: any, aIdx: number) => (
+                                    <div key={aIdx} className="text-[11px] text-emerald-600 font-medium">
+                                      + Agregado: <strong>{a.productName || `Prod #${a.productId}`}</strong> ({a.quantity} unid. @ ${Number(a.unitCost).toFixed(2)})
+                                    </div>
+                                  ))}
+                                  {log.changesSummary.items.removed?.map((r: any, rIdx: number) => (
+                                    <div key={rIdx} className="text-[11px] text-destructive font-medium">
+                                      - Eliminado: <strong>{r.productName || `Prod #${r.productId}`}</strong> ({r.quantity} unid. @ ${Number(r.unitCost).toFixed(2)})
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          <AuditComparison previous={log.previousValues} modified={log.modifiedValues} />
+                        </Card>
+                      ))
+                    )}
                   </div>
                 )}
               </div>

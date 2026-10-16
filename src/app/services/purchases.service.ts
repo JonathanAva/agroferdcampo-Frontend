@@ -17,6 +17,26 @@ export interface CreatePurchaseDto {
   items: PurchaseItemDto[];
 }
 
+export interface UpdatePurchaseDto extends Partial<CreatePurchaseDto> {
+  changeReason?: string;
+}
+
+export interface PurchaseAuditLog {
+  id: number;
+  purchaseId: number;
+  userId: number;
+  reason: string;
+  previousValues: any;
+  modifiedValues: any;
+  changesSummary?: any;
+  createdAt: string;
+  user?: {
+    id: number;
+    fullName: string;
+    email: string;
+  };
+}
+
 export interface ReceivePurchaseItemDto {
   productId: number;
   received: number;
@@ -125,6 +145,10 @@ export interface PurchaseResponse {
     };
   }>;
   receipts?: PurchaseReceipt[];
+  auditLogs?: PurchaseAuditLog[];
+  _count?: {
+    auditLogs: number;
+  };
 }
 
 export interface PaginatedPurchases {
@@ -174,11 +198,15 @@ export const purchasesService = {
     return await apiRequest<PurchaseResponse>(`/purchases/${id}`);
   },
 
-  updatePurchase: async (id: number, payload: Partial<CreatePurchaseDto>): Promise<PurchaseResponse> => {
+  updatePurchase: async (id: number, payload: UpdatePurchaseDto): Promise<PurchaseResponse> => {
     return await apiRequest<PurchaseResponse>(`/purchases/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     });
+  },
+
+  getPurchaseAuditLogs: async (id: number): Promise<PurchaseAuditLog[]> => {
+    return await apiRequest<PurchaseAuditLog[]>(`/purchases/${id}/audit`);
   },
 
   confirmPurchase: async (id: number): Promise<PurchaseResponse> => {
