@@ -27,6 +27,7 @@ import { CostAccessDialog } from "../components/quotes/CostAccessDialog";
 import type { CostAccessResponse } from "../services/quotes.service";
 import { useAuth } from "../context/AuthContext";
 import { ProductFormDialog } from "../components/products/ProductFormDialog";
+import { ProductDescriptionPopover } from "../components/products/ProductDescriptionPopover";
 
 interface POSBrand {
   id: number;
@@ -72,6 +73,7 @@ interface Product {
   unit: string;
   units?: ProductUnitOption[];
   imageUrl?: string | null;
+  description?: string | null;
 }
 
 interface CartItem extends Product {
@@ -181,6 +183,7 @@ export function NewQuote() {
               imageUrl: item.product?.imageUrl || null,
               internalCode: item.product?.internalCode || "",
               name: item.product?.name || "Producto",
+              description: item.product?.description || null,
               unitType: item.unitType || item.product?.unit || "UNIDAD",
               unitFactor: factor,
               ...(item.customName ? { customName: item.customName } : {}),
@@ -385,6 +388,7 @@ export function NewQuote() {
       id: p.id,
       internalCode: p.internalCode || p.barcode || "S/C",
       name: p.name,
+      description: p.description || null,
       price: Number(publicPrice),
       costPrice: Number(p.costPrice) || 0,
       stock: Number(stockValue),
@@ -1345,9 +1349,12 @@ export function NewQuote() {
                       >
                         {product.category?.name || "General"}
                       </button>
-                      <Badge variant={stock < 10 ? "destructive" : "secondary"} className="text-[9px] px-1.5 py-0 shrink-0">
-                        {stock} {product.unit}
-                      </Badge>
+                      <div className="flex items-center gap-1">
+                        <ProductDescriptionPopover product={product} />
+                        <Badge variant={stock < 10 ? "destructive" : "secondary"} className="text-[9px] px-1.5 py-0 shrink-0">
+                          {stock} {product.unit}
+                        </Badge>
+                      </div>
                     </div>
 
                     {/* Imagen del producto al igual que en Punto de Venta */}
@@ -1650,7 +1657,10 @@ export function NewQuote() {
                           )}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="font-bold text-sm text-[var(--text-main)] leading-tight truncate" title={item.customName || item.name}>{item.customName || item.name}</p>
+                          <div className="flex items-start justify-between gap-1">
+                            <p className="font-bold text-sm text-[var(--text-main)] leading-tight truncate" title={item.customName || item.name}>{item.customName || item.name}</p>
+                            <ProductDescriptionPopover product={item} side="left" />
+                          </div>
                           <div className="flex items-center gap-1.5 mt-0.5">
                             <span className="text-[10px] font-bold text-[var(--primary)] uppercase tracking-wide">{formatUnitLabel(item.unitType)}</span>
                             {item.customName !== undefined && (
@@ -1813,10 +1823,21 @@ export function NewQuote() {
                   <div className="flex items-center gap-2 text-sm flex-wrap">
                     <Badge variant="outline" className="font-mono text-[10px]">{selectedProduct.internalCode}</Badge>
                     <span className="text-[var(--text-sec)] font-bold text-xs">{selectedProduct.stock} {selectedProduct.unit} disp.</span>
+                    <ProductDescriptionPopover product={selectedProduct} side="bottom" />
                   </div>
                 </div>
               </div>
               <div className="p-6 space-y-6">
+                {selectedProduct.description?.trim() && (
+                  <div className="p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] space-y-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-sec)] flex items-center gap-1">
+                      <FileText size={10} className="text-[var(--primary)]" /> Descripción
+                    </p>
+                    <p className="text-xs text-[var(--text-main)] whitespace-pre-wrap leading-relaxed max-h-24 overflow-y-auto custom-scrollbar select-text">
+                      {selectedProduct.description}
+                    </p>
+                  </div>
+                )}
                 {selectedProduct.units && selectedProduct.units.length > 0 && (
                   <div className="space-y-2">
                     <Label className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">Unidad de Venta</Label>

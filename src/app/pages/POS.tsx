@@ -62,6 +62,7 @@ import { SystemConfigData } from "./SystemConfig";
 import { TransportSelector, TransportData } from "../components/transport/TransportSelector";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
+import { ProductDescriptionPopover } from "../components/products/ProductDescriptionPopover";
 
 // --- Types ---
 interface PriceOption {
@@ -94,6 +95,7 @@ interface Product {
   tags?: POSTag[];
   expirationDate?: string | null;
   imageUrl?: string | null;
+  description?: string | null;
   unit: string;
   isUniversal?: boolean;
   isService?: boolean;
@@ -959,6 +961,7 @@ export function POS() {
           id: p.id,
           internalCode: p.internalCode || p.barcode || "S/C",
           name: p.name,
+          description: p.description || null,
           price: Number(publicPrice),
           priceOptions,
           stock: Number(stockValue),
@@ -2247,6 +2250,7 @@ ${paymentConditionHtml}
                                 )}
                               </PopoverContent>
                             </Popover>
+                            <ProductDescriptionPopover product={product} />
                             <Badge
                               variant={product.stock <= 0 ? "outline" : product.stock < 10 ? "destructive" : "secondary"}
                               className={cn(
@@ -2495,14 +2499,17 @@ ${paymentConditionHtml}
                           </p>
                         )}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-6 text-red-400 hover:bg-red-50 hover:text-red-500"
-                        onClick={() => setCart(cart.filter((c) => c.id !== item.id))}
-                      >
-                        <Trash2 size={12} />
-                      </Button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <ProductDescriptionPopover product={item} side="left" />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-6 text-red-400 hover:bg-red-50 hover:text-red-500"
+                          onClick={() => setCart(cart.filter((c) => c.id !== item.id))}
+                        >
+                          <Trash2 size={12} />
+                        </Button>
+                      </div>
                     </div>
 
                     <div className="space-y-2.5">

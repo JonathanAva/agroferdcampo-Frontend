@@ -26,6 +26,7 @@ import { apiRequest } from '../config/api';
 import { TransportSelector, TransportData } from '../components/transport/TransportSelector';
 import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
 import { useAuth } from '../context/AuthContext';
+import { ProductDescriptionPopover } from '../components/products/ProductDescriptionPopover';
 import {
   Command,
   CommandInput,
@@ -1139,7 +1140,10 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                               {item.unitType && <span className="ml-1 text-[10px] font-bold text-[var(--text-sec)] uppercase">{formatUnitLabel(item.unitType)}</span>}
                             </TableCell>
                             <TableCell>
-                              <div className="font-medium text-[var(--text-main)]">{item.customName || item.product?.name}</div>
+                              <div className="flex items-center gap-1.5">
+                                <div className="font-medium text-[var(--text-main)]">{item.customName || item.product?.name}</div>
+                                {item.product && <ProductDescriptionPopover product={item.product} />}
+                              </div>
                               {item.product?.internalCode && (
                                 <span className="text-[10px] text-[var(--text-sec)] font-mono">{item.product.internalCode}</span>
                               )}
