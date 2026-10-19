@@ -26,6 +26,7 @@ import { UNIVERSAL_PRODUCT_UNITS } from "../utils/universalProduct";
 import { CostAccessDialog } from "../components/quotes/CostAccessDialog";
 import type { CostAccessResponse } from "../services/quotes.service";
 import { useAuth } from "../context/AuthContext";
+import { ProductFormDialog } from "../components/products/ProductFormDialog";
 
 interface POSBrand {
   id: number;
@@ -251,6 +252,7 @@ export function NewQuote() {
   });
 
   const [savingQuote, setSavingQuote] = useState(false);
+  const [newProductModalOpen, setNewProductModalOpen] = useState(false);
 
   // Costos y márgenes: desbloqueados por defecto para Propietarios, Administradores y Supervisores;
   // para otros roles permanecen ocultos y se desbloquean con contraseña mediante CostAccessDialog.
@@ -579,6 +581,16 @@ export function NewQuote() {
       costPerUnit: baseCost,
     });
     setShowAddModal(true);
+  };
+
+  const handleProductCreated = (created: any) => {
+    const mapped = mapProduct(created);
+    setProducts((prev) => [mapped, ...prev.filter((p) => p.id !== mapped.id)]);
+    loadCategories();
+    loadBrands();
+    loadTags();
+    openAddProductModal(mapped);
+    toast.success(`Producto "${created.name}" creado y listo para cotizar`);
   };
 
   const openUniversalModal = (item?: CartItem) => {
@@ -968,14 +980,25 @@ export function NewQuote() {
       {/* LEFT PANEL - PRODUCTS */}
       <div className="flex-1 flex flex-col bg-[var(--card)] rounded-xl border border-[var(--border)] overflow-hidden shadow-sm">
         <div className="p-3 border-b border-[var(--border)] space-y-2.5 bg-[var(--bg)]/50">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" onClick={() => confirmExit(() => navigate('/quotes'))} className="w-8 h-8 p-0 rounded-full hover:bg-[var(--primary)] hover:text-white transition-colors text-[var(--text-sec)]">
-              <ArrowLeft size={16} />
-            </Button>
-            <div>
-              <h2 className="text-base font-black text-[var(--text-main)] uppercase tracking-tight leading-none mb-0.5">{isEditMode ? "Editar Cotización" : (cloneId ? "Clonando Cotización" : "Nueva Cotización")}</h2>
-              <p className="text-[11px] text-[var(--text-sec)]">Selecciona productos y calcula márgenes</p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <Button variant="ghost" onClick={() => confirmExit(() => navigate('/quotes'))} className="w-8 h-8 p-0 rounded-full hover:bg-[var(--primary)] hover:text-white transition-colors text-[var(--text-sec)] shrink-0">
+                <ArrowLeft size={16} />
+              </Button>
+              <div className="min-w-0">
+                <h2 className="text-base font-black text-[var(--text-main)] uppercase tracking-tight leading-none mb-0.5 truncate">{isEditMode ? "Editar Cotización" : (cloneId ? "Clonando Cotización" : "Nueva Cotización")}</h2>
+                <p className="text-[11px] text-[var(--text-sec)] truncate">Selecciona productos y calcula márgenes</p>
+              </div>
             </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setNewProductModalOpen(true)}
+              className="h-8 gap-1.5 text-xs font-semibold bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shadow-sm shrink-0"
+            >
+              <Plus size={14} />
+              Nuevo Producto
+            </Button>
           </div>
           <div className="relative">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -1442,9 +1465,19 @@ export function NewQuote() {
               )}
             </div>
           ) : (
-            <div className="h-full flex flex-col items-center justify-center text-[var(--text-sec)] space-y-4 opacity-50 py-12">
-              <Package size={48} />
+            <div className="h-full flex flex-col items-center justify-center text-[var(--text-sec)] space-y-4 opacity-75 py-12">
+              <Package size={48} className="opacity-40" />
               <p className="text-base font-bold">No se encontraron productos</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setNewProductModalOpen(true)}
+                className="gap-1.5 text-xs font-semibold border-[var(--primary)] text-[var(--primary)] hover:bg-[var(--primary)]/10"
+              >
+                <Plus size={14} />
+                Crear Producto
+              </Button>
             </div>
           )}
         </div>
@@ -2032,6 +2065,12 @@ export function NewQuote() {
       />
 
       <CustomerQuickCreate open={isQuickCreateOpen} onOpenChange={setIsQuickCreateOpen} onSuccess={(c) => setSelectedCustomer(c)} />
+
+      <ProductFormDialog
+        open={newProductModalOpen}
+        onOpenChange={setNewProductModalOpen}
+        onProductCreated={handleProductCreated}
+      />
 
       <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
     </div>
