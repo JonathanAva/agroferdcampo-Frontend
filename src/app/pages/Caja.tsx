@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import logo from "../../assets/logo.png";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Search, CheckCircle2, XCircle, Printer, RefreshCcw, Clock, User, FileText, DollarSign, Upload, X as XIcon } from "lucide-react";
+import { Search, CheckCircle2, XCircle, Printer, RefreshCcw, Clock, User, FileText, DollarSign, Upload, X as XIcon, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -21,6 +21,7 @@ import { apiRequest } from "../config/api";
 import { uploadsService } from "../services/uploads.service";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
+import { cn } from "../components/ui/utils";
 
 type PaymentMethod = "EFECTIVO" | "TARJETA" | "TRANSFERENCIA" | "CREDITO";
 
@@ -58,6 +59,11 @@ function numerosALetras(n: number): string {
   return `${_enteroALetras(intPart)} dólares${cents > 0 ? ` con ${cents}/100` : ""}`;
 }
 
+function cleanTicketNote(desc?: string | null): string {
+  if (!desc) return "";
+  return desc.replace(/\[STOCK_MODE:[^\]]+\]/g, "").trim();
+}
+
 export function Caja() {
   const { user } = useAuth();
   const [tickets, setTickets] = useState<PreSaleTicket[]>([]);
@@ -75,6 +81,18 @@ export function Caja() {
   const [sysConfig, setSysConfig] = useState<any>(null);
   const [transferReceiptUrl, setTransferReceiptUrl] = useState<string | null>(null);
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  const [confirmAllowNegative, setConfirmAllowNegative] = useState<boolean | null>(null);
+  const [showCajaZeroStockWarning, setShowCajaZeroStockWarning] = useState(false);
+
+  const zeroStockTicketItems = selectedTicket?.items.filter((item) => {
+    const prod = item.product as any;
+    if (!prod || prod.trackStock === false) return false;
+    const branchInv = prod.inventory?.find((inv: any) => inv.branchId === selectedTicket.branchId);
+    const currentStock = branchInv ? Number(branchInv.quantity) : 0;
+    return currentStock <= 0 || Number(item.quantity) > currentStock;
+  }) || [];
+
+  const ticketHasZeroStock = zeroStockTicketItems.length > 0;
 
   const isDirty =
     showConfirmModal &&
@@ -114,7 +132,7 @@ export function Caja() {
       t.ticketNumber.toLowerCase().includes(q) ||
       (t.customer?.name?.toLowerCase().includes(q) ?? false) ||
       (t.user?.fullName?.toLowerCase().includes(q) ?? false) ||
-      (t.description?.toLowerCase().includes(q) ?? false)
+      (cleanTicketNote(t.description).toLowerCase().includes(q) ?? false)
     );
   });
 
@@ -136,6 +154,17 @@ export function Caja() {
     setPaymentMethod((ticket.paymentMethod as PaymentMethod) || "EFECTIVO");
     setDueDate("");
     setTransferReceiptUrl(null);
+
+    const isNegative = ticket.description?.includes("[STOCK_MODE:NEGATIVE]");
+    const isZero = ticket.description?.includes("[STOCK_MODE:ZERO]");
+    if (isNegative) {
+      setConfirmAllowNegative(true);
+    } else if (isZero) {
+      setConfirmAllowNegative(false);
+    } else {
+      setConfirmAllowNegative(sysConfig?.allowNegativeStock ?? false);
+    }
+
     setShowConfirmModal(true);
   };
 
@@ -155,6 +184,7 @@ export function Caja() {
       const totalNum = Number(selectedTicket.totalAmount);
       const payload: ConfirmPreSaleDto = {
         paymentMethod,
+        allowNegativeStock: confirmAllowNegative !== null ? confirmAllowNegative : sysConfig?.allowNegativeStock,
         payments: [{
           paymentMethod,
           amount: totalNum,
@@ -259,7 +289,7 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
 <div class="row"><span>Teléfono:</span><span>${customerPhone}</span></div>
 <div class="row"><span>Actividad económica:</span><span>${customerActivity}</span></div>
 <div class="row"><span>No. de Venta:</span><span>${saleNumber}</span></div>
-<div class="row"><span>Descripción:</span><span>${ticket.description || ""}</span></div>
+<div class="row"><span>Descripción:</span><span>${cleanTicketNote(ticket.description)}</span></div>
 
 <hr>
 
@@ -364,6 +394,13 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
           {filtered.map((ticket) => {
             const totalNum = Number(ticket.totalAmount);
             const createdAt = new Date(ticket.createdAt);
+            const hasZeroStockInCard = ticket.items.some((item) => {
+              const prod = item.product as any;
+              if (!prod || prod.trackStock === false) return false;
+              const branchInv = prod.inventory?.find((inv: any) => inv.branchId === ticket.branchId);
+              const currentStock = branchInv ? Number(branchInv.quantity) : 0;
+              return currentStock <= 0 || Number(item.quantity) > currentStock;
+            });
             return (
               <div
                 key={ticket.id}
@@ -372,7 +409,14 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
                 {/* Número y estado */}
                 <div className="flex items-center justify-between">
                   <span className="font-black text-lg text-amber-600">{ticket.ticketNumber}</span>
-                  <Badge className="bg-amber-100 text-amber-700 border-amber-300 font-bold">Pendiente</Badge>
+                  <div className="flex items-center gap-1.5">
+                    {hasZeroStockInCard && (
+                      <Badge className="bg-rose-100 text-rose-700 border-rose-300 font-bold flex items-center gap-1">
+                        <AlertTriangle size={11} /> Sin stock
+                      </Badge>
+                    )}
+                    <Badge className="bg-amber-100 text-amber-700 border-amber-300 font-bold">Pendiente</Badge>
+                  </div>
                 </div>
 
                 {/* Info básica */}
@@ -398,9 +442,9 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
                       <span>Cliente: <span className="font-bold text-[var(--text-main)]">{ticket.customer.name}</span></span>
                     </div>
                   )}
-                  {ticket.description && (
+                  {cleanTicketNote(ticket.description) && (
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 text-xs text-amber-700 font-medium">
-                      {ticket.description}
+                      {cleanTicketNote(ticket.description)}
                     </div>
                   )}
                 </div>
@@ -451,7 +495,7 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
 
       {/* Modal: Confirmar Cobro */}
       <Dialog open={showConfirmModal} onOpenChange={(o) => o ? setShowConfirmModal(true) : confirmExit(() => setShowConfirmModal(false))}>
-        <DialogContent className="sm:max-w-md p-0">
+        <DialogContent className="sm:max-w-[560px] w-full p-0">
           <div className="p-5 border-b border-[var(--border)]">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 font-black text-emerald-700">
@@ -466,14 +510,42 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
 
           {selectedTicket && (
             <div className="p-5 space-y-4">
+              {/* Alerta de productos sin stock */}
+              {ticketHasZeroStock && (
+                <div className="bg-amber-500/10 border-2 border-amber-500/50 rounded-xl p-3 flex items-start gap-3">
+                  <AlertTriangle className="size-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="text-xs space-y-1">
+                    <p className="font-black text-amber-800 dark:text-amber-300">
+                      ⚠️ ADVERTENCIA: TICKET CON PRODUCTOS SIN STOCK DISPONIBLE
+                    </p>
+                    <p className="text-amber-700 dark:text-amber-400">
+                      Este ticket contiene <strong>{zeroStockTicketItems.length} producto(s)</strong> cuya cantidad supera la existencia en sucursal. Esta operación afectará el Kardex y quedará registrada en Auditoría.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Resumen */}
               <div className="bg-[var(--bg)] rounded-xl border border-[var(--border)] p-3 space-y-1 max-h-40 overflow-y-auto">
-                {selectedTicket.items.map((item) => (
-                  <div key={item.id} className="flex justify-between text-sm">
-                    <span>{item.product?.name} ×{Number(item.quantity)}</span>
-                    <span className="font-bold">${Number(item.totalPrice).toFixed(2)}</span>
-                  </div>
-                ))}
+                {selectedTicket.items.map((item) => {
+                  const prod = item.product as any;
+                  const branchInv = prod?.inventory?.find((inv: any) => inv.branchId === selectedTicket.branchId);
+                  const currentStock = branchInv ? Number(branchInv.quantity) : 0;
+                  const isOutOfStock = prod?.trackStock !== false && (currentStock <= 0 || Number(item.quantity) > currentStock);
+                  return (
+                    <div key={item.id} className="flex justify-between items-center text-sm">
+                      <div className="flex items-center gap-1.5 truncate pr-2">
+                        <span>{item.product?.name} ×{Number(item.quantity)}</span>
+                        {isOutOfStock && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold border border-amber-500/30">
+                            Sin stock ({currentStock})
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-bold shrink-0">${Number(item.totalPrice).toFixed(2)}</span>
+                    </div>
+                  );
+                })}
                 <div className="border-t border-[var(--border)] pt-2 flex justify-between font-black">
                   <span>Total</span>
                   <span>${Number(selectedTicket.totalAmount).toFixed(2)}</span>
@@ -496,10 +568,10 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
                     <p className="text-[var(--text-main)] font-medium">{selectedTicket.customer.name}</p>
                   </div>
                 )}
-                {selectedTicket.description && (
+                {cleanTicketNote(selectedTicket.description) && (
                   <div className="col-span-2">
                     <span className="font-bold">Nota:</span>
-                    <p className="text-amber-600 font-medium">{selectedTicket.description}</p>
+                    <p className="text-amber-600 font-medium">{cleanTicketNote(selectedTicket.description)}</p>
                   </div>
                 )}
               </div>
@@ -586,6 +658,41 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
                   />
                 </div>
               )}
+
+              {/* Opciones de Existencia en 0 vs Negativo */}
+              <div className="space-y-2 pt-2 border-t border-[var(--border)]">
+                <Label className="text-xs font-bold text-[var(--text-sec)] uppercase block">
+                  Existencia para productos sin stock disponible:
+                </Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmAllowNegative(false)}
+                    className={cn(
+                      "p-2.5 rounded-xl border text-left text-xs transition-all flex flex-col gap-0.5 cursor-pointer",
+                      (confirmAllowNegative === false || (confirmAllowNegative === null && !sysConfig?.allowNegativeStock))
+                        ? "border-emerald-600 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold ring-1 ring-emerald-600"
+                        : "border-[var(--border)] bg-[var(--bg)] text-[var(--text-sec)] hover:border-emerald-400"
+                    )}
+                  >
+                    <span className="font-bold">Dejar en 0</span>
+                    <span className="text-[10px] opacity-75">No bajará de 0</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmAllowNegative(true)}
+                    className={cn(
+                      "p-2.5 rounded-xl border text-left text-xs transition-all flex flex-col gap-0.5 cursor-pointer",
+                      (confirmAllowNegative === true || (confirmAllowNegative === null && sysConfig?.allowNegativeStock))
+                        ? "border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold ring-1 ring-amber-500"
+                        : "border-[var(--border)] bg-[var(--bg)] text-[var(--text-sec)] hover:border-amber-400"
+                    )}
+                  >
+                    <span className="font-bold text-amber-600 dark:text-amber-400">Permitir negativo</span>
+                    <span className="text-[10px] opacity-75">Reflejar faltante (-X)</span>
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -594,16 +701,117 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
               Cancelar
             </Button>
             <Button
-              onClick={handleConfirm}
+              onClick={() => {
+                if (paymentMethod === "TRANSFERENCIA" && !transferReceiptUrl) {
+                  toast.error("Debes subir el comprobante de transferencia");
+                  return;
+                }
+                if (ticketHasZeroStock) {
+                  setShowCajaZeroStockWarning(true);
+                } else {
+                  handleConfirm();
+                }
+              }}
               disabled={processing}
-              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black"
+              className={cn(
+                "flex-1 text-white font-black",
+                ticketHasZeroStock ? "bg-amber-600 hover:bg-amber-700" : "bg-emerald-600 hover:bg-emerald-700"
+              )}
             >
               {processing
                 ? <RefreshCcw size={16} className="animate-spin mr-2" />
+                : ticketHasZeroStock
+                ? <AlertTriangle size={16} className="mr-2" />
                 : <CheckCircle2 size={16} className="mr-2" />}
-              Confirmar Cobro
+              {ticketHasZeroStock ? "⚠️ Confirmar Cobro Sin Stock" : "Confirmar Cobro"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Advertencia Explícita en Caja antes de Cobrar Sin Stock */}
+      <Dialog
+        open={showCajaZeroStockWarning}
+        onOpenChange={(open) => setShowCajaZeroStockWarning(open)}
+      >
+        <DialogContent className="sm:max-w-[540px] w-full p-6 bg-[var(--card)] border border-amber-500/50 shadow-2xl">
+          <div className="flex flex-col items-center text-center space-y-4">
+            <div className="size-16 rounded-full bg-amber-500/15 text-amber-500 flex items-center justify-center animate-pulse">
+              <AlertTriangle size={36} />
+            </div>
+
+            <div className="space-y-1.5">
+              <DialogTitle className="text-xl font-black text-[var(--text-main)]">
+                ⚠️ Advertencia: Cobro de Ticket Sin Existencia
+              </DialogTitle>
+              <DialogDescription className="text-xs font-medium text-[var(--text-sec)]">
+                Atención: El ticket <span className="font-bold text-amber-600">{selectedTicket?.ticketNumber}</span> contiene productos que <strong>NO tienen existencia suficiente</strong> en esta sucursal. Esta no es una venta normal.
+              </DialogDescription>
+            </div>
+
+            <div className="w-full bg-[var(--bg)] border border-amber-500/30 rounded-xl p-3 text-left space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                Productos sin existencia en este ticket:
+              </p>
+              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                {zeroStockTicketItems.map((item) => {
+                  const prod = item.product as any;
+                  const branchInv = prod?.inventory?.find((inv: any) => inv.branchId === selectedTicket?.branchId);
+                  const currentStock = branchInv ? Number(branchInv.quantity) : 0;
+                  return (
+                    <div key={item.id} className="flex justify-between items-center text-xs p-2 rounded bg-[var(--card)] border border-[var(--border)]">
+                      <div>
+                        <p className="font-bold text-[var(--text-main)] leading-tight">{prod?.name || "Producto"}</p>
+                        <p className="text-[10px] text-[var(--text-sec)]">Código: {prod?.sku || item.productId}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-red-500 font-bold text-[11px]">Stock actual: {currentStock} {prod?.unit || "und"}</p>
+                        <p className="text-xs text-[var(--text-main)] font-black">
+                          Cobrando: {Number(item.quantity)} {prod?.unit || "und"}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="pt-2 border-t border-[var(--border)] text-xs flex justify-between items-center">
+                <span className="text-[var(--text-sec)] font-medium">Tratamiento de inventario:</span>
+                <span className="font-bold text-amber-600 dark:text-amber-400">
+                  {(confirmAllowNegative !== null ? confirmAllowNegative : sysConfig?.allowNegativeStock)
+                    ? "Permitirá saldo negativo (-X)"
+                    : "Permanecerá en 0"}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 font-medium text-left w-full">
+              ⚠️ Esta venta quedará registrada en el <strong>Kardex</strong> y en la <strong>Bitácora de Auditoría</strong> reflejando que se cobró sin existencia disponible, asociando a su usuario ({user?.name || user?.email}) y la sucursal.
+            </div>
+
+            <div className="flex items-center gap-3 w-full pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 h-11 font-bold"
+                onClick={() => setShowCajaZeroStockWarning(false)}
+              >
+                Volver y revisar
+              </Button>
+              <Button
+                type="button"
+                className="flex-1 h-11 font-black bg-amber-600 hover:bg-amber-700 text-white"
+                onClick={() => {
+                  setShowCajaZeroStockWarning(false);
+                  handleConfirm();
+                }}
+                disabled={processing}
+              >
+                {processing ? <RefreshCcw size={16} className="animate-spin mr-2" /> : null}
+                Entendido, Confirmar Cobro
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

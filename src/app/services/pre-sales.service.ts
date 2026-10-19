@@ -30,6 +30,7 @@ export interface ConfirmPreSaleDto {
   paymentMethod: 'EFECTIVO' | 'TARJETA' | 'TRANSFERENCIA' | 'CREDITO';
   payments?: ConfirmPaymentDto[];
   dueDate?: string;
+  allowNegativeStock?: boolean;
 }
 
 export interface PreSaleItem {

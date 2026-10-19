@@ -6,7 +6,7 @@ import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { apiRequest } from "../config/api";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, Save, ArrowLeft } from "lucide-react";
+import { Settings as SettingsIcon, Save, ArrowLeft, Package } from "lucide-react";
 import { useNavigate } from "react-router";
 
 export interface SystemConfigData {
@@ -25,6 +25,7 @@ export interface SystemConfigData {
   allowCreditSales: boolean;
   blockOnOverdueDays: number;
   blockOnOverLimit: boolean;
+  allowNegativeStock?: boolean;
   updatedAt: string;
 }
 
@@ -62,6 +63,7 @@ export function SystemConfig() {
       defaultCreditLimit: parseFloat(formData.get("defaultCreditLimit") as string),
       allowCreditSales: formData.get("allowCreditSales") === "true",
       blockOnOverdueDays: parseInt(formData.get("blockOnOverdueDays") as string, 10),
+      allowNegativeStock: formData.get("allowNegativeStock") === "true",
     };
 
     try {
@@ -199,6 +201,29 @@ export function SystemConfig() {
                 className="bg-[var(--bg)] border-[var(--border)] font-bold font-mono"
               />
               <p className="text-[10px] opacity-50 font-bold">Días después del vencimiento para bloquear créditos</p>
+            </div>
+
+            <div className="space-y-2 md:col-span-2 p-5 rounded-2xl border border-[var(--border)] bg-[var(--bg)]/50">
+              <Label className="text-[11px] uppercase font-black tracking-widest text-[var(--text-main)] flex items-center gap-2">
+                <Package size={16} className="text-[var(--primary)]" />
+                Comportamiento al vender sin existencia (Punto de Venta)
+              </Label>
+              <Select name="allowNegativeStock" defaultValue={config?.allowNegativeStock ? "true" : "false"}>
+                <SelectTrigger className="bg-[var(--card)] border-[var(--border)] font-bold text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-[var(--card)] border-[var(--border)]">
+                  <SelectItem value="false" className="font-bold">
+                    La existencia permanece en 0 después de la venta
+                  </SelectItem>
+                  <SelectItem value="true" className="font-bold text-emerald-600">
+                    Permitir existencias negativas (Recomendado para cuadre automático con compras)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-[var(--text-sec)]">
+                Define si al vender un producto sin stock disponible en el Punto de Venta el saldo de inventario baja a números negativos (ej. -2) para compensarse automáticamente al recibir compras del proveedor, o si se mantiene en 0.
+              </p>
             </div>
           </div>
 

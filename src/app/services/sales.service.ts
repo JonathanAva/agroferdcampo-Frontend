@@ -35,6 +35,8 @@ export interface CreateSaleDto {
   deliveryAddress?: string;
   scheduledAt?: string;
   cashRegisterId?: number;
+  allowBackorder?: boolean;
+  allowNegativeStock?: boolean;
 }
 
 export interface VoidSaleDto {
@@ -80,6 +82,7 @@ export interface SaleResponse {
     unitPrice: string | number;
     totalPrice: string | number;
     customName?: string | null;
+    soldWithoutStock?: boolean;
     product?: { id: number; name: string; internalCode?: string };
   }>;
   dteResponse?: DteResponse | null;

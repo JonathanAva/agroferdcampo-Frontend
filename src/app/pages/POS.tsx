@@ -156,6 +156,11 @@ function isNearExpiration(dateStr: string): boolean {
   return daysLeft <= 30;
 }
 
+function cleanTicketNote(desc?: string | null): string {
+  if (!desc) return "";
+  return desc.replace(/\[STOCK_MODE:[^\]]+\]/g, "").trim();
+}
+
 interface CartItem extends Product {
   selections: CartUnitSelection[];
 }
@@ -393,6 +398,16 @@ export function POS() {
   
   // Checkout Errors
   const [checkoutErrorAlert, setCheckoutErrorAlert] = useState<string | null>(null);
+
+  // Advertencia de producto sin existencia
+  const [zeroStockWarning, setZeroStockWarning] = useState<{
+    product: Product;
+    unitType?: string;
+    unitFactor?: number;
+    unitPrice?: number;
+  } | null>(null);
+  const [saleAllowNegativeStock, setSaleAllowNegativeStock] = useState<boolean | null>(null);
+  const [showCheckoutZeroStockWarning, setShowCheckoutZeroStockWarning] = useState(false);
 
   // New Checkout States
   const [processingOverlay, setProcessingOverlay] = useState(false);
@@ -995,11 +1010,14 @@ export function POS() {
     }
   };
 
-  const addToCart = (product: Product, unitType?: string, unitFactor?: number, unitPrice?: number) => {
-    if (product.stock <= 0) {
-      toast.error("Producto sin stock disponible");
-      return;
-    }
+  const addToCart = (
+    product: Product,
+    unitType?: string,
+    unitFactor?: number,
+    unitPrice?: number,
+    forceAllowZeroStock: boolean = false
+  ) => {
+    const isService = isServiceProduct(product);
     const resolvedUnit = unitType || product.unit;
     const resolvedFactor = unitFactor || 1;
     const resolvedPrice = unitPrice || product.price;
@@ -1009,8 +1027,15 @@ export function POS() {
       ? existingCartItem.selections.reduce((sum, s) => sum + s.quantity * s.unitFactor, 0)
       : 0;
 
-    if (currentlyUsedStock + resolvedFactor > product.stock) {
-      toast.error("No hay más stock disponible");
+    const isOutOfStock = !isService && (product.stock <= 0 || currentlyUsedStock + resolvedFactor > product.stock);
+
+    if (isOutOfStock && !forceAllowZeroStock) {
+      setZeroStockWarning({
+        product,
+        unitType: resolvedUnit,
+        unitFactor: resolvedFactor,
+        unitPrice: resolvedPrice,
+      });
       return;
     }
 
@@ -1117,9 +1142,8 @@ export function POS() {
       .filter((s) => s.id !== selectionId)
       .reduce((sum, s) => sum + s.quantity * s.unitFactor, 0);
 
-    if (otherUsedStock + newQty * targetSel.unitFactor > item.stock) {
-      toast.error("Excede el stock disponible");
-      return;
+    if (!isServiceProduct(item) && item.stock > 0 && otherUsedStock + newQty * targetSel.unitFactor > item.stock) {
+      toast.warning("Vendiendo unidades por encima de la existencia disponible", { id: `stock-warn-${productId}` });
     }
 
     setCart(cart.map((i) => {
@@ -1190,9 +1214,8 @@ export function POS() {
 
     const combinedQty = existingSel ? existingSel.quantity + targetSel.quantity : targetSel.quantity;
 
-    if (otherUsedStock + combinedQty * newFactor > item.stock) {
-      toast.error("No hay suficiente stock para cambiar a esta unidad");
-      return;
+    if (!isServiceProduct(item) && item.stock > 0 && otherUsedStock + combinedQty * newFactor > item.stock) {
+      toast.warning("La unidad seleccionada supera la existencia disponible", { id: `unit-stock-warn-${productId}` });
     }
 
     if (existingSel) {
@@ -1245,9 +1268,8 @@ export function POS() {
     if (!item) return;
 
     const usedStock = item.selections.reduce((sum, s) => sum + s.quantity * s.unitFactor, 0);
-    if (usedStock + 1 > item.stock) {
-      toast.error("No hay más stock disponible");
-      return;
+    if (!isServiceProduct(item) && item.stock > 0 && usedStock + 1 > item.stock) {
+      toast.warning("Unidades adicionales superan la existencia disponible", { id: `row-stock-warn-${productId}` });
     }
 
     setCart(cart.map((i) => {
@@ -1323,6 +1345,14 @@ export function POS() {
     iva = subtotal * vatRate;
   }
 
+  const zeroStockItems = cart.filter(
+    (item) => !isServiceProduct(item) && (
+      item.stock <= 0 ||
+      item.selections.reduce((sum, s) => sum + s.quantity * s.unitFactor, 0) > item.stock
+    )
+  );
+  const hasZeroStockItems = zeroStockItems.length > 0;
+
   const handleCheckoutClick = () => {
     if (cart.length === 0) return;
 
@@ -1369,6 +1399,13 @@ export function POS() {
 
     const paymentsUsed = payments;
 
+    const hasBackorderItem = cart.some(
+      (i) => !isServiceProduct(i) && (
+        i.stock <= 0 ||
+        i.selections.reduce((sum, s) => sum + s.quantity * s.unitFactor, 0) > i.stock
+      )
+    );
+
     try {
       const sale = await createSale({
         customerId: selectedCustomer?.id,
@@ -1377,6 +1414,8 @@ export function POS() {
         payments: payments,
         totalAmount: total,
         taxAmount: iva,
+        allowBackorder: hasBackorderItem,
+        allowNegativeStock: saleAllowNegativeStock !== null ? saleAllowNegativeStock : sysConfig?.allowNegativeStock,
         dueDate: payments.some(p => p.paymentMethod === "CREDITO") && checkoutDueDate ? checkoutDueDate : undefined,
         items: cart.flatMap((i) =>
           i.selections.map((s) => ({
@@ -1444,11 +1483,18 @@ export function POS() {
     if (cart.length === 0) return;
     setPreSaleLoading(true);
     try {
+      const stockTag = hasZeroStockItems
+        ? ((saleAllowNegativeStock !== null ? saleAllowNegativeStock : sysConfig?.allowNegativeStock)
+            ? '[STOCK_MODE:NEGATIVE]'
+            : '[STOCK_MODE:ZERO]')
+        : '';
+      const finalDescription = [preSaleDescription.trim(), stockTag].filter(Boolean).join(' ') || undefined;
+
       const ticket = await createPreSale({
         customerId: selectedCustomer?.id,
         totalAmount: total,
         taxAmount: iva,
-        description: preSaleDescription || undefined,
+        description: finalDescription,
         paymentMethod: selectedPayment === "MIXTO" ? undefined : (selectedPayment as any),
         items: cart.flatMap((i) =>
           i.selections.map((s) => ({
@@ -1546,7 +1592,7 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
 <div class="row"><span>Correo:</span><span>${customerEmail}</span></div>
 <div class="row"><span>Teléfono:</span><span>${customerPhone}</span></div>
 <div class="row"><span>Actividad económica:</span><span>${customerActivity}</span></div>
-<div class="row"><span>Descripción:</span><span>${ticket.description || ""}</span></div>
+<div class="row"><span>Descripción:</span><span>${cleanTicketNote(ticket.description)}</span></div>
 
 <hr>
 
@@ -2141,73 +2187,77 @@ ${paymentConditionHtml}
                 </div>
               )}
               {products
-                .filter((product) => product.stock > 0 || isServiceProduct(product))
                 .filter((product) => !showExpiringSoonOnly || (product.expirationDate && isNearExpiration(product.expirationDate)))
-                .map((product) => (
-                <div
-                  key={product.id}
-                  onClick={() => isServiceProduct(product) ? handleServiceClick(product) : (product.stock > 0 && addToCart(product))}
-                  className={cn(
-                    "group relative rounded-xl border overflow-hidden transition-all flex flex-col cursor-pointer",
-                    (product.stock > 0 || isServiceProduct(product))
-                      ? "bg-[var(--card)] border-[var(--border)] hover:border-[var(--primary)] hover:shadow-md"
-                      : "bg-[var(--bg)] border-[var(--border)] opacity-60 cursor-not-allowed"
-                  )}
-                >
-                  <div className="p-2.5 flex flex-col flex-1 items-center">
-                    <div className="w-full flex items-start justify-between mb-2">
-                      {product.category?.name !== 'Sin categoría' ? (
-                        <span className="text-[9px] font-bold uppercase text-[var(--text-sec)] bg-[var(--bg)] px-1.5 py-0.5 rounded border border-[var(--border)]">
-                          {product.category.name}
-                        </span>
-                      ) : (
-                        <span />
+                .map((product) => {
+                  const isOutOfStock = product.stock <= 0 && !isServiceProduct(product);
+                  return (
+                    <div
+                      key={product.id}
+                      onClick={() => isServiceProduct(product) ? handleServiceClick(product) : addToCart(product)}
+                      className={cn(
+                        "group relative rounded-xl border overflow-hidden transition-all flex flex-col cursor-pointer",
+                        isOutOfStock
+                          ? "bg-[var(--card)] border-amber-500/30 hover:border-amber-500 hover:shadow-md"
+                          : "bg-[var(--card)] border-[var(--border)] hover:border-[var(--primary)] hover:shadow-md"
                       )}
-                      <div className="flex items-center gap-1">
-                        <Popover onOpenChange={(open) => open && handleOpenCostSummary(product.id)}>
-                          <PopoverTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={(e) => e.stopPropagation()}
-                              className="size-5 rounded flex items-center justify-center text-[var(--text-sec)] hover:text-[var(--primary)] hover:bg-[var(--bg)] border border-[var(--border)]"
-                              title="Ver costo por lote"
+                    >
+                      <div className="p-2.5 flex flex-col flex-1 items-center">
+                        <div className="w-full flex items-start justify-between mb-2">
+                          {product.category?.name !== 'Sin categoría' ? (
+                            <span className="text-[9px] font-bold uppercase text-[var(--text-sec)] bg-[var(--bg)] px-1.5 py-0.5 rounded border border-[var(--border)]">
+                              {product.category.name}
+                            </span>
+                          ) : (
+                            <span />
+                          )}
+                          <div className="flex items-center gap-1">
+                            <Popover onOpenChange={(open) => open && handleOpenCostSummary(product.id)}>
+                              <PopoverTrigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="size-5 rounded flex items-center justify-center text-[var(--text-sec)] hover:text-[var(--primary)] hover:bg-[var(--bg)] border border-[var(--border)]"
+                                  title="Ver costo por lote"
+                                >
+                                  <Layers size={11} />
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent
+                                className="w-56 p-2"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <p className="text-[10px] font-bold uppercase text-[var(--text-sec)] mb-1.5">
+                                  Costo por lote
+                                </p>
+                                {loadingCostSummaryId === product.id ? (
+                                  <p className="text-xs opacity-60">Cargando...</p>
+                                ) : costSummaryByProduct[product.id]?.length ? (
+                                  <ul className="space-y-1">
+                                    {costSummaryByProduct[product.id].map((group, idx) => (
+                                      <li key={idx} className="flex items-center justify-between text-xs">
+                                        <span>{Number(group.quantity)} {product.unit}</span>
+                                        <span className="font-bold">
+                                          {group.unitCost != null ? `$${Number(group.unitCost).toFixed(2)}` : "—"}
+                                        </span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <p className="text-xs opacity-60">Sin lotes activos.</p>
+                                )}
+                              </PopoverContent>
+                            </Popover>
+                            <Badge
+                              variant={product.stock <= 0 ? "outline" : product.stock < 10 ? "destructive" : "secondary"}
+                              className={cn(
+                                "text-[9px] px-1.5 py-0",
+                                product.stock <= 0 && "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 font-bold"
+                              )}
                             >
-                              <Layers size={11} />
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent
-                            className="w-56 p-2"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <p className="text-[10px] font-bold uppercase text-[var(--text-sec)] mb-1.5">
-                              Costo por lote
-                            </p>
-                            {loadingCostSummaryId === product.id ? (
-                              <p className="text-xs opacity-60">Cargando...</p>
-                            ) : costSummaryByProduct[product.id]?.length ? (
-                              <ul className="space-y-1">
-                                {costSummaryByProduct[product.id].map((group, idx) => (
-                                  <li key={idx} className="flex items-center justify-between text-xs">
-                                    <span>{Number(group.quantity)} {product.unit}</span>
-                                    <span className="font-bold">
-                                      {group.unitCost != null ? `$${Number(group.unitCost).toFixed(2)}` : "—"}
-                                    </span>
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <p className="text-xs opacity-60">Sin lotes activos.</p>
-                            )}
-                          </PopoverContent>
-                        </Popover>
-                        <Badge
-                          variant={product.stock < 10 ? "destructive" : "secondary"}
-                          className="text-[9px] px-1.5 py-0"
-                        >
-                          {product.stock}
-                        </Badge>
-                      </div>
-                    </div>
+                              {product.stock <= 0 ? "Sin stock" : product.stock}
+                            </Badge>
+                          </div>
+                        </div>
 
                     <div className="w-24 h-24 rounded-lg overflow-hidden bg-[var(--bg)] border border-[var(--border)] mb-2 flex-shrink-0">
                       {product.imageUrl ? (
@@ -2309,7 +2359,8 @@ ${paymentConditionHtml}
                     </div>
                   </div>
                 </div>
-              ))}
+              );
+            })}
             </div>
           </div>
 
@@ -2426,7 +2477,14 @@ ${paymentConditionHtml}
                       <div>
                         <p className="font-bold text-xs leading-tight text-[var(--text-main)]">{item.name}</p>
                         {!item.isUniversal && (
-                          <p className="text-[9px] font-bold text-[var(--text-sec)]">Stock: {item.stock} {item.unit}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <p className="text-[9px] font-bold text-[var(--text-sec)]">Stock: {item.stock} {item.unit}</p>
+                            {item.stock <= 0 && (
+                              <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                Sin stock disponible
+                              </span>
+                            )}
+                          </div>
                         )}
                         {item.expirationDate && (
                           <p className={cn(
@@ -2481,7 +2539,6 @@ ${paymentConditionHtml}
                               value={sel.quantity}
                               onValueChange={(val) => val !== undefined && updateQuantity(item.id, sel.id, val)}
                               min={1}
-                              max={Math.floor(item.stock / sel.unitFactor)}
                               step={1}
                               className="w-10 h-7 text-xs font-bold text-center border-none p-0 rounded-none bg-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none focus-visible:ring-0"
                               hideControls={true}
@@ -3444,9 +3501,120 @@ ${paymentConditionHtml}
         </DialogContent>
       </Dialog>
 
+      {/* Modal Advertencia Producto Sin Existencia */}
+      <Dialog
+        open={!!zeroStockWarning}
+        onOpenChange={(open) => {
+          if (!open) setZeroStockWarning(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-[440px] p-6 bg-[var(--card)] border border-[var(--border)] text-[var(--text-main)] shadow-xl">
+          <div className="flex flex-col items-center text-center space-y-4">
+            <div className="w-16 h-16 bg-amber-500/15 text-amber-500 rounded-full flex items-center justify-center">
+              <AlertTriangle size={34} />
+            </div>
+            <div className="space-y-1">
+              <DialogTitle className="text-xl font-black text-[var(--text-main)]">
+                Producto sin existencia
+              </DialogTitle>
+              <DialogDescription className="text-sm font-medium text-[var(--text-sec)]">
+                Este producto no tiene existencia disponible. ¿Está seguro de que desea agregarlo a la venta?
+              </DialogDescription>
+            </div>
+
+            {zeroStockWarning && (
+              <div className="w-full bg-[var(--bg)] border border-[var(--border)] rounded-xl p-3 text-left space-y-1">
+                <p className="font-bold text-sm text-[var(--text-main)] line-clamp-2">
+                  {zeroStockWarning.product.name}
+                </p>
+                <div className="flex items-center justify-between text-xs text-[var(--text-sec)]">
+                  <span>Código: <strong className="text-[var(--text-main)]">{zeroStockWarning.product.internalCode}</strong></span>
+                  <span>Stock actual: <strong className="text-red-500 font-bold">{zeroStockWarning.product.stock} {zeroStockWarning.product.unit}</strong></span>
+                </div>
+              </div>
+            )}
+
+            {/* Opciones de Existencia en 0 vs Negativo */}
+            <div className="w-full text-left space-y-2 pt-1">
+              <Label className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider block">
+                ¿Desea dejar la existencia en 0 o permitir existencia negativa?
+              </Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSaleAllowNegativeStock(false)}
+                  className={cn(
+                    "p-3 rounded-xl border text-left text-xs transition-all flex flex-col gap-1 cursor-pointer",
+                    (saleAllowNegativeStock === false || (saleAllowNegativeStock === null && !sysConfig?.allowNegativeStock))
+                      ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--text-main)] font-bold shadow-sm ring-1 ring-[var(--primary)]"
+                      : "border-[var(--border)] bg-[var(--bg)] text-[var(--text-sec)] hover:border-[var(--primary)]/40"
+                  )}
+                >
+                  <span className="font-bold flex items-center gap-1.5 text-xs text-[var(--text-main)]">
+                    <span className={cn("size-2 rounded-full", (saleAllowNegativeStock === false || (saleAllowNegativeStock === null && !sysConfig?.allowNegativeStock)) ? "bg-[var(--primary)]" : "bg-zinc-400")} />
+                    Dejar en 0
+                  </span>
+                  <span className="text-[10px] text-[var(--text-sec)] font-normal">
+                    La existencia no bajará de 0 tras vender.
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSaleAllowNegativeStock(true)}
+                  className={cn(
+                    "p-3 rounded-xl border text-left text-xs transition-all flex flex-col gap-1 cursor-pointer",
+                    (saleAllowNegativeStock === true || (saleAllowNegativeStock === null && sysConfig?.allowNegativeStock))
+                      ? "border-amber-500 bg-amber-500/10 text-[var(--text-main)] font-bold shadow-sm ring-1 ring-amber-500"
+                      : "border-[var(--border)] bg-[var(--bg)] text-[var(--text-sec)] hover:border-amber-400"
+                  )}
+                >
+                  <span className="font-bold flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                    <span className={cn("size-2 rounded-full", (saleAllowNegativeStock === true || (saleAllowNegativeStock === null && sysConfig?.allowNegativeStock)) ? "bg-amber-500" : "bg-zinc-400")} />
+                    Permitir negativo
+                  </span>
+                  <span className="text-[10px] text-[var(--text-sec)] font-normal">
+                    Refleja saldo negativo (ej. -1) para reponer.
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 w-full pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 h-11 font-bold"
+                onClick={() => setZeroStockWarning(null)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                className="flex-1 h-11 font-black bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary)]/90"
+                onClick={() => {
+                  if (zeroStockWarning) {
+                    addToCart(
+                      zeroStockWarning.product,
+                      zeroStockWarning.unitType,
+                      zeroStockWarning.unitFactor,
+                      zeroStockWarning.unitPrice,
+                      true
+                    );
+                    setZeroStockWarning(null);
+                  }
+                }}
+              >
+                Agregar a la venta
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Modal de Cobro Mixto */}
       <Dialog open={showMixedPaymentModal} onOpenChange={(o) => o ? setShowMixedPaymentModal(true) : confirmExit(() => setShowMixedPaymentModal(false))}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[620px] w-full max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black flex items-center gap-2">
               <DollarSign className="text-[var(--primary)]" size={28} />
@@ -3458,6 +3626,49 @@ ${paymentConditionHtml}
           </DialogHeader>
           
           <div className="py-4 space-y-4">
+            {hasZeroStockItems && (
+              <div className="p-3.5 rounded-xl border border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-300 space-y-2.5 animate-in fade-in overflow-hidden w-full">
+                <div className="flex items-start gap-2.5">
+                  <div className="size-8 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                    <AlertTriangle size={18} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="font-black text-xs uppercase tracking-wide text-amber-900 dark:text-amber-200">
+                      ⚠️ ADVERTENCIA: VENTA SIN EXISTENCIA EN INVENTARIO
+                    </h4>
+                    <p className="text-[11px] font-medium text-amber-800 dark:text-amber-300 mt-0.5 leading-snug">
+                      Esta venta contiene productos que <strong>no tienen stock disponible</strong>. Esta no es una venta normal y quedará registrada en Kardex y en la bitácora de auditoría.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-[var(--card)] rounded-lg p-2.5 border border-amber-500/30 space-y-1.5 w-full overflow-hidden">
+                  <span className="text-[10px] font-bold uppercase text-[var(--text-sec)] block">
+                    Productos sin existencia en este cobro:
+                  </span>
+                  {zeroStockItems.map((item) => {
+                    const usedStock = item.selections.reduce((sum, s) => sum + s.quantity * s.unitFactor, 0);
+                    return (
+                      <div key={item.id} className="flex justify-between items-center text-xs gap-2 py-0.5">
+                        <span className="font-bold text-[var(--text-main)] truncate min-w-0 flex-1">{item.name}</span>
+                        <div className="text-right shrink-0 whitespace-nowrap">
+                          <span className="text-red-500 font-bold">Stock: {item.stock}</span>
+                          <span className="text-[var(--text-sec)]"> → Vendiendo: <strong>{usedStock} {item.unit}</strong></span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-1 border-t border-amber-500/20">
+                  <span className="font-semibold text-amber-900 dark:text-amber-200">Impacto en inventario:</span>
+                  <Badge variant="outline" className="border-amber-500/40 bg-amber-500/20 text-amber-800 dark:text-amber-200 font-bold text-[10px] whitespace-normal text-right">
+                    {saleAllowNegativeStock ? "Permitirá existencia negativa (saldo pendiente)" : "La existencia permanecerá en 0"}
+                  </Badge>
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-between items-center p-4 bg-[var(--card)] border border-[var(--border)] rounded-xl">
               <span className="text-lg font-bold text-[var(--text-sec)]">Total a Cobrar</span>
               <span className="text-3xl font-black text-[var(--text-main)]">${total.toFixed(4)}</span>
@@ -3620,15 +3831,101 @@ ${paymentConditionHtml}
               </Button>
               <Button
                 onClick={() => {
-                  if (!isCheckoutSubmittingGlobal) processSale();
+                  if (!isCheckoutSubmittingGlobal) {
+                    if (hasZeroStockItems) {
+                      setShowCheckoutZeroStockWarning(true);
+                    } else {
+                      processSale();
+                    }
+                  }
                 }}
                 disabled={loading || Math.abs(payments.reduce((sum, p) => sum + p.amount, 0) - total) > 0.01}
-                className="flex-1 sm:flex-none bg-[var(--primary)] text-white"
+                className={cn(
+                  "flex-1 sm:flex-none text-white font-bold",
+                  hasZeroStockItems ? "bg-amber-600 hover:bg-amber-700" : "bg-[var(--primary)]"
+                )}
               >
-                {loading ? <RefreshCcw className="animate-spin size-4 mr-2" /> : "Confirmar Venta"}
+                {loading ? <RefreshCcw className="animate-spin size-4 mr-2" /> : (hasZeroStockItems ? "⚠️ Confirmar Venta Sin Stock" : "Confirmar Venta")}
               </Button>
             </div>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Advertencia Explícita antes de Cobrar Sin Stock */}
+      <Dialog
+        open={showCheckoutZeroStockWarning}
+        onOpenChange={(open) => setShowCheckoutZeroStockWarning(open)}
+      >
+        <DialogContent className="sm:max-w-[540px] w-full p-6 bg-[var(--card)] border border-amber-500/50 shadow-2xl">
+          <div className="flex flex-col items-center text-center space-y-4">
+            <div className="size-16 rounded-full bg-amber-500/15 text-amber-500 flex items-center justify-center animate-pulse">
+              <AlertTriangle size={36} />
+            </div>
+
+            <div className="space-y-1.5">
+              <DialogTitle className="text-xl font-black text-[var(--text-main)]">
+                ⚠️ Advertencia: Cobro Sin Existencia
+              </DialogTitle>
+              <DialogDescription className="text-xs font-medium text-[var(--text-sec)]">
+                Atención: Está a punto de cobrar productos que <strong>NO tienen existencia disponible</strong> en la sucursal. Esta no es una venta normal.
+              </DialogDescription>
+            </div>
+
+            <div className="w-full bg-[var(--bg)] border border-amber-500/30 rounded-xl p-3 text-left space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                Productos afectados en este cobro:
+              </p>
+              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1 custom-scrollbar">
+                {zeroStockItems.map((item) => (
+                  <div key={item.id} className="flex justify-between items-center text-xs p-2 rounded bg-[var(--card)] border border-[var(--border)]">
+                    <div>
+                      <p className="font-bold text-[var(--text-main)] leading-tight">{item.name}</p>
+                      <p className="text-[10px] text-[var(--text-sec)]">Código: {item.internalCode}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-red-500 font-bold text-[11px]">Stock actual: {item.stock} {item.unit}</p>
+                      <p className="text-xs text-[var(--text-main)] font-black">
+                        Vendiendo: {item.selections.reduce((sum, s) => sum + s.quantity * s.unitFactor, 0)} {item.unit}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-2 border-t border-[var(--border)] text-xs flex justify-between items-center">
+                <span className="text-[var(--text-sec)] font-medium">Registro de inventario:</span>
+                <span className="font-bold text-amber-600 dark:text-amber-400">
+                  {saleAllowNegativeStock ? "Permitirá saldo negativo (-X)" : "Permanecerá en 0"}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 font-medium text-left w-full">
+              ⚠️ Esta operación quedará asentada permanentemente en el <strong>Kardex</strong> y en la <strong>Bitácora de Auditoría</strong> con la hora, sucursal y su usuario.
+            </div>
+
+            <div className="flex items-center gap-3 w-full pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 h-11 font-bold"
+                onClick={() => setShowCheckoutZeroStockWarning(false)}
+              >
+                Volver y revisar
+              </Button>
+              <Button
+                type="button"
+                className="flex-1 h-11 font-black bg-amber-600 hover:bg-amber-700 text-white"
+                onClick={() => {
+                  setShowCheckoutZeroStockWarning(false);
+                  processSale();
+                }}
+              >
+                Entendido, Procesar Cobro
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
       {/* Modal: Confirmar Pre-Venta (Ticket) */}
@@ -3673,6 +3970,42 @@ ${paymentConditionHtml}
                 className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] p-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
             </div>
+
+            {hasZeroStockItems && (
+              <div className="space-y-2 pt-2 border-t border-[var(--border)]">
+                <label className="text-xs font-bold text-[var(--text-sec)] uppercase block">
+                  Existencia para productos sin stock disponible:
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSaleAllowNegativeStock(false)}
+                    className={cn(
+                      "p-2.5 rounded-xl border text-left text-xs transition-all flex flex-col gap-0.5 cursor-pointer",
+                      (saleAllowNegativeStock === false || (saleAllowNegativeStock === null && !sysConfig?.allowNegativeStock))
+                        ? "border-emerald-600 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold ring-1 ring-emerald-600"
+                        : "border-[var(--border)] bg-[var(--bg)] text-[var(--text-sec)] hover:border-emerald-400"
+                    )}
+                  >
+                    <span className="font-bold">Dejar en 0</span>
+                    <span className="text-[10px] opacity-75">No bajará de 0</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSaleAllowNegativeStock(true)}
+                    className={cn(
+                      "p-2.5 rounded-xl border text-left text-xs transition-all flex flex-col gap-0.5 cursor-pointer",
+                      (saleAllowNegativeStock === true || (saleAllowNegativeStock === null && sysConfig?.allowNegativeStock))
+                        ? "border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold ring-1 ring-amber-500"
+                        : "border-[var(--border)] bg-[var(--bg)] text-[var(--text-sec)] hover:border-amber-400"
+                    )}
+                  >
+                    <span className="font-bold text-amber-600 dark:text-amber-400">Permitir negativo</span>
+                    <span className="text-[10px] opacity-75">Reflejar faltante (-X)</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter className="p-5 border-t border-[var(--border)] flex gap-2">
             <Button variant="ghost" onClick={() => confirmExit(() => setShowPreSaleModal(false))} className="flex-1">

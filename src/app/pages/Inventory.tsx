@@ -544,14 +544,18 @@ function InventoryList() {
   const getProductStatus = (item: InventoryItem) => {
     const qty = Number(item.quantity);
     const min = Number(item.minStock);
-    if (qty <= 0) return "critical";
+    if (qty < 0) return "oversold";
+    if (qty === 0) return "critical";
     if (qty <= min) return "low";
     return "active";
   };
 
   const filteredInventory = inventory.filter((item) => {
     const status = getProductStatus(item);
-    const matchesStatus = filterStatus === "all" || status === filterStatus;
+    const matchesStatus =
+      filterStatus === "all" ||
+      status === filterStatus ||
+      (filterStatus === "critical" && status === "oversold");
     const matchesBranch = filterBranch === "all" || String(item.branchId) === filterBranch;
     const matchesCategory =
       !filterCategories ||
@@ -572,7 +576,7 @@ function InventoryList() {
     (i) => getProductStatus(i) === "low",
   ).length;
   const criticalStockCount = inventory.filter(
-    (i) => getProductStatus(i) === "critical",
+    (i) => getProductStatus(i) === "critical" || getProductStatus(i) === "oversold",
   ).length;
   const totalValue = inventory.reduce(
     (sum, i) => sum + Number(i.quantity) * getPublicPrice(i.product),
@@ -580,7 +584,22 @@ function InventoryList() {
   );
 
   const getStatusBadge = (item: InventoryItem) => {
+    const qty = Number(item.quantity);
     const status = getProductStatus(item);
+
+    if (status === "oversold") {
+      return (
+        <Badge
+          variant="destructive"
+          className="px-2 font-bold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30"
+          title="Stock negativo: producto vendido sin existencia disponible. Pendiente de ingreso por compra."
+        >
+          <div className="size-1.5 rounded-full bg-current mr-1.5 animate-pulse" />
+          Sobrevendido ({qty})
+        </Badge>
+      );
+    }
+
     let variant: "success" | "warning" | "destructive" = "success";
     let text = "En Stock";
 
@@ -589,7 +608,7 @@ function InventoryList() {
       text = "Stock Bajo";
     } else if (status === "critical") {
       variant = "destructive";
-      text = "Crítico";
+      text = "Crítico (0)";
     }
 
     return (
@@ -885,13 +904,20 @@ function InventoryList() {
                         className="text-lg font-black"
                         style={{
                           color:
-                            Number(item.quantity) <= Number(item.minStock)
+                            Number(item.quantity) < 0
+                              ? "#d97706"
+                              : Number(item.quantity) <= Number(item.minStock)
                               ? "#ef4444"
                               : "var(--primary)",
                         }}
                       >
                         {Number(item.quantity)} {item.product.unit?.replace('_', ' ')}
                       </span>
+                      {Number(item.quantity) < 0 && (
+                        <span className="text-[9px] uppercase font-bold text-amber-600 dark:text-amber-400">
+                          Pendiente reposición
+                        </span>
+                      )}
                       <span className="text-[9px] uppercase font-black opacity-30 text-[var(--text-sec)]">
                         MÍN: {Number(item.minStock)} {item.product.unit?.replace('_', ' ')}
                       </span>

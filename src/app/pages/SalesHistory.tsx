@@ -2037,9 +2037,20 @@ export function SalesHistory() {
                                   {item.quantity}
                                 </TableCell>
                                 <TableCell>
-                                  <p className="font-bold text-[var(--text-main)] uppercase">
-                                    {item.product?.name}
-                                  </p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-bold text-[var(--text-main)] uppercase">
+                                      {item.product?.name}
+                                    </p>
+                                    {(item as any).soldWithoutStock && (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[9px] px-1.5 py-0 bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 font-bold"
+                                        title="Esta línea fue vendida sin existencia previa disponible"
+                                      >
+                                        Sin stock previo
+                                      </Badge>
+                                    )}
+                                  </div>
                                   <p className="text-[10px] text-[var(--text-sec)] uppercase">
                                     Cód: {item.product?.id}
                                   </p>
