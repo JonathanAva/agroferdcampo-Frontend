@@ -12,6 +12,7 @@ import { purchasesService, PurchaseResponse, CreatePurchaseDto, UpdatePurchaseDt
 import { searchProducts } from '../services/sales.service';
 import { uploadsService } from '../services/uploads.service';
 import { SupplierInvoiceViewer } from '../components/purchases/SupplierInvoiceViewer';
+import { ProductFormDialog } from '../components/products/ProductFormDialog';
 import { toast } from 'sonner';
 import { Button } from '../components/ui/button';
 import { cn } from '../components/ui/utils';
@@ -211,6 +212,7 @@ export function Purchases() {
   const [productSearch, setProductSearch] = useState("");
   const [productResults, setProductResults] = useState<any[]>([]);
   const [savingPurchase, setSavingPurchase] = useState(false);
+  const [newProductModalOpen, setNewProductModalOpen] = useState(false);
 
   // Recepción de Mercadería
   const [receiveModalOpen, setReceiveModalOpen] = useState(false);
@@ -1446,7 +1448,19 @@ export function Purchases() {
             </div>
 
             <Card className="p-4 border-[var(--border)]">
-              <Label className="mb-2 block">Buscar y Agregar Producto</Label>
+              <div className="flex items-center justify-between mb-2">
+                <Label className="block font-bold">Buscar y Agregar Producto</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setNewProductModalOpen(true)}
+                  className="h-8 gap-1.5 text-xs font-bold border-[var(--primary)] text-[var(--primary)] hover:bg-[var(--primary)]/10"
+                >
+                  <Plus size={14} />
+                  Nuevo Producto
+                </Button>
+              </div>
               <div className="relative">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input 
@@ -2108,6 +2122,23 @@ export function Purchases() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ProductFormDialog
+        open={newProductModalOpen}
+        onOpenChange={setNewProductModalOpen}
+        defaultSupplierId={newPurchase.supplierId ? Number(newPurchase.supplierId) : undefined}
+        onProductCreated={(created) => {
+          addProductToNewPurchase({
+            id: created.id,
+            name: created.name,
+            price: created.costPrice != null ? Number(created.costPrice) : 0,
+            unit: created.unit,
+            units: created.units || [],
+            stock: 0,
+          });
+          toast.success(`Producto "${created.name}" creado y agregado a la compra`);
+        }}
+      />
 
       <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
         </>
