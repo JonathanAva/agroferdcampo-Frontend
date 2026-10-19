@@ -22,6 +22,7 @@ import { uploadsService } from "../services/uploads.service";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
 import { cn } from "../components/ui/utils";
+import { PaymentConfirmationDialog, PaymentConfirmationDetails } from "../components/ui/PaymentConfirmationDialog";
 
 type PaymentMethod = "EFECTIVO" | "TARJETA" | "TRANSFERENCIA" | "CREDITO";
 
@@ -83,6 +84,7 @@ export function Caja() {
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
   const [confirmAllowNegative, setConfirmAllowNegative] = useState<boolean | null>(null);
   const [showCajaZeroStockWarning, setShowCajaZeroStockWarning] = useState(false);
+  const [confirmPaymentProps, setConfirmPaymentProps] = useState<Omit<PaymentConfirmationDetails, "isOpen" | "onOpenChange"> | null>(null);
 
   const zeroStockTicketItems = selectedTicket?.items.filter((item) => {
     const prod = item.product as any;
@@ -173,12 +175,8 @@ export function Caja() {
     setShowCancelModal(true);
   };
 
-  const handleConfirm = async () => {
+  const executeConfirm = async () => {
     if (!selectedTicket) return;
-    if (paymentMethod === "TRANSFERENCIA" && !transferReceiptUrl) {
-      toast.error("Debes subir el comprobante de transferencia");
-      return;
-    }
     setProcessing(true);
     try {
       const totalNum = Number(selectedTicket.totalAmount);
@@ -202,6 +200,35 @@ export function Caja() {
     } finally {
       setProcessing(false);
     }
+  };
+
+  const handleConfirm = () => {
+    if (!selectedTicket) return;
+    if (paymentMethod === "TRANSFERENCIA" && !transferReceiptUrl) {
+      toast.error("Debes subir el comprobante de transferencia");
+      return;
+    }
+
+    const totalNum = Number(selectedTicket.totalAmount);
+    const customerName = selectedTicket.customer?.name || "Cliente Ocasional / Consumidor Final";
+    const docRef = selectedTicket.ticketNumber ? `Ticket #${selectedTicket.ticketNumber}` : `Preventa #${selectedTicket.id}`;
+    const cashAccount = user?.branch ? `Caja Sucursal (${user.branch})` : "Caja Principal";
+
+    setConfirmPaymentProps({
+      operationType: paymentMethod === 'CREDITO' ? 'Venta al Crédito' : 'Cobro de Ticket / Venta',
+      amount: totalNum,
+      paymentMethod: METHOD_LABEL[paymentMethod] || paymentMethod,
+      relatedPerson: customerName,
+      personRole: "Cliente",
+      documentNumber: docRef,
+      cashRegisterOrAccount: cashAccount,
+      confirmLabel: "Confirmar Cobro",
+      onConfirm: async () => {
+        setConfirmPaymentProps(null);
+        await executeConfirm();
+      },
+      onCancel: () => setConfirmPaymentProps(null),
+    });
   };
 
   const handleCancel = async () => {
@@ -869,6 +896,14 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
       </Dialog>
 
       <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
+
+      {confirmPaymentProps && (
+        <PaymentConfirmationDialog
+          isOpen={!!confirmPaymentProps}
+          onOpenChange={(open) => !open && setConfirmPaymentProps(null)}
+          {...confirmPaymentProps}
+        />
+      )}
     </div>
   );
 }

@@ -29,6 +29,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { UnsavedChangesDialog } from '../components/ui/unsaved-changes-dialog';
+import { PaymentConfirmationDialog, PaymentConfirmationDetails } from '../components/ui/PaymentConfirmationDialog';
 
 const financeFilters: FilterConfig[] = [
   { id: 'type', label: 'Tipo', type: 'category', options: [
@@ -137,6 +138,7 @@ export function Finance() {
     (showSetupModal && (!!setupForm.maxBalance || !!setupForm.minBalance)) ||
     (showReplenishModal && (Number(replenishForm.amount) > 0 || !!replenishForm.reason));
   const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
+  const [confirmPaymentProps, setConfirmPaymentProps] = useState<Omit<PaymentConfirmationDetails, 'isOpen' | 'onOpenChange'> | null>(null);
 
   // --- SHIFTS HISTORY STATE ---
   const [shiftsHistory, setShiftsHistory] = useState<any[]>([]);
@@ -235,14 +237,7 @@ export function Finance() {
     }
   };
 
-  const handleCreateGeneralEntry = async () => {
-    if (!newGeneralEntry.amount || Number(newGeneralEntry.amount) <= 0) {
-      toast.error('Monto inválido'); return;
-    }
-    if (newGeneralEntry.type === 'EGRESO' && !newGeneralEntry.description.trim()) {
-      toast.error('La descripción es requerida para los egresos'); return;
-    }
-
+  const executeCreateGeneralEntry = async () => {
     try {
       await generalCashService.create({
         type: newGeneralEntry.type,
@@ -260,6 +255,45 @@ export function Finance() {
     } catch (error: any) {
       toast.error(error.message || 'Error al registrar movimiento');
     }
+  };
+
+  const handleCreateGeneralEntry = () => {
+    if (!newGeneralEntry.amount || Number(newGeneralEntry.amount) <= 0) {
+      toast.error('Monto inválido'); return;
+    }
+    if (newGeneralEntry.type === 'EGRESO' && !newGeneralEntry.description.trim()) {
+      toast.error('La descripción es requerida para los egresos'); return;
+    }
+
+    const linkedPurchase = supplierPurchases.find(p => String(p.id) === String(newGeneralEntry.purchaseId));
+    const relatedPerson = linkedPurchase?.supplier?.name || user?.name || "Administración";
+    const personRole = linkedPurchase?.supplier?.name ? "Proveedor" : "Responsable";
+    const opType = newGeneralEntry.type === 'INGRESO'
+      ? 'Ingreso a Caja'
+      : (newGeneralEntry.category === 'PAGO_PROVEEDOR' ? 'Pago a Proveedor' : 'Egreso de Caja');
+    const docRef = newGeneralEntry.reference
+      ? `Ref: ${newGeneralEntry.reference}`
+      : (newGeneralEntry.purchaseId ? `Compra #${newGeneralEntry.purchaseId}` : (newGeneralEntry.description || 'Movimiento de Caja'));
+    const cashAccount = activeTab === 'general'
+      ? 'Caja General'
+      : (cashRegisters.find(r => `register_${r.id}` === activeTab)?.name || `Caja Mostrador (#${activeTab.replace('register_', '')})`);
+
+    setConfirmPaymentProps({
+      operationType: opType,
+      amount: Number(newGeneralEntry.amount),
+      paymentMethod: "Efectivo",
+      relatedPerson,
+      personRole,
+      documentNumber: docRef,
+      cashRegisterOrAccount: cashAccount,
+      notes: newGeneralEntry.description || undefined,
+      confirmLabel: "Confirmar Movimiento",
+      onConfirm: async () => {
+        setConfirmPaymentProps(null);
+        await executeCreateGeneralEntry();
+      },
+      onCancel: () => setConfirmPaymentProps(null),
+    });
   };
 
   // --- PETTY CASH LOGIC ---
@@ -454,13 +488,7 @@ export function Finance() {
     }
   };
 
-  const handleRegisterExpense = async () => {
-    if (!newExpense.amount || Number(newExpense.amount) <= 0) {
-      toast.error('Monto inválido'); return;
-    }
-    if (!newExpense.description.trim()) {
-      toast.error('La descripción es requerida'); return;
-    }
+  const executeRegisterExpense = async () => {
     try {
       await pettyCashService.registerExpense({
         amount: Number(newExpense.amount),
@@ -474,6 +502,32 @@ export function Finance() {
     } catch (error: any) {
       toast.error(error.message || 'Error al registrar gasto');
     }
+  };
+
+  const handleRegisterExpense = () => {
+    if (!newExpense.amount || Number(newExpense.amount) <= 0) {
+      toast.error('Monto inválido'); return;
+    }
+    if (!newExpense.description.trim()) {
+      toast.error('La descripción es requerida'); return;
+    }
+
+    setConfirmPaymentProps({
+      operationType: "Egreso / Gasto de Caja Chica",
+      amount: Number(newExpense.amount),
+      paymentMethod: "Efectivo (Caja Chica)",
+      relatedPerson: user?.name || "Responsable",
+      personRole: "Responsable",
+      documentNumber: newExpense.receiptRef ? `Comprobante #${newExpense.receiptRef}` : (newExpense.description || 'Gasto Caja Chica'),
+      cashRegisterOrAccount: "Caja Chica",
+      notes: newExpense.description || undefined,
+      confirmLabel: "Confirmar Gasto",
+      onConfirm: async () => {
+        setConfirmPaymentProps(null);
+        await executeRegisterExpense();
+      },
+      onCancel: () => setConfirmPaymentProps(null),
+    });
   };
 
   const handleRequestReplenish = async () => {
@@ -1341,6 +1395,14 @@ export function Finance() {
       />
 
       <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
+
+      {confirmPaymentProps && (
+        <PaymentConfirmationDialog
+          isOpen={!!confirmPaymentProps}
+          onOpenChange={(open) => !open && setConfirmPaymentProps(null)}
+          {...confirmPaymentProps}
+        />
+      )}
     </div>
   );
 }

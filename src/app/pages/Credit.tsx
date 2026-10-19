@@ -26,6 +26,7 @@ import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
 import { cn } from '../components/ui/utils';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { UnsavedChangesDialog } from '../components/ui/unsaved-changes-dialog';
+import { PaymentConfirmationDialog, PaymentConfirmationDetails } from '../components/ui/PaymentConfirmationDialog';
 
 const creditFilters: FilterConfig[] = [
   { id: 'search', label: 'Buscar cliente...', type: 'text', placeholder: 'Nombre del cliente...' },
@@ -112,6 +113,7 @@ export function Credit() {
   const [savingPayment, setSavingPayment] = useState(false);
   const [cashRegisters, setCashRegisters] = useState<CashRegister[]>([]);
   const [selectedCashRegisterId, setSelectedCashRegisterId] = useState<number | null>(null);
+  const [confirmPaymentProps, setConfirmPaymentProps] = useState<Omit<PaymentConfirmationDetails, 'isOpen' | 'onOpenChange'> | null>(null);
 
   // Crear Cuenta por Cobrar Manual
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -415,20 +417,9 @@ export function Credit() {
     }
   };
 
-  const handlePaymentSubmit = async () => {
+  const executePaymentSubmit = async () => {
     if (!selectedCreditForPayment) return;
-    if (isAbonoSubmittingGlobal) return;
-    
     const amount = Number(paymentForm.amount);
-    const maxAmount = Number(selectedCreditForPayment.remainingAmount) || 0;
-    if (amount <= 0 || amount > maxAmount) {
-      toast.error(`El monto debe ser mayor a 0 y no puede exceder $${maxAmount.toFixed(4)}`);
-      return;
-    }
-    if (!selectedCashRegisterId) {
-      toast.error('Selecciona la caja a la que se registrará el ingreso');
-      return;
-    }
 
     // Bloquear el botón a nivel DOM ANTES de cualquier código asíncrono
     isAbonoSubmittingGlobal = true;
@@ -511,6 +502,47 @@ export function Credit() {
       isSubmittingRef.current = false;
       setSavingPayment(false);
     }
+  };
+
+  const handlePaymentSubmit = () => {
+    if (!selectedCreditForPayment) return;
+    if (isAbonoSubmittingGlobal) return;
+    
+    const amount = Number(paymentForm.amount);
+    const maxAmount = Number(selectedCreditForPayment.remainingAmount) || 0;
+    if (amount <= 0 || amount > maxAmount) {
+      toast.error(`El monto debe ser mayor a 0 y no puede exceder $${maxAmount.toFixed(4)}`);
+      return;
+    }
+    if (!selectedCashRegisterId) {
+      toast.error('Selecciona la caja a la que se registrará el ingreso');
+      return;
+    }
+
+    const cashRegName = cashRegisters.find(c => c.id === selectedCashRegisterId)?.name || `Caja #${selectedCashRegisterId}`;
+    const customerName = selectedCreditForPayment.customer?.name || selectedGroup?.customer.name || 'Cliente';
+    const docRef = selectedCreditForPayment.sale?.invoiceNumber
+      ? `Factura #${selectedCreditForPayment.sale.invoiceNumber}`
+      : selectedCreditForPayment.saleId
+      ? `Venta #${selectedCreditForPayment.saleId}`
+      : `Crédito #${selectedCreditForPayment.id}`;
+
+    setConfirmPaymentProps({
+      operationType: "Abono a Crédito",
+      amount,
+      paymentMethod: paymentForm.paymentMethod,
+      relatedPerson: customerName,
+      personRole: "Cliente",
+      documentNumber: docRef,
+      cashRegisterOrAccount: cashRegName,
+      notes: paymentForm.notes || undefined,
+      confirmLabel: "Confirmar Abono",
+      onConfirm: async () => {
+        setConfirmPaymentProps(null);
+        await executePaymentSubmit();
+      },
+      onCancel: () => setConfirmPaymentProps(null),
+    });
   };
 
   const printPaymentReceipt = (payment: CreditPayment) => {
@@ -609,9 +641,8 @@ export function Credit() {
     printWindow.document.close();
   };
 
-  const handleMultiPaymentSubmit = async () => {
+  const executeMultiPaymentSubmit = async () => {
     if (!multiPaymentCustomer) return;
-    if (isMultiAbonoSubmittingGlobal) return;
 
     const itemsToPay = multiPaymentRows
       .filter(r => r.selected && r.amount > 0)
@@ -619,16 +650,6 @@ export function Credit() {
         creditSaleId: r.creditSale.id,
         amount: Number(r.amount.toFixed(4)),
       }));
-
-    if (itemsToPay.length === 0) {
-      toast.error('Debes ingresar al menos un monto mayor a $0 en las facturas seleccionadas');
-      return;
-    }
-
-    if (!multiCashRegisterId) {
-      toast.error('Selecciona la caja a la que se registrará el ingreso');
-      return;
-    }
 
     isMultiAbonoSubmittingGlobal = true;
     if (multiSubmitBtnRef.current) {
@@ -734,6 +755,49 @@ export function Credit() {
       isMultiAbonoSubmittingGlobal = false;
       setSavingMultiPayment(false);
     }
+  };
+
+  const handleMultiPaymentSubmit = () => {
+    if (!multiPaymentCustomer) return;
+    if (isMultiAbonoSubmittingGlobal) return;
+
+    const itemsToPay = multiPaymentRows
+      .filter(r => r.selected && r.amount > 0)
+      .map(r => ({
+        creditSaleId: r.creditSale.id,
+        amount: Number(r.amount.toFixed(4)),
+      }));
+
+    if (itemsToPay.length === 0) {
+      toast.error('Debes ingresar al menos un monto mayor a $0 en las facturas seleccionadas');
+      return;
+    }
+
+    if (!multiCashRegisterId) {
+      toast.error('Selecciona la caja a la que se registrará el ingreso');
+      return;
+    }
+
+    const cashRegName = cashRegisters.find(c => c.id === multiCashRegisterId)?.name || `Caja #${multiCashRegisterId}`;
+    const customerName = multiPaymentCustomer.customer.name;
+    const docRef = `${itemsToPay.length} facturas seleccionadas`;
+
+    setConfirmPaymentProps({
+      operationType: "Abono Múltiple a Créditos",
+      amount: totalMultiToPay,
+      paymentMethod: multiPaymentMethod,
+      relatedPerson: customerName,
+      personRole: "Cliente",
+      documentNumber: docRef,
+      cashRegisterOrAccount: cashRegName,
+      notes: multiNotes || undefined,
+      confirmLabel: "Confirmar Abono Múltiple",
+      onConfirm: async () => {
+        setConfirmPaymentProps(null);
+        await executeMultiPaymentSubmit();
+      },
+      onCancel: () => setConfirmPaymentProps(null),
+    });
   };
 
   const printMultiPaymentReceipt = (data: {
@@ -2122,6 +2186,14 @@ export function Credit() {
       </Dialog>
 
       <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
+
+      {confirmPaymentProps && (
+        <PaymentConfirmationDialog
+          isOpen={!!confirmPaymentProps}
+          onOpenChange={(open) => !open && setConfirmPaymentProps(null)}
+          {...confirmPaymentProps}
+        />
+      )}
     </div>
   );
 }

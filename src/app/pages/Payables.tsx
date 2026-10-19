@@ -17,6 +17,7 @@ import { Label } from '../components/ui/label';
 import { NumberInput } from '../components/ui/number-input';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { UnsavedChangesDialog } from '../components/ui/unsaved-changes-dialog';
+import { PaymentConfirmationDialog, PaymentConfirmationDetails } from '../components/ui/PaymentConfirmationDialog';
 
 export function Payables() {
   const [purchases, setPurchases] = useState<PurchaseResponse[]>([]);
@@ -37,6 +38,7 @@ export function Payables() {
   const [transferReceiptFile, setTransferReceiptFile] = useState<File | null>(null);
   const [transferReceiptPreview, setTransferReceiptPreview] = useState<string>('');
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  const [confirmPaymentProps, setConfirmPaymentProps] = useState<Omit<PaymentConfirmationDetails, 'isOpen' | 'onOpenChange'> | null>(null);
 
   const isDirty = paymentModalOpen && (!!paymentForm.paymentRef || !!transferReceiptFile);
   const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
@@ -88,7 +90,7 @@ export function Payables() {
     setPaymentModalOpen(true);
   };
 
-  const handlePaymentSubmit = async () => {
+  const executePaymentSubmit = async () => {
     if (!selectedPurchase) return;
     setSavingPayment(true);
     try {
@@ -118,6 +120,33 @@ export function Payables() {
     } finally {
       setSavingPayment(false);
     }
+  };
+
+  const handlePaymentSubmit = () => {
+    if (!selectedPurchase) return;
+    const amount = Number(selectedPurchase.totalAmount) || 0;
+    const supplierName = selectedPurchase.supplier?.name || 'Proveedor';
+    const docRef = selectedPurchase.invoiceNumber
+      ? `Factura #${selectedPurchase.invoiceNumber}`
+      : `Orden #${selectedPurchase.purchaseNumber}`;
+    const cashAccount = paymentForm.cashSource === 'CAJA_GENERAL' ? 'Caja General' : 'Caja Sucursal';
+
+    setConfirmPaymentProps({
+      operationType: "Pago a Proveedor",
+      amount,
+      paymentMethod: paymentForm.paymentMethod,
+      relatedPerson: supplierName,
+      personRole: "Proveedor",
+      documentNumber: docRef,
+      cashRegisterOrAccount: cashAccount,
+      notes: paymentForm.paymentRef ? `Ref: ${paymentForm.paymentRef}` : undefined,
+      confirmLabel: "Confirmar Pago",
+      onConfirm: async () => {
+        setConfirmPaymentProps(null);
+        await executePaymentSubmit();
+      },
+      onCancel: () => setConfirmPaymentProps(null),
+    });
   };
 
   const getStatusBadge = (status: string) => {
@@ -383,6 +412,14 @@ export function Payables() {
       </Dialog>
 
       <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
+
+      {confirmPaymentProps && (
+        <PaymentConfirmationDialog
+          isOpen={!!confirmPaymentProps}
+          onOpenChange={(open) => !open && setConfirmPaymentProps(null)}
+          {...confirmPaymentProps}
+        />
+      )}
     </div>
   );
 }

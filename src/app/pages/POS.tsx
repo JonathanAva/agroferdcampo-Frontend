@@ -63,6 +63,7 @@ import { TransportSelector, TransportData } from "../components/transport/Transp
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
 import { ProductDescriptionPopover } from "../components/products/ProductDescriptionPopover";
+import { PaymentConfirmationDialog, PaymentConfirmationDetails } from "../components/ui/PaymentConfirmationDialog";
 
 // --- Types ---
 interface PriceOption {
@@ -423,6 +424,7 @@ export function POS() {
     }
   };
   const [uploadingReceipt, setUploadingReceipt] = useState<Record<number, boolean>>({});
+  const [confirmPaymentProps, setConfirmPaymentProps] = useState<Omit<PaymentConfirmationDetails, 'isOpen' | 'onOpenChange'> | null>(null);
 
   // Cash Shift States
   const [activeShift, setActiveShift] = useState<CashShift | null>(null);
@@ -1382,7 +1384,7 @@ export function POS() {
     setShowMixedPaymentModal(true);
   };
 
-  const processSale = async () => {
+  const executeProcessSale = async () => {
     if (cart.length === 0) return;
     // Validación extra: suma de pagos debe cuadrar con el total
     const sumPayments = payments.reduce((sum, p) => sum + p.amount, 0);
@@ -1480,6 +1482,42 @@ export function POS() {
       setProcessingOverlay(false);
       setLoading(false);
     }
+  };
+
+  const processSale = () => {
+    if (cart.length === 0) return;
+    const sumPayments = payments.reduce((sum, p) => sum + p.amount, 0);
+    if (Math.abs(sumPayments - total) > 0.01) {
+      toast.error(`La suma de los pagos ($${sumPayments.toFixed(4)}) no coincide con el total ($${total.toFixed(4)})`);
+      return;
+    }
+
+    const customerName = selectedCustomer?.name || "Cliente Ocasional / Consumidor Final";
+    const paymentMethodsSummary = payments.map(p => `${p.paymentMethod}: $${Number(p.amount).toFixed(2)}`).join(', ');
+    const isCredit = payments.some(p => p.paymentMethod === 'CREDITO');
+    const cashAccount = activeShift?.cashRegister?.name 
+      ? activeShift.cashRegister.name 
+      : activeShift 
+      ? `Caja Turno #${activeShift.id}` 
+      : user?.branch 
+      ? `Caja Sucursal (${user.branch})` 
+      : 'Caja Mostrador';
+
+    setConfirmPaymentProps({
+      operationType: isCredit ? 'Venta al Crédito' : 'Cobro de Venta (POS)',
+      amount: total,
+      paymentMethod: paymentMethodsSummary || selectedPayment,
+      relatedPerson: customerName,
+      personRole: "Cliente",
+      documentNumber: `Nueva Venta (${cart.length} ítem${cart.length > 1 ? 's' : ''})`,
+      cashRegisterOrAccount: cashAccount,
+      confirmLabel: "Confirmar Cobro",
+      onConfirm: async () => {
+        setConfirmPaymentProps(null);
+        await executeProcessSale();
+      },
+      onCancel: () => setConfirmPaymentProps(null),
+    });
   };
 
   const handlePreSale = async () => {
@@ -4073,6 +4111,14 @@ ${paymentConditionHtml}
       />
 
       <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
+
+      {confirmPaymentProps && (
+        <PaymentConfirmationDialog
+          isOpen={!!confirmPaymentProps}
+          onOpenChange={(open) => !open && setConfirmPaymentProps(null)}
+          {...confirmPaymentProps}
+        />
+      )}
     </div>
   );
 }
