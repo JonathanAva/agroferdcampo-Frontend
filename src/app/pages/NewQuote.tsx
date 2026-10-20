@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router";
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, User, CheckCircle2,
   X, ArrowLeft, Percent, Package, Loader2, Award, Tag, PlusCircle,
-  Calendar as CalendarIcon, Check, Edit3, Lock, EyeOff
+  Calendar as CalendarIcon, Check, Edit3, Lock, EyeOff, FileText, AlertTriangle
 } from "lucide-react";
 import { apiRequest } from "../config/api";
 import { quotesService } from "../services/quotes.service";
@@ -256,6 +256,20 @@ export function NewQuote() {
 
   const [savingQuote, setSavingQuote] = useState(false);
   const [newProductModalOpen, setNewProductModalOpen] = useState(false);
+
+  const [sysConfig, setSysConfig] = useState<any>(null);
+  const [quoteAllowNegativeStock, setQuoteAllowNegativeStock] = useState<boolean | null>(null);
+  const [zeroStockWarning, setZeroStockWarning] = useState<{
+    product: Product;
+    unitType: string;
+    unitFactor: number;
+    unitPrice: number;
+    quantity: number;
+  } | null>(null);
+
+  useEffect(() => {
+    apiRequest<any>('/system-config').then(setSysConfig).catch(() => {});
+  }, []);
 
   // Costos y márgenes: desbloqueados por defecto para Propietarios, Administradores y Supervisores;
   // para otros roles permanecen ocultos y se desbloquean con contraseña mediante CostAccessDialog.
@@ -785,7 +799,7 @@ export function NewQuote() {
     }));
   };
 
-  const addProductToCart = () => {
+  const addProductToCart = (forceAllowZeroStock: boolean = false) => {
     if (!selectedProduct) return;
     if (marginForm.unitPrice <= 0) {
       toast.error("El precio debe ser mayor a 0");
@@ -796,7 +810,24 @@ export function NewQuote() {
       return;
     }
 
-    // Stock validation removed for quotes
+    const isService = selectedProduct.isService || (selectedProduct as any).category?.name?.trim().toLowerCase() === 'servicios';
+    const cartId = `${selectedProduct.id}-${marginForm.unitType}`;
+    const existing = cart.find(i => i.cartId === cartId);
+    const existingOtherUnits = cart.filter(i => i.id === selectedProduct.id && i.cartId !== cartId);
+    const usedStock = existingOtherUnits.reduce((sum, i) => sum + i.quantity * i.unitFactor, 0);
+    const neededTotal = usedStock + (editingCartId ? 0 : (existing?.quantity || 0) * marginForm.unitFactor) + marginForm.quantity * marginForm.unitFactor;
+    const isOutOfStock = selectedProduct.trackStock && !isService && (selectedProduct.stock <= 0 || neededTotal > selectedProduct.stock);
+
+    if (isOutOfStock && !forceAllowZeroStock) {
+      setZeroStockWarning({
+        product: selectedProduct,
+        unitType: marginForm.unitType,
+        unitFactor: marginForm.unitFactor,
+        unitPrice: marginForm.unitPrice,
+        quantity: marginForm.quantity,
+      });
+      return;
+    }
 
     const costPerUnit = marginForm.costPerUnit;
     const baseCostPrice = marginForm.costPrice;
@@ -825,9 +856,6 @@ export function NewQuote() {
       return;
     }
 
-    const cartId = `${selectedProduct.id}-${marginForm.unitType}`;
-
-    const existing = cart.find(i => i.cartId === cartId);
     if (existing) {
       const newQty = existing.quantity + marginForm.quantity;
       setCart(cart.map(i => i.cartId === cartId ? {
@@ -1774,6 +1802,38 @@ export function NewQuote() {
               </>
             )
           )}
+          {(() => {
+            const zeroStockItemsInCart = cart.filter(item => {
+              const isService = item.isService || (item as any).category?.name?.trim().toLowerCase() === 'servicios';
+              return item.trackStock && !isService && (item.stock <= 0 || item.quantity * item.unitFactor > item.stock);
+            });
+            if (zeroStockItemsInCart.length === 0) return null;
+
+            return (
+              <div className="p-3 rounded-xl border border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-300 space-y-2">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={15} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <h5 className="font-bold text-xs uppercase text-amber-900 dark:text-amber-200">
+                      Artículos sin existencia ({zeroStockItemsInCart.length})
+                    </h5>
+                    <p className="text-[11px] text-amber-800 dark:text-amber-300 mt-0.5 leading-snug">
+                      Esta cotización incluye productos sin existencia en bodega. Al confirmarse como venta se procesará como encargo.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2 pt-1 border-t border-amber-500/20 text-[11px]">
+                  <span className="font-semibold text-amber-900 dark:text-amber-200">Preferencia de inventario:</span>
+                  <Badge variant="outline" className="border-amber-500/40 bg-amber-500/20 text-amber-800 dark:text-amber-200 font-bold text-[10px]">
+                    {(quoteAllowNegativeStock === true || (quoteAllowNegativeStock === null && sysConfig?.allowNegativeStock))
+                      ? "Permitirá saldo negativo"
+                      : "Permanecerá en 0"}
+                  </Badge>
+                </div>
+              </div>
+            );
+          })()}
+
           <div className="flex justify-between text-xl font-black text-[var(--primary)] border-t border-[var(--border)] pt-2">
             <span>TOTAL</span>
             <span>${cartTotal.toFixed(4)}</span>
@@ -1823,6 +1883,11 @@ export function NewQuote() {
                   <div className="flex items-center gap-2 text-sm flex-wrap">
                     <Badge variant="outline" className="font-mono text-[10px]">{selectedProduct.internalCode}</Badge>
                     <span className="text-[var(--text-sec)] font-bold text-xs">{selectedProduct.stock} {selectedProduct.unit} disp.</span>
+                    {selectedProduct.trackStock && !selectedProduct.isService && (selectedProduct as any).category?.name?.trim().toLowerCase() !== 'servicios' && selectedProduct.stock <= 0 && (
+                      <Badge variant="outline" className="border-red-500/30 bg-red-500/10 text-red-500 font-bold text-[10px]">
+                        Sin existencias (Encargo)
+                      </Badge>
+                    )}
                     <ProductDescriptionPopover product={selectedProduct} side="bottom" />
                   </div>
                 </div>
@@ -2094,6 +2159,104 @@ export function NewQuote() {
       />
 
       <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />
+
+      {/* Modal de Advertencia de Stock 0 en Cotizaciones */}
+      <Dialog open={!!zeroStockWarning} onOpenChange={(o) => !o && setZeroStockWarning(null)}>
+        <DialogContent className="sm:max-w-lg bg-[var(--card)] border-[var(--border)] text-[var(--text-main)] p-6">
+          <div className="flex flex-col items-center text-center space-y-4 pt-2">
+            <div className="size-12 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center">
+              <AlertTriangle size={24} />
+            </div>
+            <div className="space-y-1">
+              <DialogTitle className="text-xl font-black text-[var(--text-main)]">
+                Producto sin existencia disponible
+              </DialogTitle>
+              <DialogDescription className="text-sm font-medium text-[var(--text-sec)]">
+                Este producto no cuenta con existencia suficiente en inventario. ¿Está seguro de que desea agregarlo a la cotización?
+              </DialogDescription>
+            </div>
+
+            {zeroStockWarning && (
+              <div className="w-full bg-[var(--bg)] border border-[var(--border)] rounded-xl p-3 text-left space-y-1">
+                <p className="font-bold text-sm text-[var(--text-main)] line-clamp-2">
+                  {zeroStockWarning.product.name}
+                </p>
+                <div className="flex items-center justify-between text-xs text-[var(--text-sec)]">
+                  <span>Código: <strong className="text-[var(--text-main)]">{zeroStockWarning.product.internalCode || 'N/A'}</strong></span>
+                  <span>Stock actual: <strong className="text-red-500 font-bold">{zeroStockWarning.product.stock} {zeroStockWarning.product.unit}</strong></span>
+                </div>
+              </div>
+            )}
+
+            {/* Opciones de Existencia en 0 vs Negativo */}
+            <div className="w-full text-left space-y-2 pt-1">
+              <Label className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider block">
+                Al confirmar esta cotización como venta:
+              </Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setQuoteAllowNegativeStock(false)}
+                  className={cn(
+                    "p-3 rounded-xl border text-left text-xs transition-all flex flex-col gap-1 cursor-pointer",
+                    (quoteAllowNegativeStock === false || (quoteAllowNegativeStock === null && !sysConfig?.allowNegativeStock))
+                      ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--text-main)] font-bold shadow-sm ring-1 ring-[var(--primary)]"
+                      : "border-[var(--border)] bg-[var(--bg)] text-[var(--text-sec)] hover:border-[var(--primary)]/40"
+                  )}
+                >
+                  <span className="font-bold flex items-center gap-1.5 text-xs text-[var(--text-main)]">
+                    <span className={cn("size-2 rounded-full", (quoteAllowNegativeStock === false || (quoteAllowNegativeStock === null && !sysConfig?.allowNegativeStock)) ? "bg-[var(--primary)]" : "bg-zinc-400")} />
+                    Dejar en 0
+                  </span>
+                  <span className="text-[10px] text-[var(--text-sec)] font-normal">
+                    La existencia no bajará de 0 tras vender.
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setQuoteAllowNegativeStock(true)}
+                  className={cn(
+                    "p-3 rounded-xl border text-left text-xs transition-all flex flex-col gap-1 cursor-pointer",
+                    (quoteAllowNegativeStock === true || (quoteAllowNegativeStock === null && sysConfig?.allowNegativeStock))
+                      ? "border-amber-500 bg-amber-500/10 text-[var(--text-main)] font-bold shadow-sm ring-1 ring-amber-500"
+                      : "border-[var(--border)] bg-[var(--bg)] text-[var(--text-sec)] hover:border-amber-400"
+                  )}
+                >
+                  <span className="font-bold flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                    <span className={cn("size-2 rounded-full", (quoteAllowNegativeStock === true || (quoteAllowNegativeStock === null && sysConfig?.allowNegativeStock)) ? "bg-amber-500" : "bg-zinc-400")} />
+                    Permitir negativo
+                  </span>
+                  <span className="text-[10px] text-[var(--text-sec)] font-normal">
+                    Refleja saldo negativo (ej. -1) para reponer.
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 w-full pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 h-11 font-bold"
+                onClick={() => setZeroStockWarning(null)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                className="flex-1 h-11 font-black bg-[var(--primary)] text-white hover:bg-[var(--primary)]/90"
+                onClick={() => {
+                  setZeroStockWarning(null);
+                  addProductToCart(true);
+                }}
+              >
+                Agregar a la cotización
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

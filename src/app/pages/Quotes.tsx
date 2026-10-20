@@ -3,11 +3,12 @@ import logo from '../../assets/logo.png';
 import {
   Search, FileText, Eye, EyeOff, CheckCircle2, AlertCircle, Calendar as CalendarIcon, RefreshCcw, Filter, X,
   Mail, UserCog, Clock, Send, Plus, Banknote, CreditCard, Smartphone, Trash2, Truck as TruckIcon, Printer, PackageCheck, Edit3, Copy
-, Store, Layers, Loader2, Lock
+, Store, Layers, Loader2, Lock, Ban, AlertTriangle
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { quotesService, QuoteResponse, CostAccessResponse } from '../services/quotes.service';
 import { CostAccessDialog } from '../components/quotes/CostAccessDialog';
+import { CancelQuoteDialog } from '../components/quotes/CancelQuoteDialog';
 import { cashRegistersService } from '../services/cash-registers.service';
 import { CashRegister } from '../services/cash-shifts.service';
 import { toast } from 'sonner';
@@ -122,6 +123,13 @@ export function Quotes() {
   };
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [cancelingId, setCancelingId] = useState<number | null>(null);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [quoteToCancel, setQuoteToCancel] = useState<QuoteResponse | null>(null);
+
+  const handleOpenCancelModal = (quote: QuoteResponse) => {
+    setQuoteToCancel(quote);
+    setCancelModalOpen(true);
+  };
 
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [deliveryWarningOpen, setDeliveryWarningOpen] = useState(false);
@@ -130,6 +138,7 @@ export function Quotes() {
   const [cashRegisters, setCashRegisters] = useState<CashRegister[]>([]);
   const [selectedCashRegisterId, setSelectedCashRegisterId] = useState<number | null>(null);
   const [transportData, setTransportData] = useState<TransportData | null>(null);
+  const [confirmAllowNegativeStock, setConfirmAllowNegativeStock] = useState<boolean>(false);
 
   // --- Estados para Crear Cotización ---
   const [createQuoteModalOpen, setCreateQuoteModalOpen] = useState(false);
@@ -494,12 +503,21 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
   };
 
   const handleOpenConfirmModal = async (quote: QuoteResponse) => {
-    setQuoteToConfirm(quote);
+    let fullQuote = quote;
+    if (!quote.items || quote.items.length === 0) {
+      try {
+        fullQuote = await quotesService.getQuoteDetail(quote.id);
+      } catch (e) {
+        console.error("Error al cargar detalles de la cotización para confirmar:", e);
+      }
+    }
+    setQuoteToConfirm(fullQuote);
+    setConfirmAllowNegativeStock(sysConfig?.allowNegativeStock ?? false);
     setSelectedPaymentMethod('EFECTIVO');
-    setTransportData(quote.requiresTransport ? {
+    setTransportData(fullQuote.requiresTransport ? {
       requiresTransport: true,
-      deliveryAddress: quote.deliveryAddress || (quote.customer as any)?.address || '',
-      vehicleId: quote.vehicleId || undefined,
+      deliveryAddress: fullQuote.deliveryAddress || (fullQuote.customer as any)?.address || '',
+      vehicleId: fullQuote.vehicleId || undefined,
       driverId: undefined
     } : null);
     setSelectedCashRegisterId(null);
@@ -525,6 +543,7 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
     try {
       await quotesService.confirmQuote(quoteToConfirm.id, {
         paymentMethod: selectedPaymentMethod,
+        allowNegativeStock: confirmAllowNegativeStock,
         ...(requiresCashRegister ? { cashRegisterId: selectedCashRegisterId! } : {}),
         ...(transportData && transportData.requiresTransport ? {
           requiresTransport: true,
@@ -563,18 +582,10 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
     setDeliveryWarningOpen(false);
     handleConfirmQuote();
   };
-const handleCancelQuote = async (quote: QuoteResponse) => {
-    setCancelingId(quote.id);
-    try {
-      await quotesService.cancelQuote(quote.id);
-      toast.success('Cotización cancelada');
-      fetchQuotes();
-    } catch (error: any) {
-      toast.error(error.message || 'Error al cancelar la cotización');
-    } finally {
-      setCancelingId(null);
-    }
+  const handleCancelQuote = (quote: QuoteResponse) => {
+    handleOpenCancelModal(quote);
   };
+
 
   useEffect(() => {
     if (productSearchCreate.trim().length >= 2) {
@@ -931,18 +942,22 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuItem 
-                                onClick={() => handleCancelQuote(quote)} 
-                                disabled={cancelingId === quote.id}
+                                onClick={() => handleOpenCancelModal(quote)} 
                                 className="font-bold cursor-pointer text-destructive focus:text-destructive"
                               >
-                                {cancelingId === quote.id ? (
-                                  <RefreshCcw size={14} className="mr-2 animate-spin" />
-                                ) : (
-                                  <X size={14} className="mr-2" />
-                                )}
-                                Cancelar
+                                <X size={14} className="mr-2" />
+                                Cancelar Cotización
                               </DropdownMenuItem>
                             </>
+                          )}
+                          {quote.status === 'CONFIRMADA' && quote.sale?.status !== 'CANCELADA' && (
+                            <DropdownMenuItem 
+                              onClick={() => handleOpenCancelModal(quote)} 
+                              className="font-bold cursor-pointer text-destructive focus:text-destructive"
+                            >
+                              <Ban size={14} className="mr-2" />
+                              Cancelar Pedido / Factura
+                            </DropdownMenuItem>
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -1261,6 +1276,45 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                     </div>
                   </div>
                 </div>
+
+                {selectedQuote.sale && (
+                  <div className="p-3.5 rounded-xl border border-[var(--border)] bg-[var(--bg)]/50 space-y-2 mt-4">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <span className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">
+                        Venta / Factura Asociada
+                      </span>
+                      <Badge variant={selectedQuote.sale.status === 'CANCELADA' ? 'destructive' : 'success'}>
+                        {selectedQuote.sale.status === 'CANCELADA' ? 'Venta Cancelada' : `Venta #${selectedQuote.sale.id}`}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <span className="text-[10px] font-bold text-[var(--text-sec)] uppercase block">Estado Fiscal</span>
+                        <span className="font-bold text-[var(--text-main)]">
+                          {selectedQuote.sale.dteResponse?.estado === 'PROCESADO'
+                            ? `DTE Procesado (${selectedQuote.sale.dteResponse.codigoGeneracion?.slice(0, 8)}...)`
+                            : selectedQuote.sale.dteResponse?.estado === 'RECHAZADO'
+                            ? 'DTE Invalidado'
+                            : 'Sin emitir a Hacienda (Directa)'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-[var(--text-sec)] uppercase block">Cuentas por Cobrar</span>
+                        <span className="font-bold text-[var(--text-main)]">
+                          {selectedQuote.sale.creditSale
+                            ? selectedQuote.sale.creditSale.status === 'ANULADO'
+                              ? 'Crédito Anulado'
+                              : `Crédito Pendiente ($${Number(selectedQuote.sale.creditSale.remainingAmount).toFixed(2)})`
+                            : `Venta Contado (${selectedQuote.sale.paymentMethod || 'Efectivo'})`}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-[var(--text-sec)] uppercase block">Condición</span>
+                        <span className="font-bold text-[var(--text-main)]">{selectedQuote.sale.paymentMethod || 'Efectivo'}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {selectedQuote.status === 'PENDIENTE' && (
@@ -1288,10 +1342,9 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                   <Button 
                     variant="destructive" 
                     onClick={() => {
-                      handleCancelQuote(selectedQuote);
+                      handleOpenCancelModal(selectedQuote);
                       setDetailModalOpen(false);
                     }}
-                    disabled={cancelingId === selectedQuote.id}
                     className="font-bold"
                   >
                     Cancelar Cotización
@@ -1308,6 +1361,31 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                       Confirmar Venta
                     </Button>
                   )}
+                </div>
+              )}
+
+              {selectedQuote.status === 'CONFIRMADA' && selectedQuote.sale?.status !== 'CANCELADA' && (
+                <div className="p-4 border-t border-[var(--border)] bg-[var(--bg)]/30 flex justify-end gap-3 flex-wrap">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      handleOpenEmailModal(selectedQuote);
+                      setDetailModalOpen(false);
+                    }}
+                    className="font-bold"
+                  >
+                    <Mail size={16} className="mr-2 text-indigo-600" /> Enviar por Correo
+                  </Button>
+                  <Button 
+                    variant="destructive" 
+                    onClick={() => {
+                      handleOpenCancelModal(selectedQuote);
+                      setDetailModalOpen(false);
+                    }}
+                    className="font-bold"
+                  >
+                    <Ban size={16} className="mr-2" /> Cancelar Pedido / Factura
+                  </Button>
                 </div>
               )}
             </>
@@ -1611,97 +1689,122 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
 
       {/* DIALOG CONFIRMAR VENTA Y MÉTODO DE PAGO */}
       <Dialog open={paymentModalOpen} onOpenChange={(o) => o ? setPaymentModalOpen(true) : confirmExit(() => setPaymentModalOpen(false))}>
-        <DialogContent className="max-w-md bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-emerald-600">
-              <CheckCircle2 size={20} />
-              Confirmar a Venta
+        <DialogContent className="sm:max-w-[720px] w-full max-h-[92vh] overflow-y-auto bg-[var(--card)] border-[var(--border)] text-[var(--text-main)] p-6">
+          <DialogHeader className="pb-3 border-b border-[var(--border)]">
+            <DialogTitle className="flex items-center gap-2.5 text-lg font-bold text-emerald-600">
+              <CheckCircle2 size={22} />
+              Confirmar Cotización a Venta
             </DialogTitle>
-            <DialogDescription>
-              Seleccione el método de pago con el que el cliente pagará la cotización. Esta venta se sumará a su caja actual.
+            <DialogDescription className="text-sm text-[var(--text-sec)]">
+              Seleccione el método de pago con el que el cliente liquidará la cotización. Esta venta se sumará a su caja actual.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="py-4">
-            <Label className="text-xs font-bold uppercase text-[var(--text-sec)] mb-3 block">Método de Pago</Label>
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
-              <div
-                onClick={() => setSelectedPaymentMethod('EFECTIVO')}
-                className={cn(
-                  "border rounded-xl p-3 flex flex-col items-center gap-2 cursor-pointer transition-all",
-                  selectedPaymentMethod === 'EFECTIVO' 
-                    ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold" 
-                    : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]/50"
-                )}
-              >
-                <Banknote size={24} />
-                <span className="text-sm">Efectivo</span>
-              </div>
-              <div 
-                onClick={() => setSelectedPaymentMethod('TRANSFERENCIA')}
-                className={cn(
-                  "border rounded-xl p-3 flex flex-col items-center gap-2 cursor-pointer transition-all",
-                  selectedPaymentMethod === 'TRANSFERENCIA' 
-                    ? "border-sky-500 bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold" 
-                    : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]/50"
-                )}
-              >
-                <Smartphone size={24} />
-                <span className="text-sm">Transf.</span>
-              </div>
-              <div 
-                onClick={() => setSelectedPaymentMethod('TARJETA')}
-                className={cn(
-                  "border rounded-xl p-3 flex flex-col items-center gap-2 cursor-pointer transition-all",
-                  selectedPaymentMethod === 'TARJETA' 
-                    ? "border-indigo-500 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold" 
-                    : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]/50"
-                )}
-              >
-                <CreditCard size={24} />
-                <span className="text-sm">Tarjeta</span>
-              </div>
-              <div 
-                onClick={() => setSelectedPaymentMethod('CREDITO')}
-                className={cn(
-                  "border rounded-xl p-3 flex flex-col items-center gap-2 cursor-pointer transition-all",
-                  selectedPaymentMethod === 'CREDITO' 
-                    ? "border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400 font-bold" 
-                    : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]/50"
-                )}
-              >
-                <Clock size={24} />
-                <span className="text-sm">Crédito</span>
-              </div>
-              <div
-                onClick={() => setSelectedPaymentMethod('CONTRAENTREGA')}
-                className={cn(
-                  "border rounded-xl p-3 flex flex-col items-center gap-2 cursor-pointer transition-all",
-                  selectedPaymentMethod === 'CONTRAENTREGA'
-                    ? "border-purple-500 bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold"
-                    : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)]/50"
-                )}
-              >
-                <PackageCheck size={24} />
-                <span className="text-sm">Contraentrega</span>
-              </div>
-            </div>
-            {selectedPaymentMethod === 'CONTRAENTREGA' && (
-              <div className="mt-4 p-3 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 text-sm flex items-center gap-2">
-                <Clock size={16} className="text-purple-600 shrink-0" />
-                <span className="text-purple-800 dark:text-purple-300 font-medium">
-                  Se registrará como pago pendiente con vencimiento fijo de 2 días. Requiere un cliente registrado.
-                </span>
+          <div className="py-3 space-y-4">
+            {quoteToConfirm && (
+              <div className="p-4 rounded-xl bg-[var(--bg)]/80 border border-[var(--border)] flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="size-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-black text-sm">
+                    #{quoteToConfirm.id}
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-[var(--text-sec)] block">Cliente</span>
+                    <span className="text-sm font-bold text-[var(--text-main)]">{quoteToConfirm.clientName || 'Cliente General'}</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-bold text-[var(--text-sec)] block">Total a cobrar</span>
+                  <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                    ${Number(quoteToConfirm.totalAmount).toFixed(4)}
+                  </span>
+                </div>
               </div>
             )}
+
+            <div>
+              <Label className="text-xs font-bold uppercase text-[var(--text-sec)] tracking-wider mb-2.5 block">
+                Método de Pago
+              </Label>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                <div
+                  onClick={() => setSelectedPaymentMethod('EFECTIVO')}
+                  className={cn(
+                    "border rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all text-center",
+                    selectedPaymentMethod === 'EFECTIVO' 
+                      ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold shadow-sm ring-1 ring-emerald-500" 
+                      : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)] hover:border-emerald-500/40"
+                  )}
+                >
+                  <Banknote size={22} />
+                  <span className="text-xs font-semibold">Efectivo</span>
+                </div>
+                <div 
+                  onClick={() => setSelectedPaymentMethod('TRANSFERENCIA')}
+                  className={cn(
+                    "border rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all text-center",
+                    selectedPaymentMethod === 'TRANSFERENCIA' 
+                      ? "border-sky-500 bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold shadow-sm ring-1 ring-sky-500" 
+                      : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)] hover:border-sky-500/40"
+                  )}
+                >
+                  <Smartphone size={22} />
+                  <span className="text-xs font-semibold">Transf.</span>
+                </div>
+                <div 
+                  onClick={() => setSelectedPaymentMethod('TARJETA')}
+                  className={cn(
+                    "border rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all text-center",
+                    selectedPaymentMethod === 'TARJETA' 
+                      ? "border-indigo-500 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold shadow-sm ring-1 ring-indigo-500" 
+                      : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)] hover:border-indigo-500/40"
+                  )}
+                >
+                  <CreditCard size={22} />
+                  <span className="text-xs font-semibold">Tarjeta</span>
+                </div>
+                <div 
+                  onClick={() => setSelectedPaymentMethod('CREDITO')}
+                  className={cn(
+                    "border rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all text-center",
+                    selectedPaymentMethod === 'CREDITO' 
+                      ? "border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400 font-bold shadow-sm ring-1 ring-orange-500" 
+                      : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)] hover:border-orange-500/40"
+                  )}
+                >
+                  <Clock size={22} />
+                  <span className="text-xs font-semibold">Crédito</span>
+                </div>
+                <div
+                  onClick={() => setSelectedPaymentMethod('CONTRAENTREGA')}
+                  className={cn(
+                    "border rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all text-center col-span-2 sm:col-span-1",
+                    selectedPaymentMethod === 'CONTRAENTREGA'
+                      ? "border-purple-500 bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold shadow-sm ring-1 ring-purple-500"
+                      : "border-[var(--border)] text-[var(--text-sec)] hover:bg-[var(--bg)] hover:border-purple-500/40"
+                  )}
+                >
+                  <PackageCheck size={22} />
+                  <span className="text-xs font-semibold">Contraentrega</span>
+                </div>
+              </div>
+              {selectedPaymentMethod === 'CONTRAENTREGA' && (
+                <div className="mt-3 p-3 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 text-xs flex items-center gap-2.5">
+                  <Clock size={16} className="text-purple-600 shrink-0" />
+                  <span className="text-purple-800 dark:text-purple-300 font-medium">
+                    Se registrará como pago pendiente con vencimiento fijo de 2 días. Requiere un cliente registrado.
+                  </span>
+                </div>
+              )}
+            </div>
+
             {selectedPaymentMethod !== 'CREDITO' && selectedPaymentMethod !== 'CONTRAENTREGA' && (
-              <div className="mt-4">
+              <div className="p-3.5 rounded-xl bg-[var(--bg)]/50 border border-[var(--border)]">
                 <Label className="text-xs font-bold uppercase text-[var(--text-sec)] mb-2 block">Caja de Destino</Label>
                 <Select
                   value={selectedCashRegisterId ? String(selectedCashRegisterId) : undefined}
                   onValueChange={(v) => setSelectedCashRegisterId(Number(v))}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger className="w-full bg-[var(--card)]">
                     <SelectValue placeholder={cashRegisters.length === 0 ? "No hay cajas activas" : "Selecciona una caja..."} />
                   </SelectTrigger>
                   <SelectContent>
@@ -1710,27 +1813,137 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-[10px] text-[var(--text-sec)] mt-1.5">El ingreso de esta venta se registrará en la caja seleccionada.</p>
+                <p className="text-[11px] text-[var(--text-sec)] mt-1.5">El ingreso de esta venta se registrará automáticamente en la caja seleccionada.</p>
               </div>
             )}
 
-            {quoteToConfirm && (
-              <div className="mt-6 p-4 rounded-lg bg-[var(--bg)]/50 border border-[var(--border)] flex justify-between items-center">
-                <span className="text-sm text-[var(--text-sec)] font-medium">Total a cobrar:</span>
-                <span className="text-xl font-black text-[var(--text-main)]">${Number(quoteToConfirm.totalAmount).toFixed(4)}</span>
-              </div>
-            )}
+            {(() => {
+              const zeroStockItemsInQuote = (quoteToConfirm?.items || []).filter((item: any) => {
+                const isService = item.product?.isService || item.product?.category?.name?.trim().toLowerCase() === 'servicios';
+                if (!item.product?.trackStock || isService) return false;
+                const invQty = item.product?.inventory?.[0]?.quantity !== undefined
+                  ? Number(item.product.inventory[0].quantity)
+                  : (item.product?.stock !== undefined ? Number(item.product.stock) : 0);
+                const neededQty = Number(item.quantity) * (Number(item.unitFactor) || 1);
+                return invQty <= 0 || invQty < neededQty;
+              });
+
+              if (zeroStockItemsInQuote.length === 0) return null;
+
+              return (
+                <div className="p-4 rounded-2xl border border-amber-500/40 bg-amber-500/5 text-amber-800 dark:text-amber-300 space-y-3.5 animate-in fade-in w-full">
+                  <div className="flex items-start gap-3">
+                    <div className="size-9 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <AlertTriangle size={20} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-black text-xs sm:text-sm uppercase tracking-wide text-amber-900 dark:text-amber-200">
+                        Advertencia: Venta sin existencia en inventario
+                      </h4>
+                      <p className="text-xs text-amber-800 dark:text-amber-300/90 mt-0.5 leading-relaxed">
+                        Esta cotización contiene productos que <strong>no tienen existencia disponible</strong>. Esta venta quedará registrada como encargo en Kardex y en la bitácora de auditoría.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-[var(--card)] rounded-xl p-3 border border-amber-500/30 space-y-2 w-full">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-sec)] block">
+                      Productos sin existencia en esta venta:
+                    </span>
+                    <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                      {zeroStockItemsInQuote.map((item: any) => {
+                        const invQty = item.product?.inventory?.[0]?.quantity !== undefined
+                          ? Number(item.product.inventory[0].quantity)
+                          : (item.product?.stock !== undefined ? Number(item.product.stock) : 0);
+                        const neededQty = Number(item.quantity) * (Number(item.unitFactor) || 1);
+                        return (
+                          <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-1.5 sm:gap-4 py-2 px-3 rounded-lg bg-[var(--bg)]/80 border border-[var(--border)]">
+                            <span className="font-semibold text-[var(--text-main)] truncate min-w-0 flex-1">
+                              {item.customName || item.product?.name || `Producto #${item.productId}`}
+                            </span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
+                                Stock actual: {invQty}
+                              </span>
+                              <span className="text-[var(--text-sec)] text-xs">
+                                → Vendiendo: <strong className="text-[var(--text-main)]">{neededQty} {item.product?.unit || item.unitType || 'UNIDAD'}</strong>
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Opciones de Existencia en 0 vs Negativo */}
+                  <div className="w-full text-left space-y-2 pt-0.5">
+                    <Label className="text-xs font-bold text-amber-900 dark:text-amber-200 uppercase tracking-wider block">
+                      ¿Desea dejar la existencia en 0 o permitir existencia negativa?
+                    </Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setConfirmAllowNegativeStock(false)}
+                        className={cn(
+                          "p-3.5 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer",
+                          !confirmAllowNegativeStock
+                            ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--text-main)] font-bold shadow-sm ring-1 ring-[var(--primary)]"
+                            : "border-[var(--border)] bg-[var(--card)] text-[var(--text-sec)] hover:border-[var(--primary)]/40 hover:bg-[var(--bg)]/50"
+                        )}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold flex items-center gap-2 text-xs text-[var(--text-main)]">
+                            <span className={cn("size-2.5 rounded-full", !confirmAllowNegativeStock ? "bg-[var(--primary)]" : "bg-zinc-400")} />
+                            Dejar en 0
+                          </span>
+                          {!confirmAllowNegativeStock && (
+                            <span className="text-[10px] font-bold text-[var(--primary)] uppercase tracking-wider">Activo</span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-[var(--text-sec)] font-normal leading-relaxed">
+                          La existencia no bajará a números negativos tras confirmar.
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setConfirmAllowNegativeStock(true)}
+                        className={cn(
+                          "p-3.5 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer",
+                          confirmAllowNegativeStock
+                            ? "border-amber-500 bg-amber-500/10 text-[var(--text-main)] font-bold shadow-sm ring-1 ring-amber-500"
+                            : "border-[var(--border)] bg-[var(--card)] text-[var(--text-sec)] hover:border-amber-400 hover:bg-[var(--bg)]/50"
+                        )}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
+                            <span className={cn("size-2.5 rounded-full", confirmAllowNegativeStock ? "bg-amber-500" : "bg-zinc-400")} />
+                            Permitir negativo
+                          </span>
+                          {confirmAllowNegativeStock && (
+                            <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Activo</span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-[var(--text-sec)] font-normal leading-relaxed">
+                          Refleja saldo negativo (ej. -1) para reponer existencia en próximas entradas.
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {quoteToConfirm?.requiresTransport && (
-              <div className="mt-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 text-sm flex items-center gap-2">
-                <TruckIcon size={16} className="text-blue-600" />
+              <div className="p-3.5 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-xs flex items-center gap-2.5">
+                <TruckIcon size={16} className="text-blue-600 shrink-0" />
                 <span className="text-blue-800 dark:text-blue-300 font-medium">
                   Esta cotización incluye entrega a domicilio. Se generará un albarán automáticamente al confirmar.
                 </span>
               </div>
             )}
 
-            <div className="mt-4">
+            <div>
               <TransportSelector
                 customerId={quoteToConfirm?.customerId}
                 value={transportData}
@@ -1740,17 +1953,19 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => confirmExit(() => setPaymentModalOpen(false))}>Cancelar</Button>
+          <DialogFooter className="pt-3 border-t border-[var(--border)] flex sm:justify-end gap-3">
+            <Button variant="outline" onClick={() => confirmExit(() => setPaymentModalOpen(false))} disabled={!!confirmingId}>
+              Cancelar
+            </Button>
             <Button
               onClick={handlePreConfirmQuote}
               disabled={!!confirmingId || (selectedPaymentMethod !== 'CREDITO' && selectedPaymentMethod !== 'CONTRAENTREGA' && !selectedCashRegisterId)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-2"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-2 px-6"
             >
               {confirmingId ? (
                 <><RefreshCcw size={16} className="animate-spin" /> Procesando...</>
               ) : (
-                <><CheckCircle2 size={16} /> Confirmar Venta</>
+                <><CheckCircle2 size={18} /> Confirmar Venta</>
               )}
             </Button>
           </DialogFooter>
@@ -2074,6 +2289,19 @@ const handleCancelQuote = async (quote: QuoteResponse) => {
         onOpenChange={setCostDialogOpen}
         quoteId={selectedQuote?.id ?? null}
         onGranted={setCostAccess}
+      />
+
+      <CancelQuoteDialog
+        open={cancelModalOpen}
+        onOpenChange={setCancelModalOpen}
+        quote={quoteToCancel}
+        currentUser={user}
+        onSuccess={() => {
+          fetchQuotes();
+          if (selectedQuote && quoteToCancel && selectedQuote.id === quoteToCancel.id) {
+            quotesService.getQuoteById(selectedQuote.id).then(setSelectedQuote).catch(() => {});
+          }
+        }}
       />
 
       <UnsavedChangesDialog open={exitDialogOpen} onConfirm={confirmDiscard} onCancel={cancelDiscard} />

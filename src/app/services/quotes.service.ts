@@ -65,6 +65,22 @@ export interface QuoteResponse {
   };
   sale?: {
     id: number;
+    status?: string;
+    totalAmount?: string | number;
+    paymentMethod?: string;
+    creditSale?: {
+      id: number;
+      status: string;
+      remainingAmount: string | number;
+      paidAmount: string | number;
+    } | null;
+    dteResponse?: {
+      id: number;
+      estado: string;
+      codigoGeneracion?: string;
+      selloRecibido?: string;
+      numeroControl?: string;
+    } | null;
     deliveryNotes?: Array<{
       id: number;
       status: string;
@@ -159,16 +175,26 @@ export const quotesService = {
     });
   },
 
-  confirmQuote: async (id: number, payload: { paymentMethod?: string; cashRegisterId?: number; requiresTransport?: boolean; vehicleId?: number; driverId?: number; deliveryAddress?: string; scheduledAt?: string }): Promise<any> => {
+  confirmQuote: async (id: number, payload: {
+    paymentMethod?: string;
+    cashRegisterId?: number;
+    requiresTransport?: boolean;
+    vehicleId?: number;
+    driverId?: number;
+    deliveryAddress?: string;
+    scheduledAt?: string;
+    allowNegativeStock?: boolean;
+  }): Promise<any> => {
     return await apiRequest(`${BASE}/${id}/confirm`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
   },
 
-  cancelQuote: async (id: number): Promise<any> => {
+  cancelQuote: async (id: number, payload?: any): Promise<any> => {
     return await apiRequest(`${BASE}/${id}/cancel`, {
       method: 'POST',
+      ...(payload ? { body: JSON.stringify(payload) } : {}),
     });
   },
 
