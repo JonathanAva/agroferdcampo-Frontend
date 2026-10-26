@@ -17,6 +17,7 @@ import { Button } from "../ui/button";
 import { Switch } from "../ui/switch";
 import { cn } from "../ui/utils";
 import { Input } from "../ui/input";
+import { Textarea } from "../ui/textarea";
 import { Label } from "../ui/label";
 import {
   Dialog,
@@ -37,6 +38,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "../ui/unsaved-changes-dialog";
+import {
+  ProductTechnicalFields,
+  ProductClassification,
+} from "./ProductTechnicalFields";
 
 export interface CreatedProductResult {
   id: number;
@@ -139,6 +144,16 @@ const productSchema = z.object({
   isService: z.boolean().optional(),
   serviceType: z.string().optional(),
   fixedCommission: z.string().optional(),
+  classification: z.enum(["SERVICIO", "ESTANDAR", "AGROQUIMICO", "VETERINARIO"]).optional(),
+  chemicalFamily: z.string().optional(),
+  agrochemicalType: z.string().optional(),
+  formulation: z.string().optional(),
+  dosage: z.string().optional(),
+  veterinaryType: z.string().optional(),
+  targetSpecies: z.string().optional(),
+  activeIngredients: z.string().optional(),
+  technicalNotes: z.string().optional(),
+  servicePrice: z.string().optional(),
   prices: z
     .array(
       z.object({
@@ -219,8 +234,18 @@ export function ProductFormDialog({
       trackStock: true,
       isUniversal: false,
       isService: false,
-      serviceType: "",
+      serviceType: "INGRESO",
       fixedCommission: "",
+      classification: "ESTANDAR",
+      chemicalFamily: "",
+      agrochemicalType: "",
+      formulation: "",
+      dosage: "",
+      veterinaryType: "",
+      targetSpecies: "",
+      activeIngredients: "",
+      technicalNotes: "",
+      servicePrice: "",
       prices: [{ priceType: "PUBLICO", branchId: "global", price: "" }],
       stockRows: [],
     },
@@ -256,6 +281,7 @@ export function ProductFormDialog({
   const watchTrackStock = watch("trackStock");
   const watchIsUniversal = watch("isUniversal");
   const watchIsService = watch("isService");
+  const watchClassification = (watch("classification") || (watchIsService ? "SERVICIO" : "ESTANDAR")) as ProductClassification;
   const watchCategoryId = watch("categoryId");
   const watchBrandId = watch("brandId");
   const watchTagIds = watch("tagIds") || [];
@@ -314,8 +340,18 @@ export function ProductFormDialog({
       trackStock: true,
       isUniversal: false,
       isService: false,
-      serviceType: "",
+      serviceType: "INGRESO",
       fixedCommission: "",
+      classification: "ESTANDAR",
+      chemicalFamily: "",
+      agrochemicalType: "",
+      formulation: "",
+      dosage: "",
+      veterinaryType: "",
+      targetSpecies: "",
+      activeIngredients: "",
+      technicalNotes: "",
+      servicePrice: "",
       prices: [{ priceType: "PUBLICO", branchId: "global", price: "" }],
       stockRows: [],
     });
@@ -427,39 +463,59 @@ export function ProductFormDialog({
   }, [suppliers, supplierFilterQuery, watchSupplierIds]);
 
   const onSubmitProduct = async (data: ProductFormData) => {
+    const isServ = data.classification === "SERVICIO" || Boolean(data.isService);
     const body: Record<string, unknown> = {
       name: data.name.trim(),
-      unit: data.unit,
-      trackStock: data.trackStock,
-      isUniversal: data.isUniversal,
-      isService: data.isService,
-      serviceType: data.isService ? data.serviceType : null,
+      classification: data.classification || (isServ ? "SERVICIO" : "ESTANDAR"),
+      unit: isServ ? "UNIDAD" : data.unit,
+      trackStock: isServ ? false : data.trackStock,
+      isUniversal: isServ ? false : data.isUniversal,
+      isService: isServ,
+      serviceType: isServ ? (data.serviceType || "INGRESO") : null,
       fixedCommission:
-        data.isService && data.fixedCommission
+        isServ && data.fixedCommission
           ? Number(data.fixedCommission)
           : null,
+      chemicalFamily: data.classification === "AGROQUIMICO" ? data.chemicalFamily?.trim() || null : null,
+      agrochemicalType: data.classification === "AGROQUIMICO" ? data.agrochemicalType?.trim() || null : null,
+      formulation: data.classification === "AGROQUIMICO" ? data.formulation?.trim() || null : null,
+      dosage: (data.classification === "AGROQUIMICO" || data.classification === "VETERINARIO") ? data.dosage?.trim() || null : null,
+      veterinaryType: data.classification === "VETERINARIO" ? data.veterinaryType?.trim() || null : null,
+      targetSpecies: data.classification === "VETERINARIO" ? data.targetSpecies?.trim() || null : null,
+      activeIngredients: (data.classification === "AGROQUIMICO" || data.classification === "VETERINARIO") ? data.activeIngredients?.trim() || null : null,
+      technicalNotes: (data.classification === "AGROQUIMICO" || data.classification === "VETERINARIO") ? data.technicalNotes?.trim() || null : null,
       categoryId: data.categoryId ? Number(data.categoryId) : null,
       subcategoryId: data.subcategoryId ? Number(data.subcategoryId) : null,
       brandId: data.brandId ? Number(data.brandId) : null,
       tagIds: data.tagIds.map(Number),
       supplierIds: (data.supplierIds || []).map(Number),
-      costPrice: data.costPrice ? Number(data.costPrice) : null,
+      costPrice: isServ ? null : (data.costPrice ? Number(data.costPrice) : null),
       internalCode: data.internalCode?.trim() || undefined,
-      barcode: data.barcode?.trim() || undefined,
+      barcode: isServ ? undefined : (data.barcode?.trim() || undefined),
       description: data.description?.trim() || undefined,
       imageUrl: productImageUrl || undefined,
-      expirationDate: data.expirationDate || null,
-      units:
-        data.units?.map((u) => ({
-          unit: u.unit,
-          factor: Number(u.factor),
-          priceDetalle: u.priceDetalle ? Number(u.priceDetalle) : null,
-          priceMayorista: u.priceMayorista ? Number(u.priceMayorista) : null,
-          barcode: u.barcode?.trim() || undefined,
-        })) || [],
+      expirationDate: isServ ? null : (data.expirationDate || null),
+      units: isServ
+        ? []
+        : (data.units?.map((u) => ({
+            unit: u.unit,
+            factor: Number(u.factor),
+            priceDetalle: u.priceDetalle ? Number(u.priceDetalle) : null,
+            priceMayorista: u.priceMayorista ? Number(u.priceMayorista) : null,
+            barcode: u.barcode?.trim() || undefined,
+          })) || []),
     };
 
-    if (!data.isUniversal) {
+    if (isServ) {
+      const sPrice = data.servicePrice ? Number(data.servicePrice) : 0;
+      body.prices = [
+        {
+          priceType: "PUBLICO",
+          branchId: null,
+          price: sPrice,
+        },
+      ];
+    } else if (!data.isUniversal) {
       body.prices = data.prices.map((p) => ({
         priceType: p.priceType,
         branchId: p.branchId === "global" ? null : Number(p.branchId),
@@ -525,75 +581,205 @@ export function ProductFormDialog({
             onSubmit={handleSubmit(onSubmitProduct)}
             className="space-y-6 mt-4 px-2"
           >
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-              {/* Columna Izquierda: Información Básica */}
-              <div className="space-y-6">
-                <div className="p-6 rounded-xl border border-[var(--border)] space-y-6 bg-transparent">
-                  <p className="text-xs font-black uppercase tracking-widest opacity-60 text-[var(--text-sec)]">
-                    Información General
+            {/* 1. SECCIÓN PRINCIPAL: IDENTIFICACIÓN Y CLASIFICACIÓN (Ancho completo) */}
+            <div className="p-6 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/40 space-y-6">
+              <div className="flex flex-col sm:flex-row gap-5 items-start">
+                {/* Photo upload */}
+                <div className="space-y-2 shrink-0">
+                  <Label className="text-sm font-bold">Foto</Label>
+                  <label className="block cursor-pointer">
+                    <input
+                      type="file"
+                      accept="image/jpg,image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) handleProductImageUpload(f);
+                        e.target.value = "";
+                      }}
+                    />
+                    <div className="relative w-28 h-28 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--card)] flex items-center justify-center overflow-hidden hover:border-[var(--primary)] transition-colors group">
+                      {productImageUrl ? (
+                        <>
+                          <img
+                            src={productImageUrl}
+                            alt="Vista previa"
+                            className="w-full h-full object-contain"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
+                            <Upload size={16} className="text-white" />
+                            <span className="text-white text-[10px] font-bold">
+                              Cambiar
+                            </span>
+                          </div>
+                        </>
+                      ) : uploadingImage ? (
+                        <div className="flex flex-col items-center gap-2 opacity-60">
+                          <div className="w-5 h-5 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-1 opacity-40 group-hover:opacity-70 transition-opacity px-2 text-center">
+                          <Upload size={18} />
+                          <span className="text-[9px] font-bold">
+                            Subir foto
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </label>
+                </div>
+
+                <div className="space-y-2 flex-1 w-full">
+                  <Label className="text-sm font-bold">
+                    Nombre del {watchClassification === "SERVICIO" ? "Servicio" : "Producto"}{" "}
+                    <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    {...register("name")}
+                    placeholder={
+                      watchClassification === "SERVICIO"
+                        ? "Ej. Asesoría técnica en campo, Flete, Mano de obra..."
+                        : watchClassification === "AGROQUIMICO"
+                          ? "Ej. Karate con Zeon 5 CS, Glifosato 480 SL..."
+                          : watchClassification === "VETERINARIO"
+                            ? "Ej. Ivermectina 1%, Oxitetraciclina L.A...."
+                            : "Ej. Fertilizante 18-46-0, Machete Corneta 18\"..."
+                    }
+                    className="h-11 rounded-xl bg-[var(--card)] font-semibold text-base"
+                  />
+                  <p className="text-[10px] opacity-60 ml-1">
+                    JPG, PNG o WEBP · máx 5 MB (opcional)
+                  </p>
+                </div>
+              </div>
+
+              {/* CLASIFICADOR DINÁMICO DE ÍTEM (Directamente debajo del nombre) */}
+              <ProductTechnicalFields
+                classification={watchClassification}
+                onChangeClassification={(c) => {
+                  setValue("classification", c, { shouldDirty: true });
+                  const isS = c === "SERVICIO";
+                  setValue("isService", isS, { shouldDirty: true });
+                  if (isS) {
+                    setValue("trackStock", false, { shouldDirty: true });
+                    const currPrice = watch("prices")?.[0]?.price;
+                    if (!watch("servicePrice") && currPrice) {
+                      setValue("servicePrice", String(currPrice), { shouldDirty: true });
+                    }
+                  }
+                }}
+                chemicalFamily={watch("chemicalFamily") || ""}
+                agrochemicalType={watch("agrochemicalType") || ""}
+                formulation={watch("formulation") || ""}
+                dosage={watch("dosage") || ""}
+                veterinaryType={watch("veterinaryType") || ""}
+                targetSpecies={watch("targetSpecies") || ""}
+                activeIngredients={watch("activeIngredients") || ""}
+                technicalNotes={watch("technicalNotes") || ""}
+                onChangeTechnical={(field, val) => setValue(field as any, val, { shouldDirty: true })}
+                serviceType={watch("serviceType") || "INGRESO"}
+                fixedCommission={watch("fixedCommission") || ""}
+                servicePrice={watch("servicePrice") || ""}
+                onChangeService={(field, val) => {
+                  setValue(field as any, val, { shouldDirty: true });
+                  if (field === "servicePrice") {
+                    setValue("prices.0.price", val, { shouldDirty: true });
+                  }
+                }}
+              />
+            </div>
+
+            {/* 2. CAMPOS RESTANTES: SERVICIO vs PRODUCTO ALMACENABLE */}
+            {watchClassification === "SERVICIO" ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in">
+                {/* Columna Izquierda: Información Básica del Servicio */}
+                <div className="p-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] space-y-5">
+                  <p className="text-xs font-black uppercase tracking-widest text-[var(--text-sec)]">
+                    Datos Generales del Servicio
                   </p>
 
-                  <div className="flex gap-4 items-start">
-                    {/* Photo upload */}
-                    <div className="space-y-2 shrink-0">
-                      <Label className="text-sm font-bold">Foto</Label>
-                      <label className="block cursor-pointer">
-                        <input
-                          type="file"
-                          accept="image/jpg,image/jpeg,image/png,image/webp"
-                          className="hidden"
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) handleProductImageUpload(f);
-                            e.target.value = "";
-                          }}
-                        />
-                        <div className="relative w-28 h-28 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--card)] flex items-center justify-center overflow-hidden hover:border-[var(--primary)] transition-colors group">
-                          {productImageUrl ? (
-                            <>
-                              <img
-                                src={productImageUrl}
-                                alt="Vista previa"
-                                className="w-full h-full object-contain"
-                              />
-                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
-                                <Upload size={16} className="text-white" />
-                                <span className="text-white text-[10px] font-bold">
-                                  Cambiar
-                                </span>
-                              </div>
-                            </>
-                          ) : uploadingImage ? (
-                            <div className="flex flex-col items-center gap-2 opacity-60">
-                              <div className="w-5 h-5 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-center gap-1 opacity-40 group-hover:opacity-70 transition-opacity px-2 text-center">
-                              <Upload size={18} />
-                              <span className="text-[9px] font-bold">
-                                Subir foto
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </label>
-                    </div>
-
-                    <div className="space-y-2 flex-1">
-                      <Label className="text-sm font-bold">
-                        Nombre del Producto{" "}
-                        <span className="text-red-500">*</span>
-                      </Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold">Código Interno (Opcional)</Label>
                       <Input
-                        {...register("name")}
-                        placeholder="Ej. Fertilizante 18-46-0"
-                        className="h-11 rounded-xl bg-[var(--card)]"
+                        {...register("internalCode")}
+                        placeholder="SRV-001"
+                        className="h-11 rounded-xl bg-[var(--surface)]"
                       />
-                      <p className="text-[10px] opacity-60 ml-1">
-                        JPG, PNG o WEBP · máx 5 MB (opcional)
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold">Categoría (Opcional)</Label>
+                      <Select
+                        value={watch("categoryId")}
+                        onValueChange={(v) => setValue("categoryId", v, { shouldDirty: true })}
+                      >
+                        <SelectTrigger className="h-11 rounded-xl bg-[var(--surface)]">
+                          <SelectValue placeholder="Sin categoría" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.map((c) => (
+                            <SelectItem key={c.id} value={String(c.id)}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-bold">Descripción o Alcance del Servicio</Label>
+                    <Textarea
+                      {...register("description")}
+                      placeholder="Describe las condiciones, alcance o detalles del servicio..."
+                      className="rounded-xl bg-[var(--surface)] min-h-[140px]"
+                    />
+                  </div>
+                </div>
+
+                {/* Columna Derecha: Tarjeta Informativa / Resumen */}
+                <div className="p-6 rounded-2xl border border-amber-500/20 bg-amber-500/5 flex flex-col justify-between space-y-6">
+                  <div className="space-y-3">
+                    <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/20 inline-block">
+                      Servicio sin inventario físico
+                    </span>
+                    <h3 className="text-lg font-black text-[var(--text-main)]">
+                      {watch("name") || "Nuevo Servicio"}
+                    </h3>
+                    <p className="text-xs text-[var(--text-sec)] leading-relaxed">
+                      Este servicio se registrará contablemente sin descontar ni rastrear existencias de inventario físico. Puede utilizarse directamente en Cotizaciones, Órdenes y Facturación.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 p-4 rounded-xl bg-[var(--card)] border border-[var(--border)]">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase opacity-60 text-[var(--text-sec)]">
+                        Tipo de Servicio
+                      </p>
+                      <p className="text-sm font-black text-[var(--text-main)] mt-0.5">
+                        {watch("serviceType") === "SALIDA" ? "Salida de Caja (Pago/Gasto)" : "Ingreso a Caja (Cobro)"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase opacity-60 text-[var(--text-sec)]">
+                        Tarifa / Precio
+                      </p>
+                      <p className="text-base font-black text-amber-600 dark:text-amber-400 mt-0.5">
+                        ${Number(watch("servicePrice") || 0).toFixed(2)}
                       </p>
                     </div>
                   </div>
+                </div>
+              </div>
+            ) : (
+              /* PRODUCTO ALMACENABLE (ESTÁNDAR, AGROQUÍMICO O VETERINARIO) */
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                {/* Columna Izquierda: Información Básica */}
+                <div className="space-y-6">
+                  <div className="p-6 rounded-xl border border-[var(--border)] space-y-6 bg-transparent">
+                    <p className="text-xs font-black uppercase tracking-widest opacity-60 text-[var(--text-sec)]">
+                      Códigos y Categorización
+                    </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 [&>div]:min-w-0">
                     <div className="space-y-2">
@@ -1402,6 +1588,7 @@ export function ProductFormDialog({
                 )}
               </div>
             </div>
+          )}
 
             <DialogFooter className="pt-6 border-t border-[var(--border)] gap-3">
               <Button

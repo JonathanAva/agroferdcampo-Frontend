@@ -74,6 +74,9 @@ interface Product {
   units?: ProductUnitOption[];
   imageUrl?: string | null;
   description?: string | null;
+  isService?: boolean;
+  trackStock?: boolean;
+  classification?: string;
 }
 
 interface CartItem extends Product {
@@ -2027,7 +2030,7 @@ export function NewQuote() {
                   setEditingCartId(null);
                   setSelectedProduct(null);
                 }}>Cancelar</Button>
-                <Button className="flex-1 font-black h-12 bg-[var(--primary)] text-white shadow-md shadow-[var(--primary)]/20" onClick={addProductToCart}>
+                <Button className="flex-1 font-black h-12 bg-[var(--primary)] text-white shadow-md shadow-[var(--primary)]/20" onClick={() => addProductToCart()}>
                   {editingCartId ? (
                     <>
                       <Check size={18} className="mr-2" /> Actualizar Producto

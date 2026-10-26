@@ -23,7 +23,7 @@ import { Badge } from "../components/ui/badge";
 import { InlinePills } from "../components/ui/inline-pills";
 import { Button } from "../components/ui/button";
 import { Switch } from "../components/ui/switch";
-import { Edit, Copy, Check, X, History, Award } from "lucide-react";
+import { Edit, Copy, Check, X, History, Award, Wrench, Sprout, Stethoscope } from "lucide-react";
 import { cn } from "../components/ui/utils";
 import { ProductSalesHistoryDialog } from "../components/products/ProductSalesHistoryDialog";
 import { Input } from "../components/ui/input";
@@ -59,6 +59,10 @@ import * as z from "zod";
 import { SmartFilter, FilterConfig } from "../components/ui/smart-filter";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
+import {
+  ProductTechnicalFields,
+  ProductClassification,
+} from "../components/products/ProductTechnicalFields";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface ProductPrice {
@@ -81,6 +85,15 @@ interface CatalogProduct {
   isService?: boolean;
   serviceType?: string;
   fixedCommission?: number | string;
+  classification?: string;
+  chemicalFamily?: string;
+  agrochemicalType?: string;
+  formulation?: string;
+  dosage?: string;
+  veterinaryType?: string;
+  targetSpecies?: string;
+  activeIngredients?: string;
+  technicalNotes?: string;
   isActive: boolean;
   imageUrl?: string;
   category?: { id: number; name: string };
@@ -201,6 +214,16 @@ const productSchema = z.object({
   isService: z.boolean().optional(),
   serviceType: z.string().optional(),
   fixedCommission: z.string().optional(),
+  classification: z.enum(["SERVICIO", "ESTANDAR", "AGROQUIMICO", "VETERINARIO"]).optional(),
+  chemicalFamily: z.string().optional(),
+  agrochemicalType: z.string().optional(),
+  formulation: z.string().optional(),
+  dosage: z.string().optional(),
+  veterinaryType: z.string().optional(),
+  targetSpecies: z.string().optional(),
+  activeIngredients: z.string().optional(),
+  technicalNotes: z.string().optional(),
+  servicePrice: z.string().optional(),
   prices: z
     .array(
       z.object({
@@ -366,8 +389,18 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       trackStock: true,
       isUniversal: false,
       isService: false,
-      serviceType: "",
+      serviceType: "INGRESO",
       fixedCommission: "",
+      classification: "ESTANDAR",
+      chemicalFamily: "",
+      agrochemicalType: "",
+      formulation: "",
+      dosage: "",
+      veterinaryType: "",
+      targetSpecies: "",
+      activeIngredients: "",
+      technicalNotes: "",
+      servicePrice: "",
       prices: [{ priceType: "PUBLICO", branchId: "global", price: "" }],
       stockRows: [],
     },
@@ -403,6 +436,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   const watchTrackStock = watch("trackStock");
   const watchIsUniversal = watch("isUniversal");
   const watchIsService = watch("isService");
+  const watchClassification = (watch("classification") || (watchIsService ? "SERVICIO" : "ESTANDAR")) as ProductClassification;
   const watchCategoryId = watch("categoryId");
   const watchBrandId = watch("brandId");
   const watchTagIds = watch("tagIds") || [];
@@ -625,12 +659,14 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
     if (product) {
       setEditingProduct(product);
       setProductImageUrl(product.imageUrl || null);
+      const isServ = product.isService || product.classification === "SERVICIO";
+      const classif = (product.classification as ProductClassification) || (isServ ? "SERVICIO" : "ESTANDAR");
       reset({
         name: product.name,
         internalCode: product.internalCode || "",
         barcode: product.barcode || "",
         description: product.description || "",
-        unit: product.unit,
+        unit: product.unit || "UNIDAD",
         categoryId: product.category?.id ? String(product.category.id) : "",
         subcategoryId: product.subcategory?.id
           ? String(product.subcategory.id)
@@ -644,13 +680,23 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         supplierIds: product.suppliers?.map((s) => String(s.supplierId)) || [],
         expirationDate: "",
         costPrice: product.costPrice?.toString() || "",
-        trackStock: product.trackStock,
+        trackStock: isServ ? false : product.trackStock,
         isUniversal: product.isUniversal || false,
-        isService: product.isService || false,
-        serviceType: product.serviceType || "",
+        isService: isServ,
+        serviceType: product.serviceType || "INGRESO",
         fixedCommission: product.fixedCommission
           ? String(product.fixedCommission)
           : "",
+        classification: classif,
+        chemicalFamily: product.chemicalFamily || "",
+        agrochemicalType: product.agrochemicalType || "",
+        formulation: product.formulation || "",
+        dosage: product.dosage || "",
+        veterinaryType: product.veterinaryType || "",
+        targetSpecies: product.targetSpecies || "",
+        activeIngredients: product.activeIngredients || "",
+        technicalNotes: product.technicalNotes || "",
+        servicePrice: product.prices?.[0]?.price ? String(product.prices[0].price) : "",
 
         prices: product.prices.map((p) => ({
           id: p.id,
@@ -688,6 +734,19 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
         costPrice: "",
         trackStock: true,
         isUniversal: false,
+        isService: false,
+        serviceType: "INGRESO",
+        fixedCommission: "",
+        classification: "ESTANDAR",
+        chemicalFamily: "",
+        agrochemicalType: "",
+        formulation: "",
+        dosage: "",
+        veterinaryType: "",
+        targetSpecies: "",
+        activeIngredients: "",
+        technicalNotes: "",
+        servicePrice: "",
         prices: [{ priceType: "PUBLICO", branchId: "global", price: "" }],
         units: [],
         stockRows: [],
@@ -703,12 +762,14 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
     setQuickBrandName("");
     setEditingProduct(null);
     setProductImageUrl(product.imageUrl || null);
+    const isServ = product.isService || product.classification === "SERVICIO";
+    const classif = (product.classification as ProductClassification) || (isServ ? "SERVICIO" : "ESTANDAR");
     reset({
       name: `${product.name} (Copia)`,
       internalCode: "",
       barcode: "",
       description: product.description || "",
-      unit: product.unit,
+      unit: product.unit || "UNIDAD",
       categoryId: product.category?.id ? String(product.category.id) : "",
       subcategoryId: product.subcategory?.id
         ? String(product.subcategory.id)
@@ -722,8 +783,23 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       supplierIds: product.suppliers?.map((s) => String(s.supplierId)) || [],
       expirationDate: "",
       costPrice: product.costPrice?.toString() || "",
-      trackStock: product.trackStock,
+      trackStock: isServ ? false : product.trackStock,
       isUniversal: false,
+      isService: isServ,
+      serviceType: product.serviceType || "INGRESO",
+      fixedCommission: product.fixedCommission
+        ? String(product.fixedCommission)
+        : "",
+      classification: classif,
+      chemicalFamily: product.chemicalFamily || "",
+      agrochemicalType: product.agrochemicalType || "",
+      formulation: product.formulation || "",
+      dosage: product.dosage || "",
+      veterinaryType: product.veterinaryType || "",
+      targetSpecies: product.targetSpecies || "",
+      activeIngredients: product.activeIngredients || "",
+      technicalNotes: product.technicalNotes || "",
+      servicePrice: product.prices?.[0]?.price ? String(product.prices[0].price) : "",
       prices: product.prices.map((p) => ({
         priceType: p.priceType,
         branchId: p.branchId === null ? "global" : String(p.branchId),
@@ -768,41 +844,61 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
   };
 
   const onSubmitProduct = async (data: ProductFormData) => {
+    const isServ = data.classification === "SERVICIO" || Boolean(data.isService);
     const body: Record<string, unknown> = {
       name: data.name.trim(),
-      unit: data.unit,
-      trackStock: data.trackStock,
-      isUniversal: data.isUniversal,
-      isService: data.isService,
-      serviceType: data.isService ? data.serviceType : null,
+      classification: data.classification || (isServ ? "SERVICIO" : "ESTANDAR"),
+      unit: isServ ? "UNIDAD" : data.unit,
+      trackStock: isServ ? false : data.trackStock,
+      isUniversal: isServ ? false : data.isUniversal,
+      isService: isServ,
+      serviceType: isServ ? (data.serviceType || "INGRESO") : null,
       fixedCommission:
-        data.isService && data.fixedCommission
+        isServ && data.fixedCommission
           ? Number(data.fixedCommission)
           : null,
       categoryId: data.categoryId ? Number(data.categoryId) : null,
-      subcategoryId: data.subcategoryId ? Number(data.subcategoryId) : null,
-      brandId: data.brandId ? Number(data.brandId) : null,
-      tagIds: data.tagIds.map(Number),
-      supplierIds: (data.supplierIds || []).map(Number),
-      costPrice: data.costPrice ? Number(data.costPrice) : null,
+      subcategoryId: isServ ? null : (data.subcategoryId ? Number(data.subcategoryId) : null),
+      brandId: isServ ? null : (data.brandId ? Number(data.brandId) : null),
+      tagIds: isServ ? [] : data.tagIds.map(Number),
+      supplierIds: isServ ? [] : (data.supplierIds || []).map(Number),
+      costPrice: isServ ? null : (data.costPrice ? Number(data.costPrice) : null),
       internalCode: data.internalCode?.trim() || undefined,
-      barcode: data.barcode?.trim() || undefined,
+      barcode: isServ ? undefined : (data.barcode?.trim() || undefined),
       description: data.description?.trim() || undefined,
       imageUrl: productImageUrl || undefined,
-      units:
-        data.units?.map((u) => ({
-          unit: u.unit,
-          factor: Number(u.factor),
-          priceDetalle: u.priceDetalle ? Number(u.priceDetalle) : null,
-          priceMayorista: u.priceMayorista ? Number(u.priceMayorista) : null,
-          barcode: u.barcode?.trim() || undefined,
-        })) || [],
+      chemicalFamily: data.classification === "AGROQUIMICO" ? data.chemicalFamily?.trim() || null : null,
+      agrochemicalType: data.classification === "AGROQUIMICO" ? data.agrochemicalType?.trim() || null : null,
+      formulation: data.classification === "AGROQUIMICO" ? data.formulation?.trim() || null : null,
+      dosage: (data.classification === "AGROQUIMICO" || data.classification === "VETERINARIO") ? data.dosage?.trim() || null : null,
+      veterinaryType: data.classification === "VETERINARIO" ? data.veterinaryType?.trim() || null : null,
+      targetSpecies: data.classification === "VETERINARIO" ? data.targetSpecies?.trim() || null : null,
+      activeIngredients: (data.classification === "AGROQUIMICO" || data.classification === "VETERINARIO") ? data.activeIngredients?.trim() || null : null,
+      technicalNotes: (data.classification === "AGROQUIMICO" || data.classification === "VETERINARIO") ? data.technicalNotes?.trim() || null : null,
+      units: isServ
+        ? []
+        : (data.units?.map((u) => ({
+            unit: u.unit,
+            factor: Number(u.factor),
+            priceDetalle: u.priceDetalle ? Number(u.priceDetalle) : null,
+            priceMayorista: u.priceMayorista ? Number(u.priceMayorista) : null,
+            barcode: u.barcode?.trim() || undefined,
+          })) || []),
     };
 
     if (!editingProduct) {
-      body.expirationDate = data.expirationDate || null;
+      body.expirationDate = isServ ? null : (data.expirationDate || null);
 
-      if (!data.isUniversal) {
+      if (isServ) {
+        const sPrice = data.servicePrice ? Number(data.servicePrice) : 0;
+        body.prices = [
+          {
+            priceType: "PUBLICO",
+            branchId: null,
+            price: sPrice,
+          },
+        ];
+      } else if (!data.isUniversal) {
         body.prices = data.prices.map((p) => ({
           priceType: p.priceType,
           branchId: p.branchId === "global" ? null : Number(p.branchId),
@@ -811,7 +907,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
       }
 
       const validStock =
-        data.stockRows?.filter((s) => s.branchId && Number(s.quantity) > 0) ||
+        !isServ && data.stockRows?.filter((s) => s.branchId && Number(s.quantity) > 0) ||
         [];
       if (validStock.length > 0) {
         body.initialStock = validStock.map((s) => ({
@@ -830,7 +926,17 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
           body: JSON.stringify(body),
         });
 
-        if (!data.isUniversal) {
+        if (isServ) {
+          const sPrice = data.servicePrice ? Number(data.servicePrice) : 0;
+          await apiRequest(`/catalog/products/${editingProduct.id}/prices`, {
+            method: "POST",
+            body: JSON.stringify({
+              priceType: "PUBLICO",
+              branchId: null,
+              price: sPrice,
+            }),
+          });
+        } else if (!data.isUniversal) {
           for (const p of data.prices) {
             await apiRequest(`/catalog/products/${editingProduct.id}/prices`, {
               method: "POST",
@@ -842,13 +948,13 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
             });
           }
         }
-        toast.success("Producto actualizado exitosamente");
+        toast.success(isServ ? "Servicio actualizado exitosamente" : "Producto actualizado exitosamente");
       } else {
         await apiRequest("/catalog/products", {
           method: "POST",
           body: JSON.stringify(body),
         });
-        toast.success("Producto creado exitosamente");
+        toast.success(isServ ? "Servicio creado exitosamente" : "Producto creado exitosamente");
       }
       setIsDialogOpen(false);
       fetchData();
@@ -1199,6 +1305,19 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                                 {product.brand.name}
                               </span>
                             )}
+                            {product.classification === "SERVICIO" || product.isService ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-full border border-amber-500/20">
+                                <Wrench size={10} /> Servicio
+                              </span>
+                            ) : product.classification === "AGROQUIMICO" ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full border border-emerald-500/20">
+                                <Sprout size={10} /> {product.agrochemicalType || "Agroquímico"}
+                              </span>
+                            ) : product.classification === "VETERINARIO" ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-700 dark:text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded-full border border-purple-500/20">
+                                <Stethoscope size={10} /> {product.veterinaryType || "Veterinario"}
+                              </span>
+                            ) : null}
                           </div>
                           <span className="text-[10px] font-mono font-bold opacity-40 uppercase tracking-tighter text-[var(--text-sec)]">
                             {product.internalCode ||
@@ -1371,127 +1490,139 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
             onSubmit={handleSubmit(onSubmitProduct)}
             className="space-y-6 mt-4 px-2"
           >
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-              {/* Columna Izquierda: Información Básica */}
-              <div className="space-y-6">
-                <div className="p-6 rounded-xl border border-[var(--border)] space-y-6 bg-transparent">
-                  <p className="text-xs font-black uppercase tracking-widest opacity-60 text-[var(--text-sec)]">
-                    Información General
+            {/* 1. SECCIÓN PRINCIPAL: IDENTIFICACIÓN Y CLASIFICACIÓN (Ancho completo) */}
+            <div className="p-6 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/40 space-y-6">
+              <div className="flex flex-col sm:flex-row gap-5 items-start">
+                {/* Photo upload */}
+                <div className="space-y-2 shrink-0">
+                  <Label className="text-sm font-bold">Foto</Label>
+                  <label className="block cursor-pointer">
+                    <input
+                      type="file"
+                      accept="image/jpg,image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) handleProductImageUpload(f);
+                        e.target.value = "";
+                      }}
+                    />
+                    <div className="relative w-28 h-28 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--card)] flex items-center justify-center overflow-hidden hover:border-[var(--primary)] transition-colors group">
+                      {productImageUrl ? (
+                        <>
+                          <img
+                            src={productImageUrl}
+                            alt="Vista previa"
+                            className="w-full h-full object-contain"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
+                            <Upload size={16} className="text-white" />
+                            <span className="text-white text-[10px] font-bold">
+                              Cambiar
+                            </span>
+                          </div>
+                        </>
+                      ) : uploadingImage ? (
+                        <div className="flex flex-col items-center gap-2 opacity-60">
+                          <div className="w-5 h-5 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-1 opacity-40 group-hover:opacity-70 transition-opacity px-2 text-center">
+                          <Upload size={18} />
+                          <span className="text-[9px] font-bold">
+                            Subir foto
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </label>
+                </div>
+
+                <div className="space-y-2 flex-1 w-full">
+                  <Label className="text-sm font-bold">
+                    Nombre del {watchClassification === "SERVICIO" ? "Servicio" : "Producto"}{" "}
+                    <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    {...register("name")}
+                    placeholder={
+                      watchClassification === "SERVICIO"
+                        ? "Ej. Asesoría técnica en campo, Flete, Mano de obra..."
+                        : watchClassification === "AGROQUIMICO"
+                          ? "Ej. Karate con Zeon 5 CS, Glifosato 480 SL..."
+                          : watchClassification === "VETERINARIO"
+                            ? "Ej. Ivermectina 1%, Oxitetraciclina L.A...."
+                            : "Ej. Fertilizante 18-46-0, Machete Corneta 18\"..."
+                    }
+                    className="h-11 rounded-xl bg-[var(--card)] font-semibold text-base"
+                  />
+                  <p className="text-[10px] opacity-60 ml-1">
+                    JPG, PNG o WEBP · máx 5 MB (opcional)
+                  </p>
+                </div>
+              </div>
+
+              {/* CLASIFICADOR DINÁMICO DE ÍTEM (Directamente debajo del nombre) */}
+              <ProductTechnicalFields
+                classification={watchClassification}
+                onChangeClassification={(c) => {
+                  setValue("classification", c, { shouldDirty: true });
+                  const isS = c === "SERVICIO";
+                  setValue("isService", isS, { shouldDirty: true });
+                  if (isS) {
+                    setValue("trackStock", false, { shouldDirty: true });
+                    const currPrice = watch("prices")?.[0]?.price;
+                    if (!watch("servicePrice") && currPrice) {
+                      setValue("servicePrice", String(currPrice), { shouldDirty: true });
+                    }
+                  }
+                }}
+                chemicalFamily={watch("chemicalFamily") || ""}
+                agrochemicalType={watch("agrochemicalType") || ""}
+                formulation={watch("formulation") || ""}
+                dosage={watch("dosage") || ""}
+                veterinaryType={watch("veterinaryType") || ""}
+                targetSpecies={watch("targetSpecies") || ""}
+                activeIngredients={watch("activeIngredients") || ""}
+                technicalNotes={watch("technicalNotes") || ""}
+                onChangeTechnical={(field, val) => setValue(field as any, val, { shouldDirty: true })}
+                serviceType={watch("serviceType") || "INGRESO"}
+                fixedCommission={watch("fixedCommission") || ""}
+                servicePrice={watch("servicePrice") || ""}
+                onChangeService={(field, val) => {
+                  setValue(field as any, val, { shouldDirty: true });
+                  if (field === "servicePrice") {
+                    setValue("prices.0.price", val, { shouldDirty: true });
+                  }
+                }}
+              />
+            </div>
+
+            {/* 2. CAMPOS RESTANTES: SERVICIO vs PRODUCTO ALMACENABLE */}
+            {watchClassification === "SERVICIO" ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in">
+                {/* Columna Izquierda: Información Básica del Servicio */}
+                <div className="p-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] space-y-5">
+                  <p className="text-xs font-black uppercase tracking-widest text-[var(--text-sec)]">
+                    Datos Generales del Servicio
                   </p>
 
-                  <div className="flex gap-4 items-start">
-                    {/* Photo upload */}
-                    <div className="space-y-2 shrink-0">
-                      <Label className="text-sm font-bold">Foto</Label>
-                      <label className="block cursor-pointer">
-                        <input
-                          type="file"
-                          accept="image/jpg,image/jpeg,image/png,image/webp"
-                          className="hidden"
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) handleProductImageUpload(f);
-                            e.target.value = "";
-                          }}
-                        />
-                        <div className="relative w-28 h-28 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--card)] flex items-center justify-center overflow-hidden hover:border-[var(--primary)] transition-colors group">
-                          {productImageUrl ? (
-                            <>
-                              <img
-                                src={productImageUrl}
-                                alt="Vista previa"
-                                className="w-full h-full object-contain"
-                              />
-                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
-                                <Upload size={16} className="text-white" />
-                                <span className="text-white text-[10px] font-bold">
-                                  Cambiar
-                                </span>
-                              </div>
-                            </>
-                          ) : uploadingImage ? (
-                            <div className="flex flex-col items-center gap-2 opacity-60">
-                              <div className="w-5 h-5 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-center gap-1 opacity-40 group-hover:opacity-70 transition-opacity px-2 text-center">
-                              <Upload size={18} />
-                              <span className="text-[9px] font-bold">
-                                Subir foto
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </label>
-                    </div>
-
-                    <div className="space-y-2 flex-1">
-                      <Label className="text-sm font-bold">
-                        Nombre del Producto{" "}
-                        <span className="text-red-500">*</span>
-                      </Label>
-                      <Input
-                        {...register("name")}
-                        placeholder="Ej. Fertilizante 18-46-0"
-                        className="h-11 rounded-xl bg-[var(--card)]"
-                      />
-                      <p className="text-[10px] opacity-60 ml-1">
-                        JPG, PNG o WEBP · máx 5 MB (opcional)
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 [&>div]:min-w-0">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label className="text-sm font-bold">
-                        Código Interno
-                      </Label>
+                      <Label className="text-sm font-bold">Código Interno (Opcional)</Label>
                       <Input
                         {...register("internalCode")}
-                        placeholder="FERT-001"
-                        className="h-11 rounded-xl bg-[var(--card)]"
+                        placeholder="SRV-001"
+                        className="h-11 rounded-xl bg-[var(--surface)]"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-sm font-bold">
-                        Código de Barras
-                      </Label>
-                      <Input
-                        {...register("barcode")}
-                        placeholder="7501234567890"
-                        className="h-11 rounded-xl bg-[var(--card)]"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-sm font-bold">
-                        Unidad <span className="text-red-500">*</span>
-                      </Label>
-                      <Select
-                        value={watch("unit")}
-                        onValueChange={(v) => setValue("unit", v)}
-                      >
-                        <SelectTrigger className="h-11 rounded-xl bg-[var(--card)]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {UNITS.map((u) => (
-                            <SelectItem key={u} value={u}>
-                              {u?.replace("_", " ")}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 [&>div]:min-w-0">
-                    <div className="space-y-2">
-                      <Label className="text-sm font-bold">Categoría</Label>
+                      <Label className="text-sm font-bold">Categoría (Opcional)</Label>
                       <Select
                         value={watch("categoryId")}
-                        onValueChange={(v) => setValue("categoryId", v)}
+                        onValueChange={(v) => setValue("categoryId", v, { shouldDirty: true })}
                       >
-                        <SelectTrigger className="h-11 rounded-xl bg-[var(--card)]">
+                        <SelectTrigger className="h-11 rounded-xl bg-[var(--surface)]">
                           <SelectValue placeholder="Sin categoría" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1503,511 +1634,563 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-sm font-bold">Subcategoría</Label>
-                      <Select
-                        value={watch("subcategoryId")}
-                        onValueChange={(v) => setValue("subcategoryId", v)}
-                        disabled={!watchCategoryId}
-                      >
-                        <SelectTrigger className="h-11 rounded-xl bg-[var(--card)]">
-                          <SelectValue
-                            placeholder={
-                              watchCategoryId
-                                ? "Sin subcategoría"
-                                : "Elige categoría"
-                            }
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableSubcategories.map((s) => (
-                            <SelectItem key={s.id} value={String(s.id)}>
-                              {s.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {!editingProduct && (
-                      <div className="space-y-2">
-                        <Label className="text-sm font-bold whitespace-nowrap">
-                          Fecha de Vencimiento
-                        </Label>
-                        <Input
-                          type="date"
-                          {...register("expirationDate")}
-                          className="h-11 rounded-xl bg-[var(--card)]"
-                        />
-                        <p className="text-[10px] opacity-60 ml-1">
-                          Opcional. Aplica solo al lote inicial.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Marca */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-bold flex items-center gap-1.5">
-                        <Award size={15} className="text-amber-600" />
-                        Marca
-                      </Label>
-                      {watchBrandId && (
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
-                            {brands.find((b) => String(b.id) === watchBrandId)?.name || "Marca seleccionada"}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setValue("brandId", "")}
-                            className="text-muted-foreground hover:text-red-500 p-0.5 rounded text-xs"
-                            title="Quitar marca"
-                          >
-                            <X size={12} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-3">
-                      {/* Buscador de marcas */}
-                      {brands.length > 0 && (
-                        <div className="relative">
-                          <Search
-                            size={14}
-                            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-                          />
-                          <Input
-                            value={brandFilterQuery}
-                            onChange={(e) => setBrandFilterQuery(e.target.value)}
-                            placeholder="Buscar marcas por nombre..."
-                            className="h-8 pl-8 pr-8 text-xs rounded-lg bg-[var(--bg)] border-[var(--border)]"
-                          />
-                          {brandFilterQuery && (
-                            <button
-                              type="button"
-                              onClick={() => setBrandFilterQuery("")}
-                              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded"
-                              title="Limpiar búsqueda"
-                            >
-                              <X size={13} />
-                            </button>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Lista de marcas */}
-                      <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto pr-1">
-                        {brands.length === 0 ? (
-                          <p className="text-[10px] opacity-50 py-1">
-                            Sin marcas registradas todavía. Puedes agregar una abajo.
-                          </p>
-                        ) : filteredFormBrands.length === 0 ? (
-                          <div className="py-2 text-center w-full">
-                            <p className="text-xs text-[var(--text-sec)]">
-                              No se encontraron marcas con "{brandFilterQuery}".
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() => setBrandFilterQuery("")}
-                              className="text-xs text-[var(--primary)] hover:underline mt-1 font-medium"
-                            >
-                              Ver todas las marcas
-                            </button>
-                          </div>
-                        ) : (
-                          filteredFormBrands.map((b) => {
-                            const selected = watchBrandId === String(b.id);
-                            return (
-                              <button
-                                type="button"
-                                key={b.id}
-                                onClick={() => setValue("brandId", selected ? "" : String(b.id))}
-                                className={cn(
-                                  "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
-                                  selected
-                                    ? "bg-amber-600 text-white border-amber-600 shadow-sm"
-                                    : "bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-amber-500 hover:text-foreground",
-                                )}
-                              >
-                                {selected && <Check size={11} className="stroke-[3]" />}
-                                {b.name}
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-                      <div className="flex gap-2 pt-2 border-t border-[var(--border)]">
-                        <Input
-                          value={quickBrandName}
-                          onChange={(e) => setQuickBrandName(e.target.value)}
-                          placeholder="Nueva marca rápida..."
-                          className="h-8 text-xs rounded-lg"
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              handleQuickAddBrand();
-                            }
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-8 shrink-0"
-                          onClick={handleQuickAddBrand}
-                          title="Crear y asignar marca rápida"
-                        >
-                          <Plus size={14} className="mr-1" />
-                          Agregar
-                        </Button>
-                      </div>
-                    </div>
-                    <p className="text-[10px] opacity-60 ml-1">
-                      Asigna la marca comercial para facilitar la búsqueda y clasificación de productos.
-                    </p>
-                  </div>
-
-                  {/* Proveedores */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-bold flex items-center gap-1.5">
-                        <Truck size={15} className="text-sky-600" />
-                        Proveedores
-                      </Label>
-                      {watchSupplierIds.length > 0 && (
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-500/20">
-                          {watchSupplierIds.length} seleccionado{watchSupplierIds.length !== 1 ? "s" : ""}
-                        </span>
-                      )}
-                    </div>
-                    <div className="p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-3">
-                      {/* Proveedores asociados, con su última compra */}
-                      {watchSupplierIds.length > 0 && (
-                        <div className="space-y-1.5">
-                          {watchSupplierIds.map((sid) => {
-                            const link = editingProduct?.suppliers?.find((s) => String(s.supplierId) === sid);
-                            const name = link?.supplier.name || suppliers.find((s) => String(s.id) === sid)?.name || `Proveedor #${sid}`;
-                            return (
-                              <div key={sid} className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-sky-500/5 border border-sky-500/20">
-                                <div className="min-w-0">
-                                  <p className="text-xs font-bold truncate">{name}</p>
-                                  <p className="text-[10px] text-[var(--text-sec)]">
-                                    {link?.lastPurchaseAt
-                                      ? `Última compra: ${new Date(link.lastPurchaseAt).toLocaleDateString()}${link.lastPurchaseCost != null ? ` · $${Number(link.lastPurchaseCost).toFixed(2)}` : ""}`
-                                      : link
-                                        ? "Asignado manualmente"
-                                        : "Se agregará al guardar"}
-                                  </p>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => toggleSupplier(sid)}
-                                  className="text-muted-foreground hover:text-red-500 p-0.5 rounded shrink-0"
-                                  title="Quitar proveedor"
-                                >
-                                  <X size={13} />
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {/* Buscador de proveedores */}
-                      {suppliers.length > 0 && (
-                        <div className="relative">
-                          <Search
-                            size={14}
-                            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-                          />
-                          <Input
-                            value={supplierFilterQuery}
-                            onChange={(e) => setSupplierFilterQuery(e.target.value)}
-                            placeholder="Buscar proveedores por nombre..."
-                            className="h-8 pl-8 pr-8 text-xs rounded-lg bg-[var(--bg)] border-[var(--border)]"
-                          />
-                          {supplierFilterQuery && (
-                            <button
-                              type="button"
-                              onClick={() => setSupplierFilterQuery("")}
-                              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded"
-                              title="Limpiar búsqueda"
-                            >
-                              <X size={13} />
-                            </button>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Lista de proveedores registrados */}
-                      <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto pr-1">
-                        {suppliers.length === 0 ? (
-                          <p className="text-[10px] opacity-50 py-1">
-                            Sin proveedores registrados todavía. Regístralos en Compras a Proveedores.
-                          </p>
-                        ) : filteredFormSuppliers.length === 0 ? (
-                          <p className="text-xs text-[var(--text-sec)] py-2 w-full text-center">
-                            No se encontraron proveedores con "{supplierFilterQuery}".
-                          </p>
-                        ) : (
-                          filteredFormSuppliers.map((s) => {
-                            const selected = watchSupplierIds.includes(String(s.id));
-                            return (
-                              <button
-                                type="button"
-                                key={s.id}
-                                onClick={() => toggleSupplier(String(s.id))}
-                                className={cn(
-                                  "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
-                                  selected
-                                    ? "bg-sky-600 text-white border-sky-600 shadow-sm"
-                                    : "bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-sky-500 hover:text-foreground",
-                                )}
-                              >
-                                {selected && <Check size={11} className="stroke-[3]" />}
-                                {s.name}
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-                    </div>
-                    <p className="text-[10px] opacity-60 ml-1">
-                      Puedes asignar varios. Al recibir una compra, su proveedor se agrega aquí automáticamente.
-                    </p>
                   </div>
 
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-bold flex items-center gap-1.5">
-                        <Tag size={15} className="text-[var(--primary)]" />
-                        Etiquetas
-                      </Label>
-                      {watchTagIds.length > 0 && (
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/20">
-                          {watchTagIds.length} seleccionada{watchTagIds.length !== 1 ? "s" : ""}
-                        </span>
-                      )}
-                    </div>
-                    <div className="p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-3">
-                      {/* Buscador de etiquetas */}
-                      {tags.length > 0 && (
-                        <div className="relative">
-                          <Search
-                            size={14}
-                            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-                          />
-                          <Input
-                            value={tagFilterQuery}
-                            onChange={(e) => setTagFilterQuery(e.target.value)}
-                            placeholder="Buscar etiquetas por nombre..."
-                            className="h-8 pl-8 pr-8 text-xs rounded-lg bg-[var(--bg)] border-[var(--border)]"
-                          />
-                          {tagFilterQuery && (
-                            <button
-                              type="button"
-                              onClick={() => setTagFilterQuery("")}
-                              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded"
-                              title="Limpiar búsqueda"
-                            >
-                              <X size={13} />
-                            </button>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Lista de etiquetas */}
-                      <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto pr-1">
-                        {tags.length === 0 ? (
-                          <p className="text-[10px] opacity-50 py-1">
-                            Sin etiquetas registradas todavía.
-                          </p>
-                        ) : filteredFormTags.length === 0 ? (
-                          <div className="py-2 text-center w-full">
-                            <p className="text-xs text-[var(--text-sec)]">
-                              No se encontraron etiquetas con "{tagFilterQuery}".
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() => setTagFilterQuery("")}
-                              className="text-xs text-[var(--primary)] hover:underline mt-1 font-medium"
-                            >
-                              Ver todas las etiquetas
-                            </button>
-                          </div>
-                        ) : (
-                          filteredFormTags.map((t) => {
-                            const selected = watchTagIds.includes(String(t.id));
-                            return (
-                              <button
-                                type="button"
-                                key={t.id}
-                                onClick={() => toggleTag(String(t.id))}
-                                className={cn(
-                                  "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
-                                  selected
-                                    ? "bg-[var(--primary)] text-white border-[var(--primary)] shadow-sm"
-                                    : "bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-[var(--primary)] hover:text-foreground",
-                                )}
-                              >
-                                {selected && <Check size={11} className="stroke-[3]" />}
-                                #{t.name}
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-                      <div className="flex gap-2 pt-2 border-t border-[var(--border)]">
-                        <Input
-                          value={quickTagName}
-                          onChange={(e) => setQuickTagName(e.target.value)}
-                          placeholder="Nueva etiqueta rápida..."
-                          className="h-8 text-xs rounded-lg"
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              handleQuickAddTag();
-                            }
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-8 shrink-0"
-                          onClick={handleQuickAddTag}
-                          title="Crear y asignar etiqueta rápida"
-                        >
-                          <Plus size={14} className="mr-1" />
-                          Agregar
-                        </Button>
-                      </div>
-                    </div>
-                    <p className="text-[10px] opacity-60 ml-1">
-                      Solo se usan para buscar el producto por descripción, no
-                      dividen visualmente el catálogo.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-sm font-bold">Descripción</Label>
+                    <Label className="text-sm font-bold">Descripción o Alcance del Servicio</Label>
                     <Textarea
                       {...register("description")}
-                      placeholder="Describe brevemente el producto..."
-                      className="rounded-xl bg-[var(--card)] min-h-[100px]"
+                      placeholder="Describe las condiciones, alcance o detalles del servicio..."
+                      className="rounded-xl bg-[var(--surface)] min-h-[140px]"
                     />
                   </div>
+                </div>
 
-                  <div className="space-y-2">
-                    <Label className="text-sm font-bold">
-                      Costo de Adquisición
-                    </Label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                        $
-                      </span>
-                      <Input
-                        type="number"
-                        step="0.0001"
-                        {...register("costPrice")}
-                        placeholder="0.0000"
-                        className="h-11 pl-7 rounded-xl bg-[var(--card)]"
-                      />
-                    </div>
-                    <p className="text-[10px] opacity-60 ml-1">
-                      Lo que te cuesta comprarlo (Opcional)
+                {/* Columna Derecha: Tarjeta Informativa / Resumen */}
+                <div className="p-6 rounded-2xl border border-amber-500/20 bg-amber-500/5 flex flex-col justify-between space-y-6">
+                  <div className="space-y-3">
+                    <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/20 inline-block">
+                      Servicio sin inventario físico
+                    </span>
+                    <h3 className="text-lg font-black text-[var(--text-main)]">
+                      {watch("name") || "Nuevo Servicio"}
+                    </h3>
+                    <p className="text-xs text-[var(--text-sec)] leading-relaxed">
+                      Este servicio se registrará contablemente sin descontar ni rastrear existencias de inventario físico. Puede utilizarse directamente en Cotizaciones, Punto de Venta y Facturación.
                     </p>
                   </div>
 
-                  <div className="pt-4 border-t border-[var(--border)]">
-                    <div className="flex items-center justify-between">
-                      <div className="text-left">
-                        <p className="text-sm font-bold">Rastrear Inventario</p>
-                        <p className="text-[10px] opacity-60">
-                          {watchIsUniversal
-                            ? "Desactivado automáticamente por ser Producto Universal"
-                            : "Controlar entradas y salidas automáticamente"}
-                        </p>
-                      </div>
-                      <Switch
-                        checked={watchIsUniversal ? false : watchTrackStock}
-                        disabled={watchIsUniversal}
-                        onCheckedChange={(v) => setValue("trackStock", v)}
-                      />
+                  <div className="grid grid-cols-2 gap-3 p-4 rounded-xl bg-[var(--card)] border border-[var(--border)]">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase opacity-60 text-[var(--text-sec)]">
+                        Tipo de Servicio
+                      </p>
+                      <p className="text-sm font-black text-[var(--text-main)] mt-0.5">
+                        {watch("serviceType") === "SALIDA" ? "Salida de Caja (Pago/Gasto)" : "Ingreso a Caja (Cobro)"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase opacity-60 text-[var(--text-sec)]">
+                        Tarifa / Precio
+                      </p>
+                      <p className="text-base font-black text-amber-600 dark:text-amber-400 mt-0.5">
+                        ${Number(watch("servicePrice") || 0).toFixed(2)}
+                      </p>
                     </div>
                   </div>
+                </div>
+              </div>
+            ) : (
+              /* PRODUCTO ALMACENABLE (ESTÁNDAR, AGROQUÍMICO O VETERINARIO) */
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                {/* Columna Izquierda: Información Básica y de Almacén */}
+                <div className="space-y-6">
+                  <div className="p-6 rounded-xl border border-[var(--border)] space-y-6 bg-transparent">
+                    <p className="text-xs font-black uppercase tracking-widest opacity-60 text-[var(--text-sec)]">
+                      Códigos y Categorización
+                    </p>
 
-                  <div className="pt-4 border-t border-[var(--border)]">
-                    <div className="flex items-center justify-between">
-                      <div className="text-left">
-                        <p className="text-sm font-bold">Es un Servicio</p>
-                        <p className="text-[10px] opacity-60">
-                          (No f�sico: luz, remesas, etc)
-                        </p>
-                      </div>
-                      <Switch
-                        checked={watchIsService}
-                        onCheckedChange={(v) => {
-                          setValue("isService", v);
-                          if (v) {
-                            setValue("trackStock", false);
-                            setValue("prices", [
-                              {
-                                priceType: "PUBLICO",
-                                branchId: "global",
-                                price: "0",
-                              },
-                            ]);
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {watchIsService && (
-                    <div className="pt-4 border-t border-[var(--border)] space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 [&>div]:min-w-0">
                       <div className="space-y-2">
                         <Label className="text-sm font-bold">
-                          Tipo de Servicio
+                          Código Interno
+                        </Label>
+                        <Input
+                          {...register("internalCode")}
+                          placeholder="FERT-001"
+                          className="h-11 rounded-xl bg-[var(--card)]"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-bold">
+                          Código de Barras
+                        </Label>
+                        <Input
+                          {...register("barcode")}
+                          placeholder="7501234567890"
+                          className="h-11 rounded-xl bg-[var(--card)]"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-bold">
+                          Unidad <span className="text-red-500">*</span>
                         </Label>
                         <Select
-                          onValueChange={(val) => setValue("serviceType", val)}
-                          value={watch("serviceType") || ""}
+                          value={watch("unit")}
+                          onValueChange={(v) => setValue("unit", v)}
                         >
                           <SelectTrigger className="h-11 rounded-xl bg-[var(--card)]">
-                            <SelectValue placeholder="Selecciona tipo de servicio" />
+                            <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="INGRESO">
-                              Ingreso a Caja (Ej. Cobro de Luz)
-                            </SelectItem>
-                            <SelectItem value="SALIDA">
-                              Salida de Caja (Ej. Pago de Remesa)
-                            </SelectItem>
+                            {UNITS.map((u) => (
+                              <SelectItem key={u} value={u}>
+                                {u?.replace("_", " ")}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 [&>div]:min-w-0">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-bold">Categoría</Label>
+                        <Select
+                          value={watch("categoryId")}
+                          onValueChange={(v) => setValue("categoryId", v)}
+                        >
+                          <SelectTrigger className="h-11 rounded-xl bg-[var(--card)]">
+                            <SelectValue placeholder="Sin categoría" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories.map((c) => (
+                              <SelectItem key={c.id} value={String(c.id)}>
+                                {c.name}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-2">
-                        <Label className="text-sm font-bold">
-                          Comisión Fija ($)
+                        <Label className="text-sm font-bold">Subcategoría</Label>
+                        <Select
+                          value={watch("subcategoryId")}
+                          onValueChange={(v) => setValue("subcategoryId", v)}
+                          disabled={!watchCategoryId}
+                        >
+                          <SelectTrigger className="h-11 rounded-xl bg-[var(--card)]">
+                            <SelectValue
+                              placeholder={
+                                watchCategoryId
+                                  ? "Sin subcategoría"
+                                  : "Elige categoría"
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableSubcategories.map((s) => (
+                              <SelectItem key={s.id} value={String(s.id)}>
+                                {s.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {!editingProduct && (
+                        <div className="space-y-2">
+                          <Label className="text-sm font-bold whitespace-nowrap">
+                            Fecha de Vencimiento
+                          </Label>
+                          <Input
+                            type="date"
+                            {...register("expirationDate")}
+                            className="h-11 rounded-xl bg-[var(--card)]"
+                          />
+                          <p className="text-[10px] opacity-60 ml-1">
+                            Opcional. Aplica solo al lote inicial.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Marca */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-bold flex items-center gap-1.5">
+                          <Award size={15} className="text-amber-600" />
+                          Marca
                         </Label>
+                        {watchBrandId && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                              {brands.find((b) => String(b.id) === watchBrandId)?.name || "Marca seleccionada"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setValue("brandId", "")}
+                              className="text-muted-foreground hover:text-red-500 p-0.5 rounded text-xs"
+                              title="Quitar marca"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-3">
+                        {/* Buscador de marcas */}
+                        {brands.length > 0 && (
+                          <div className="relative">
+                            <Search
+                              size={14}
+                              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+                            />
+                            <Input
+                              value={brandFilterQuery}
+                              onChange={(e) => setBrandFilterQuery(e.target.value)}
+                              placeholder="Buscar marcas por nombre..."
+                              className="h-8 pl-8 pr-8 text-xs rounded-lg bg-[var(--bg)] border-[var(--border)]"
+                            />
+                            {brandFilterQuery && (
+                              <button
+                                type="button"
+                                onClick={() => setBrandFilterQuery("")}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded"
+                                title="Limpiar búsqueda"
+                              >
+                                <X size={13} />
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Lista de marcas */}
+                        <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto pr-1">
+                          {brands.length === 0 ? (
+                            <p className="text-[10px] opacity-50 py-1">
+                              Sin marcas registradas todavía. Puedes agregar una abajo.
+                            </p>
+                          ) : filteredFormBrands.length === 0 ? (
+                            <div className="py-2 text-center w-full">
+                              <p className="text-xs text-[var(--text-sec)]">
+                                No se encontraron marcas con "{brandFilterQuery}".
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => setBrandFilterQuery("")}
+                                className="text-xs text-[var(--primary)] hover:underline mt-1 font-medium"
+                              >
+                                Ver todas las marcas
+                              </button>
+                            </div>
+                          ) : (
+                            filteredFormBrands.map((b) => {
+                              const selected = watchBrandId === String(b.id);
+                              return (
+                                <button
+                                  type="button"
+                                  key={b.id}
+                                  onClick={() => setValue("brandId", selected ? "" : String(b.id))}
+                                  className={cn(
+                                    "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
+                                    selected
+                                      ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+                                      : "bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-amber-500 hover:text-foreground",
+                                  )}
+                                >
+                                  {selected && <Check size={11} className="stroke-[3]" />}
+                                  {b.name}
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                        <div className="flex gap-2 pt-2 border-t border-[var(--border)]">
+                          <Input
+                            value={quickBrandName}
+                            onChange={(e) => setQuickBrandName(e.target.value)}
+                            placeholder="Nueva marca rápida..."
+                            className="h-8 text-xs rounded-lg"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleQuickAddBrand();
+                              }
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 shrink-0"
+                            onClick={handleQuickAddBrand}
+                            title="Crear y asignar marca rápida"
+                          >
+                            <Plus size={14} className="mr-1" />
+                            Agregar
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="text-[10px] opacity-60 ml-1">
+                        Asigna la marca comercial para facilitar la búsqueda y clasificación de productos.
+                      </p>
+                    </div>
+
+                    {/* Proveedores */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-bold flex items-center gap-1.5">
+                          <Truck size={15} className="text-sky-600" />
+                          Proveedores
+                        </Label>
+                        {watchSupplierIds.length > 0 && (
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-500/20">
+                            {watchSupplierIds.length} seleccionado{watchSupplierIds.length !== 1 ? "s" : ""}
+                          </span>
+                        )}
+                      </div>
+                      <div className="p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-3">
+                        {/* Proveedores asociados, con su última compra */}
+                        {watchSupplierIds.length > 0 && (
+                          <div className="space-y-1.5">
+                            {watchSupplierIds.map((sid) => {
+                              const link = editingProduct?.suppliers?.find((s) => String(s.supplierId) === sid);
+                              const name = link?.supplier.name || suppliers.find((s) => String(s.id) === sid)?.name || `Proveedor #${sid}`;
+                              return (
+                                <div key={sid} className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-sky-500/5 border border-sky-500/20">
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-bold truncate">{name}</p>
+                                    <p className="text-[10px] text-[var(--text-sec)]">
+                                      {link?.lastPurchaseAt
+                                        ? `Última compra: ${new Date(link.lastPurchaseAt).toLocaleDateString()}${link.lastPurchaseCost != null ? ` · $${Number(link.lastPurchaseCost).toFixed(2)}` : ""}`
+                                        : link
+                                          ? "Asignado manualmente"
+                                          : "Se agregará al guardar"}
+                                    </p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleSupplier(sid)}
+                                    className="text-muted-foreground hover:text-red-500 p-0.5 rounded shrink-0"
+                                    title="Quitar proveedor"
+                                  >
+                                    <X size={13} />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Buscador de proveedores */}
+                        {suppliers.length > 0 && (
+                          <div className="relative">
+                            <Search
+                              size={14}
+                              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+                            />
+                            <Input
+                              value={supplierFilterQuery}
+                              onChange={(e) => setSupplierFilterQuery(e.target.value)}
+                              placeholder="Buscar proveedores por nombre..."
+                              className="h-8 pl-8 pr-8 text-xs rounded-lg bg-[var(--bg)] border-[var(--border)]"
+                            />
+                            {supplierFilterQuery && (
+                              <button
+                                type="button"
+                                onClick={() => setSupplierFilterQuery("")}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded"
+                                title="Limpiar búsqueda"
+                              >
+                                <X size={13} />
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Lista de proveedores registrados */}
+                        <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto pr-1">
+                          {suppliers.length === 0 ? (
+                            <p className="text-[10px] opacity-50 py-1">
+                              Sin proveedores registrados todavía. Regístralos en Compras a Proveedores.
+                            </p>
+                          ) : filteredFormSuppliers.length === 0 ? (
+                            <p className="text-xs text-[var(--text-sec)] py-2 w-full text-center">
+                              No se encontraron proveedores con "{supplierFilterQuery}".
+                            </p>
+                          ) : (
+                            filteredFormSuppliers.map((s) => {
+                              const selected = watchSupplierIds.includes(String(s.id));
+                              return (
+                                <button
+                                  type="button"
+                                  key={s.id}
+                                  onClick={() => toggleSupplier(String(s.id))}
+                                  className={cn(
+                                    "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
+                                    selected
+                                      ? "bg-sky-600 text-white border-sky-600 shadow-sm"
+                                      : "bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-sky-500 hover:text-foreground",
+                                  )}
+                                >
+                                  {selected && <Check size={11} className="stroke-[3]" />}
+                                  {s.name}
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-[10px] opacity-60 ml-1">
+                        Puedes asignar varios. Al recibir una compra, su proveedor se agrega aquí automáticamente.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-bold flex items-center gap-1.5">
+                          <Tag size={15} className="text-[var(--primary)]" />
+                          Etiquetas
+                        </Label>
+                        {watchTagIds.length > 0 && (
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/20">
+                            {watchTagIds.length} seleccionada{watchTagIds.length !== 1 ? "s" : ""}
+                          </span>
+                        )}
+                      </div>
+                      <div className="p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-3">
+                        {/* Buscador de etiquetas */}
+                        {tags.length > 0 && (
+                          <div className="relative">
+                            <Search
+                              size={14}
+                              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+                            />
+                            <Input
+                              value={tagFilterQuery}
+                              onChange={(e) => setTagFilterQuery(e.target.value)}
+                              placeholder="Buscar etiquetas por nombre..."
+                              className="h-8 pl-8 pr-8 text-xs rounded-lg bg-[var(--bg)] border-[var(--border)]"
+                            />
+                            {tagFilterQuery && (
+                              <button
+                                type="button"
+                                onClick={() => setTagFilterQuery("")}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded"
+                                title="Limpiar búsqueda"
+                              >
+                                <X size={13} />
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Lista de etiquetas */}
+                        <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto pr-1">
+                          {tags.length === 0 ? (
+                            <p className="text-[10px] opacity-50 py-1">
+                              Sin etiquetas registradas todavía.
+                            </p>
+                          ) : filteredFormTags.length === 0 ? (
+                            <div className="py-2 text-center w-full">
+                              <p className="text-xs text-[var(--text-sec)]">
+                                No se encontraron etiquetas con "{tagFilterQuery}".
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => setTagFilterQuery("")}
+                                className="text-xs text-[var(--primary)] hover:underline mt-1 font-medium"
+                              >
+                                Ver todas las etiquetas
+                              </button>
+                            </div>
+                          ) : (
+                            filteredFormTags.map((t) => {
+                              const selected = watchTagIds.includes(String(t.id));
+                              return (
+                                <button
+                                  type="button"
+                                  key={t.id}
+                                  onClick={() => toggleTag(String(t.id))}
+                                  className={cn(
+                                    "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
+                                    selected
+                                      ? "bg-[var(--primary)] text-white border-[var(--primary)] shadow-sm"
+                                      : "bg-transparent border-[var(--border)] text-[var(--text-sec)] hover:border-[var(--primary)] hover:text-foreground",
+                                  )}
+                                >
+                                  {selected && <Check size={11} className="stroke-[3]" />}
+                                  #{t.name}
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                        <div className="flex gap-2 pt-2 border-t border-[var(--border)]">
+                          <Input
+                            value={quickTagName}
+                            onChange={(e) => setQuickTagName(e.target.value)}
+                            placeholder="Nueva etiqueta rápida..."
+                            className="h-8 text-xs rounded-lg"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleQuickAddTag();
+                              }
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 shrink-0"
+                            onClick={handleQuickAddTag}
+                            title="Crear y asignar etiqueta rápida"
+                          >
+                            <Plus size={14} className="mr-1" />
+                            Agregar
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="text-[10px] opacity-60 ml-1">
+                        Solo se usan para buscar el producto por descripción, no dividen visualmente el catálogo.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold">Descripción</Label>
+                      <Textarea
+                        {...register("description")}
+                        placeholder="Describe brevemente el producto..."
+                        className="rounded-xl bg-[var(--card)] min-h-[100px]"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold">
+                        Costo de Adquisición
+                      </Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                          $
+                        </span>
                         <Input
                           type="number"
-                          step="0.01"
-                          {...register("fixedCommission")}
-                          placeholder="0.00"
-                          className="h-11 rounded-xl bg-[var(--card)]"
+                          step="0.0001"
+                          {...register("costPrice")}
+                          placeholder="0.0000"
+                          className="h-11 pl-7 rounded-xl bg-[var(--card)]"
+                        />
+                      </div>
+                      <p className="text-[10px] opacity-60 ml-1">
+                        Lo que te cuesta comprarlo (Opcional)
+                      </p>
+                    </div>
+
+                    <div className="pt-4 border-t border-[var(--border)]">
+                      <div className="flex items-center justify-between">
+                        <div className="text-left">
+                          <p className="text-sm font-bold">Rastrear Inventario</p>
+                          <p className="text-[10px] opacity-60">
+                            {watchIsUniversal
+                              ? "Desactivado automáticamente por ser Producto Universal"
+                              : "Controlar entradas y salidas automáticamente"}
+                          </p>
+                        </div>
+                        <Switch
+                          checked={watchIsUniversal ? false : watchTrackStock}
+                          disabled={watchIsUniversal}
+                          onCheckedChange={(v) => setValue("trackStock", v)}
                         />
                       </div>
                     </div>
-                  )}
+                  </div>
                 </div>
-              </div>
 
-              {/* Columna Derecha: Precios y Stock */}
-              <div className="space-y-6">
-                {/* Sección Precios (no aplica a Producto Universal: el precio se define al vender) */}
-                {watchIsUniversal || watchIsService ? (
+                {/* Columna Derecha: Precios y Stock */}
+                <div className="space-y-6">
+                  {/* Sección Precios (no aplica a Producto Universal: el precio se define al vender) */}
+                  {watchIsUniversal ? (
                   <div className="p-6 rounded-xl border border-dashed border-[var(--border)] bg-transparent">
                     <p className="text-xs font-bold text-[var(--text-sec)]">
                       Este producto no lleva precio fijo — se ingresa cada vez
@@ -2387,6 +2570,7 @@ export function Catalog({ hideTitle }: { hideTitle?: boolean } = {}) {
                 )}
               </div>
             </div>
+          )}
 
             <DialogFooter className="pt-6 border-t border-[var(--border)] gap-3">
               <Button
