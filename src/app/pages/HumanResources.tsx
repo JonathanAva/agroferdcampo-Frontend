@@ -135,6 +135,8 @@ interface Employee {
   branch?: { id: number; name: string };
   department?: Department;
   position?: Position;
+  departments?: { id: number; departmentId: number; isPrimary: boolean; department?: Department }[];
+  positions?: { id: number; positionId: number; isPrimary: boolean; position?: Position }[];
   workSchedule?: WorkSchedule;
   notes?: string;
 }
@@ -333,13 +335,17 @@ export function HumanResources() {
     ]}
   ], [departments]);
 
-  // Estados para el formulario de registro (DatePicker)
+  // Estados para el formulario de registro (DatePicker y Multi-select)
   const [regBirthDate, setRegBirthDate] = useState<Date | undefined>(undefined);
   const [regHireDate, setRegHireDate] = useState<Date | undefined>(new Date());
+  const [regDepartmentIds, setRegDepartmentIds] = useState<number[]>([]);
+  const [regPositionIds, setRegPositionIds] = useState<number[]>([]);
 
-  // Estados para el formulario de edición (DatePicker)
+  // Estados para el formulario de edición (DatePicker y Multi-select)
   const [editBirthDate, setEditBirthDate] = useState<Date | undefined>(undefined);
   const [editHireDate, setEditHireDate] = useState<Date | undefined>(undefined);
+  const [editDepartmentIds, setEditDepartmentIds] = useState<number[]>([]);
+  const [editPositionIds, setEditPositionIds] = useState<number[]>([]);
 
   useEffect(() => {
     if (selectedBranch) {
@@ -352,9 +358,21 @@ export function HumanResources() {
     if (selectedEmployee) {
       setEditBirthDate(selectedEmployee.birthDate ? new Date(selectedEmployee.birthDate) : undefined);
       setEditHireDate(selectedEmployee.hireDate ? new Date(selectedEmployee.hireDate) : undefined);
+      
+      const dIds = selectedEmployee.departments && selectedEmployee.departments.length > 0
+        ? selectedEmployee.departments.map((d) => d.departmentId)
+        : (selectedEmployee.departmentId ? [selectedEmployee.departmentId] : []);
+      setEditDepartmentIds(dIds);
+
+      const pIds = selectedEmployee.positions && selectedEmployee.positions.length > 0
+        ? selectedEmployee.positions.map((p) => p.positionId)
+        : (selectedEmployee.positionId ? [selectedEmployee.positionId] : []);
+      setEditPositionIds(pIds);
     } else {
       setEditBirthDate(undefined);
       setEditHireDate(undefined);
+      setEditDepartmentIds([]);
+      setEditPositionIds([]);
     }
   }, [selectedEmployee]);
 
@@ -546,14 +564,10 @@ export function HumanResources() {
       branchId: formData.get("branchId")
         ? Number(formData.get("branchId"))
         : selectedBranch?.id,
-      departmentId:
-        formData.get("departmentId") && formData.get("departmentId") !== "none"
-          ? Number(formData.get("departmentId"))
-          : undefined,
-      positionId:
-        formData.get("positionId") && formData.get("positionId") !== "none"
-          ? Number(formData.get("positionId"))
-          : undefined,
+      departmentId: regDepartmentIds[0] || undefined,
+      departmentIds: regDepartmentIds,
+      positionId: regPositionIds[0] || undefined,
+      positionIds: regPositionIds,
       workScheduleId:
         formData.get("workScheduleId") &&
         formData.get("workScheduleId") !== "none"
@@ -573,6 +587,8 @@ export function HumanResources() {
       });
       toast.success("Empleado creado exitosamente");
       setIsEmployeeModalOpen(false);
+      setRegDepartmentIds([]);
+      setRegPositionIds([]);
       loadData();
     } catch (error: any) {
       toast.error(error.message || "Error al crear empleado");
@@ -627,14 +643,10 @@ export function HumanResources() {
       branchId: formData.get("branchId")
         ? Number(formData.get("branchId"))
         : undefined,
-      departmentId:
-        formData.get("departmentId") && formData.get("departmentId") !== "none"
-          ? Number(formData.get("departmentId"))
-          : undefined,
-      positionId:
-        formData.get("positionId") && formData.get("positionId") !== "none"
-          ? Number(formData.get("positionId"))
-          : undefined,
+      departmentId: editDepartmentIds[0] || null,
+      departmentIds: editDepartmentIds,
+      positionId: editPositionIds[0] || null,
+      positionIds: editPositionIds,
       workScheduleId:
         formData.get("workScheduleId") &&
         formData.get("workScheduleId") !== "none"
@@ -917,7 +929,9 @@ export function HumanResources() {
                       e.employeeCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
                       (e.dui && e.dui.includes(searchTerm));
                     const matchesStatus = statusFilter === 'all' || e.status === statusFilter;
-                    const matchesDept = departmentFilter === 'all' || String(e.departmentId) === departmentFilter;
+                    const matchesDept = departmentFilter === 'all' || 
+                      String(e.departmentId) === departmentFilter ||
+                      Boolean(e.departments?.some((d) => String(d.departmentId) === departmentFilter));
                     
                     return matchesSearch && matchesStatus && matchesDept;
                   }).map((emp) => (
@@ -944,17 +958,50 @@ export function HumanResources() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex flex-col gap-1">
-                            <span className="text-sm font-bold text-[var(--text-main)]">
-                              {emp.department?.name || "Sin Depto"}
-                            </span>
-                            <Badge
-                              variant="outline"
-                              className="w-fit text-[10px] font-black uppercase py-0 h-5 bg-[var(--bg)]/50 border-[var(--border)]"
-                            >
-                              {emp.position?.title || "Sin Cargo"}
-                            </Badge>
-                          </div>
+                          {(() => {
+                            const depts = (emp.departments && emp.departments.length > 0)
+                              ? (emp.departments.map((d) => d.department?.name).filter(Boolean) as string[])
+                              : (emp.department?.name ? [emp.department.name] : []);
+                            const posList = (emp.positions && emp.positions.length > 0)
+                              ? (emp.positions.map((p) => p.position?.title).filter(Boolean) as string[])
+                              : (emp.position?.title ? [emp.position.title] : []);
+
+                            return (
+                              <div className="flex flex-col gap-1.5 max-w-[280px]">
+                                <div className="flex flex-wrap items-center gap-1">
+                                  {depts.length > 0 ? (
+                                    depts.map((dName, idx) => (
+                                      <span key={idx} className="text-xs font-bold text-[var(--text-main)]">
+                                        {dName}{idx < depts.length - 1 ? ',' : ''}
+                                      </span>
+                                    ))
+                                  ) : (
+                                    <span className="text-xs text-[var(--text-sec)] italic">Sin Depto</span>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                  {posList.length > 0 ? (
+                                    posList.map((pTitle, idx) => (
+                                      <Badge
+                                        key={idx}
+                                        variant="outline"
+                                        className="text-[10px] font-black uppercase py-0.5 px-2 bg-[var(--bg)]/50 border-[var(--border)] text-[var(--text-main)]"
+                                      >
+                                        {pTitle}
+                                      </Badge>
+                                    ))
+                                  ) : (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[10px] font-black uppercase py-0 h-5 opacity-40 bg-[var(--bg)]/50 border-[var(--border)]"
+                                    >
+                                      Sin Cargo
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-1">
@@ -1834,8 +1881,16 @@ export function HumanResources() {
         </DialogContent>
       </Dialog>
 
-      {/* --- MODAL: NUEVO EMPLEADO (ALINEADO CON LA GUÍA) --- */}
-      <Dialog open={isEmployeeModalOpen} onOpenChange={setIsEmployeeModalOpen}>
+      <Dialog 
+        open={isEmployeeModalOpen} 
+        onOpenChange={(open) => {
+          setIsEmployeeModalOpen(open);
+          if (!open) {
+            setRegDepartmentIds([]);
+            setRegPositionIds([]);
+          }
+        }}
+      >
 
         <DialogContent className="sm:max-w-[1000px] w-[95vw] max-h-[95vh] flex flex-col p-0 overflow-hidden border-[var(--border)] bg-[var(--card)] shadow-2xl">
           <DialogHeader className="p-6 border-b border-[var(--border)] bg-[var(--bg)]/50">
@@ -2096,63 +2151,164 @@ export function HumanResources() {
                       </Select>
                     </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] uppercase font-black opacity-60 tracking-widest">
-                      Departamento
-                    </Label>
+                  {/* Departamentos Asignados (Multi-select) */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[10px] uppercase font-black opacity-60 tracking-widest">
+                        Departamento(s) Asignado(s)
+                      </Label>
+                      {regDepartmentIds.length > 0 && (
+                        <span className="text-[10px] font-bold text-[var(--primary)]">
+                          {regDepartmentIds.length} seleccionado(s)
+                        </span>
+                      )}
+                    </div>
                     <Select
-                      name="departmentId"
-                      value={selectedDeptId}
-                      onValueChange={setSelectedDeptId}
+                      value=""
+                      onValueChange={(val) => {
+                        if (val && val !== "none") {
+                          const id = Number(val);
+                          if (!regDepartmentIds.includes(id)) {
+                            setRegDepartmentIds([...regDepartmentIds, id]);
+                          }
+                        }
+                      }}
                     >
                       <SelectTrigger className="bg-[var(--bg)] border-[var(--border)] font-bold">
-                        <SelectValue placeholder="Seleccionar departamento..." />
+                        <SelectValue placeholder="Agregar departamento..." />
                       </SelectTrigger>
                       <SelectContent className="bg-[var(--card)] border-[var(--border)]">
-                        <SelectItem
-                          value="none"
-                          className="font-bold opacity-50 italic"
-                        >
-                          Ninguno
-                        </SelectItem>
-                        {departments.map((d) => (
-                          <SelectItem
-                            key={d.id}
-                            value={String(d.id)}
-                            className="font-bold"
-                          >
-                            {d.name}
-                          </SelectItem>
-                        ))}
+                        {departments
+                          .filter((d) => !regDepartmentIds.includes(d.id))
+                          .map((d) => (
+                            <SelectItem
+                              key={d.id}
+                              value={String(d.id)}
+                              className="font-bold cursor-pointer"
+                            >
+                              {d.name}
+                            </SelectItem>
+                          ))}
+                        {departments.filter((d) => !regDepartmentIds.includes(d.id)).length === 0 && (
+                          <div className="p-2 text-xs text-center text-[var(--text-sec)] italic">
+                            Todos los departamentos han sido agregados
+                          </div>
+                        )}
                       </SelectContent>
                     </Select>
+                    {regDepartmentIds.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {regDepartmentIds.map((id, index) => {
+                          const dept = departments.find((d) => d.id === id);
+                          return (
+                            <Badge
+                              key={id}
+                              variant="secondary"
+                              className="bg-[var(--primary)]/15 text-[var(--primary)] border border-[var(--primary)]/30 font-bold px-2.5 py-1 text-xs flex items-center gap-1.5 rounded-lg shadow-sm"
+                            >
+                              <span>{dept?.name || `Depto #${id}`}</span>
+                              {index === 0 && (
+                                <span className="text-[9px] bg-[var(--primary)] text-white px-1 py-0.2 rounded font-black uppercase">
+                                  Principal
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setRegDepartmentIds(regDepartmentIds.filter((dId) => dId !== id))}
+                                className="hover:text-red-400 focus:outline-none transition-colors ml-0.5"
+                                title="Quitar departamento"
+                              >
+                                <X size={13} />
+                              </button>
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-[var(--text-sec)] italic">
+                        Opcional: Seleccione uno o más departamentos para este empleado.
+                      </p>
+                    )}
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] uppercase font-black opacity-60 tracking-widest">
-                      Cargo / Puesto
-                    </Label>
-                    <Select name="positionId">
+
+                  {/* Cargos / Puestos Asignados (Multi-select) */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[10px] uppercase font-black opacity-60 tracking-widest">
+                        Cargo(s) / Puesto(s) Asignado(s)
+                      </Label>
+                      {regPositionIds.length > 0 && (
+                        <span className="text-[10px] font-bold text-[var(--primary)]">
+                          {regPositionIds.length} seleccionado(s)
+                        </span>
+                      )}
+                    </div>
+                    <Select
+                      value=""
+                      onValueChange={(val) => {
+                        if (val && val !== "none") {
+                          const id = Number(val);
+                          if (!regPositionIds.includes(id)) {
+                            setRegPositionIds([...regPositionIds, id]);
+                          }
+                        }
+                      }}
+                    >
                       <SelectTrigger className="bg-[var(--bg)] border-[var(--border)] font-bold">
-                        <SelectValue placeholder="Seleccionar cargo..." />
+                        <SelectValue placeholder="Agregar cargo o puesto..." />
                       </SelectTrigger>
                       <SelectContent className="bg-[var(--card)] border-[var(--border)]">
-                        <SelectItem
-                          value="none"
-                          className="font-bold opacity-50 italic"
-                        >
-                          Ninguno
-                        </SelectItem>
-                        {availablePositions.map((p) => (
-                          <SelectItem
-                            key={p.id}
-                            value={String(p.id)}
-                            className="font-bold"
-                          >
-                            {p.title}
-                          </SelectItem>
-                        ))}
+                        {availablePositions
+                          .filter((p) => !regPositionIds.includes(p.id))
+                          .map((p) => (
+                            <SelectItem
+                              key={p.id}
+                              value={String(p.id)}
+                              className="font-bold cursor-pointer"
+                            >
+                              {p.title}
+                            </SelectItem>
+                          ))}
+                        {availablePositions.filter((p) => !regPositionIds.includes(p.id)).length === 0 && (
+                          <div className="p-2 text-xs text-center text-[var(--text-sec)] italic">
+                            Todos los cargos han sido agregados
+                          </div>
+                        )}
                       </SelectContent>
                     </Select>
+                    {regPositionIds.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {regPositionIds.map((id, index) => {
+                          const pos = availablePositions.find((p) => p.id === id);
+                          return (
+                            <Badge
+                              key={id}
+                              variant="secondary"
+                              className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-bold px-2.5 py-1 text-xs flex items-center gap-1.5 rounded-lg shadow-sm"
+                            >
+                              <span>{pos?.title || `Puesto #${id}`}</span>
+                              {index === 0 && (
+                                <span className="text-[9px] bg-emerald-600 text-white px-1 py-0.2 rounded font-black uppercase">
+                                  Principal
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setRegPositionIds(regPositionIds.filter((pId) => pId !== id))}
+                                className="hover:text-red-400 focus:outline-none transition-colors ml-0.5"
+                                title="Quitar cargo"
+                              >
+                                <X size={13} />
+                              </button>
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-[var(--text-sec)] italic">
+                        Opcional: Seleccione uno o más cargos para este empleado.
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-[10px] uppercase font-black opacity-60 tracking-widest">
@@ -2375,7 +2531,9 @@ export function HumanResources() {
                     {selectedEmployee?.employeeCode || "EMP-XXXX"}
                   </Badge>
                   <p className="text-xs font-bold text-[var(--text-sec)] opacity-70 uppercase tracking-widest">
-                    {selectedEmployee?.position?.title || "Sin Cargo Asignado"}
+                    {selectedEmployee?.positions && selectedEmployee.positions.length > 0
+                      ? selectedEmployee.positions.map((p) => p.position?.title).filter(Boolean).join(" • ")
+                      : (selectedEmployee?.position?.title || "Sin Cargo Asignado")}
                   </p>
                 </div>
               </div>
@@ -2555,73 +2713,164 @@ export function HumanResources() {
                             </SelectContent>
                           </Select>
                         </div>
+                        {/* Departamentos Asignados (Multi-select) */}
                         <div className="space-y-2">
-                          <Label className="text-[10px] uppercase font-black opacity-60 tracking-widest">
-                            Departamento
-                          </Label>
+                          <div className="flex items-center justify-between">
+                            <Label className="text-[10px] uppercase font-black opacity-60 tracking-widest">
+                              Departamento(s) Asignado(s)
+                            </Label>
+                            {editDepartmentIds.length > 0 && (
+                              <span className="text-[10px] font-bold text-[var(--primary)]">
+                                {editDepartmentIds.length} seleccionado(s)
+                              </span>
+                            )}
+                          </div>
                           <Select
-                            name="departmentId"
-                            defaultValue={
-                              selectedEmployee.departmentId
-                                ? String(selectedEmployee.departmentId)
-                                : "none"
-                            }
+                            value=""
+                            onValueChange={(val) => {
+                              if (val && val !== "none") {
+                                const id = Number(val);
+                                if (!editDepartmentIds.includes(id)) {
+                                  setEditDepartmentIds([...editDepartmentIds, id]);
+                                }
+                              }
+                            }}
                           >
                             <SelectTrigger className="bg-[var(--bg)] border-[var(--border)] font-bold">
-                              <SelectValue placeholder="Seleccione departamento" />
+                              <SelectValue placeholder="Agregar departamento..." />
                             </SelectTrigger>
                             <SelectContent className="bg-[var(--card)] border-[var(--border)]">
-                              <SelectItem
-                                value="none"
-                                className="font-bold opacity-50 italic"
-                              >
-                                Ninguno
-                              </SelectItem>
-                              {departments.map((d) => (
-                                <SelectItem
-                                  key={d.id}
-                                  value={String(d.id)}
-                                  className="font-bold"
-                                >
-                                  {d.name}
-                                </SelectItem>
-                              ))}
+                              {departments
+                                .filter((d) => !editDepartmentIds.includes(d.id))
+                                .map((d) => (
+                                  <SelectItem
+                                    key={d.id}
+                                    value={String(d.id)}
+                                    className="font-bold cursor-pointer"
+                                  >
+                                    {d.name}
+                                  </SelectItem>
+                                ))}
+                              {departments.filter((d) => !editDepartmentIds.includes(d.id)).length === 0 && (
+                                <div className="p-2 text-xs text-center text-[var(--text-sec)] italic">
+                                  Todos los departamentos han sido agregados
+                                </div>
+                              )}
                             </SelectContent>
                           </Select>
+                          {editDepartmentIds.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {editDepartmentIds.map((id, index) => {
+                                const dept = departments.find((d) => d.id === id);
+                                return (
+                                  <Badge
+                                    key={id}
+                                    variant="secondary"
+                                    className="bg-[var(--primary)]/15 text-[var(--primary)] border border-[var(--primary)]/30 font-bold px-2.5 py-1 text-xs flex items-center gap-1.5 rounded-lg shadow-sm"
+                                  >
+                                    <span>{dept?.name || `Depto #${id}`}</span>
+                                    {index === 0 && (
+                                      <span className="text-[9px] bg-[var(--primary)] text-white px-1 py-0.2 rounded font-black uppercase">
+                                        Principal
+                                      </span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditDepartmentIds(editDepartmentIds.filter((dId) => dId !== id))}
+                                      className="hover:text-red-400 focus:outline-none transition-colors ml-0.5"
+                                      title="Quitar departamento"
+                                    >
+                                      <X size={13} />
+                                    </button>
+                                  </Badge>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-[var(--text-sec)] italic">
+                              Sin departamentos asignados.
+                            </p>
+                          )}
                         </div>
+
+                        {/* Cargos / Puestos Asignados (Multi-select) */}
                         <div className="space-y-2">
-                          <Label className="text-[10px] uppercase font-black opacity-60 tracking-widest">
-                            Cargo / Puesto
-                          </Label>
+                          <div className="flex items-center justify-between">
+                            <Label className="text-[10px] uppercase font-black opacity-60 tracking-widest">
+                              Cargo(s) / Puesto(s) Asignado(s)
+                            </Label>
+                            {editPositionIds.length > 0 && (
+                              <span className="text-[10px] font-bold text-[var(--primary)]">
+                                {editPositionIds.length} seleccionado(s)
+                              </span>
+                            )}
+                          </div>
                           <Select
-                            name="positionId"
-                            defaultValue={
-                              selectedEmployee.positionId
-                                ? String(selectedEmployee.positionId)
-                                : "none"
-                            }
+                            value=""
+                            onValueChange={(val) => {
+                              if (val && val !== "none") {
+                                const id = Number(val);
+                                if (!editPositionIds.includes(id)) {
+                                  setEditPositionIds([...editPositionIds, id]);
+                                }
+                              }
+                            }}
                           >
                             <SelectTrigger className="bg-[var(--bg)] border-[var(--border)] font-bold">
-                              <SelectValue placeholder="Seleccione cargo" />
+                              <SelectValue placeholder="Agregar cargo o puesto..." />
                             </SelectTrigger>
                             <SelectContent className="bg-[var(--card)] border-[var(--border)]">
-                              <SelectItem
-                                value="none"
-                                className="font-bold opacity-50 italic"
-                              >
-                                Ninguno
-                              </SelectItem>
-                              {positions.map((p) => (
-                                <SelectItem
-                                  key={p.id}
-                                  value={String(p.id)}
-                                  className="font-bold"
-                                >
-                                  {p.title}
-                                </SelectItem>
-                              ))}
+                              {positions
+                                .filter((p) => !editPositionIds.includes(p.id))
+                                .map((p) => (
+                                  <SelectItem
+                                    key={p.id}
+                                    value={String(p.id)}
+                                    className="font-bold cursor-pointer"
+                                  >
+                                    {p.title}
+                                  </SelectItem>
+                                ))}
+                              {positions.filter((p) => !editPositionIds.includes(p.id)).length === 0 && (
+                                <div className="p-2 text-xs text-center text-[var(--text-sec)] italic">
+                                  Todos los cargos han sido agregados
+                                </div>
+                              )}
                             </SelectContent>
                           </Select>
+                          {editPositionIds.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {editPositionIds.map((id, index) => {
+                                const pos = positions.find((p) => p.id === id);
+                                return (
+                                  <Badge
+                                    key={id}
+                                    variant="secondary"
+                                    className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-bold px-2.5 py-1 text-xs flex items-center gap-1.5 rounded-lg shadow-sm"
+                                  >
+                                    <span>{pos?.title || `Puesto #${id}`}</span>
+                                    {index === 0 && (
+                                      <span className="text-[9px] bg-emerald-600 text-white px-1 py-0.2 rounded font-black uppercase">
+                                        Principal
+                                      </span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditPositionIds(editPositionIds.filter((pId) => pId !== id))}
+                                      className="hover:text-red-400 focus:outline-none transition-colors ml-0.5"
+                                      title="Quitar cargo"
+                                    >
+                                      <X size={13} />
+                                    </button>
+                                  </Badge>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-[var(--text-sec)] italic">
+                              Sin cargos asignados.
+                            </p>
+                          )}
                         </div>
                         <div className="space-y-2">
                           <Label className="text-[10px] uppercase font-black opacity-60 tracking-widest">
