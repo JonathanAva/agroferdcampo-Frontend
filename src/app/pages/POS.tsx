@@ -59,6 +59,7 @@ import { useAuth } from "../context/AuthContext";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Label } from "../components/ui/label";
 import { SystemConfigData } from "./SystemConfig";
+import { calculateCardPrice } from "../utils/cardPricing";
 import { TransportSelector, TransportData } from "../components/transport/TransportSelector";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
@@ -129,6 +130,7 @@ interface CartUnitSelection {
   quantity: number;
   price: number;
   originalPrice: number;
+  cashPrice?: number;
   priceType: string;
   customName?: string;
   unitCost?: number;
@@ -340,6 +342,7 @@ export function POS() {
       quantity: 1,
       price: total,
       originalPrice: total,
+      cashPrice: total,
       priceType: "PUBLICO",
       customName,
     };
@@ -383,9 +386,13 @@ export function POS() {
   };
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
-  const [selectedPayment, setSelectedPayment] = useState<
-    "EFECTIVO" | "TARJETA" | "TRANSFERENCIA" | "CREDITO" | "MIXTO"
-  >("EFECTIVO");
+  const selectedPayment = (posTabs.activeTab?.selectedPayment || "EFECTIVO") as
+    | "EFECTIVO"
+    | "TARJETA"
+    | "TRANSFERENCIA"
+    | "CREDITO"
+    | "MIXTO";
+  const setSelectedPayment = (val: any) => posTabs.updateTab({ selectedPayment: val });
   
   // System Config
   const [sysConfig, setSysConfig] = useState<SystemConfigData | null>(null);
@@ -467,6 +474,63 @@ export function POS() {
   // Transport State
   const transportData = posTabs.activeTab.transportData as TransportData | null;
   const setTransportData = (val: any) => posTabs.updateTab({ transportData: val });
+
+  // Configuración y cálculo automático de precio según método de pago (Efectivo vs Tarjeta con comisión bancaria y redondeo comercial)
+  const isCardFeeActive = Boolean(
+    sysConfig?.enableCardFeeCalculation !== false &&
+    sysConfig?.cardFeePercentage != null &&
+    Number(sysConfig.cardFeePercentage) > 0
+  );
+
+  const resolveItemPriceByPayment = (
+    baseCashPrice: number,
+    paymentMethod: string = selectedPayment,
+    isService: boolean = false
+  ) => {
+    if (isService) {
+      return { activePrice: baseCashPrice, cashPrice: baseCashPrice };
+    }
+    const isCard = paymentMethod === "TARJETA";
+    const activePrice = (isCard && isCardFeeActive)
+      ? calculateCardPrice(baseCashPrice, sysConfig?.cardFeePercentage, sysConfig?.cardFeeRoundingTargets)
+      : baseCashPrice;
+    return { activePrice, cashPrice: baseCashPrice };
+  };
+
+  const applyPaymentMethodToCart = (
+    currentCart: CartItem[],
+    targetPaymentMethod: string
+  ): CartItem[] => {
+    const isCard = targetPaymentMethod === "TARJETA";
+
+    return currentCart.map((item) => {
+      if (isServiceProduct(item)) return item;
+
+      return {
+        ...item,
+        selections: item.selections.map((s) => {
+          const baseCashPrice = s.cashPrice ?? s.originalPrice ?? s.price;
+          const targetPrice = (isCard && isCardFeeActive)
+            ? calculateCardPrice(baseCashPrice, sysConfig?.cardFeePercentage, sysConfig?.cardFeeRoundingTargets)
+            : baseCashPrice;
+
+          return {
+            ...s,
+            cashPrice: baseCashPrice,
+            originalPrice: s.originalPrice ?? baseCashPrice,
+            price: targetPrice,
+          };
+        }),
+      };
+    });
+  };
+
+  const handlePaymentMethodChange = (
+    newMethod: "EFECTIVO" | "TARJETA" | "TRANSFERENCIA" | "CREDITO"
+  ) => {
+    setSelectedPayment(newMethod);
+    setCart((prevCart) => applyPaymentMethodToCart(prevCart, newMethod));
+  };
 
   // Nota: "Apertura de Caja" (showOpenShiftModal) y "Cierre de Caja" (showCloseShiftModal)
   // tienen su propio flujo obligatorio y NO llevan este guard.
@@ -1025,7 +1089,8 @@ export function POS() {
     const isService = isServiceProduct(product);
     const resolvedUnit = unitType || product.unit;
     const resolvedFactor = unitFactor || 1;
-    const resolvedPrice = unitPrice || product.price;
+    const baseCashPrice = unitPrice || product.price;
+    const { activePrice } = resolveItemPriceByPayment(baseCashPrice, selectedPayment, isService);
 
     const existingCartItem = cart.find((i) => i.id === product.id);
     const currentlyUsedStock = existingCartItem
@@ -1039,7 +1104,7 @@ export function POS() {
         product,
         unitType: resolvedUnit,
         unitFactor: resolvedFactor,
-        unitPrice: resolvedPrice,
+        unitPrice: baseCashPrice,
       });
       return;
     }
@@ -1072,8 +1137,9 @@ export function POS() {
                   unitType: resolvedUnit,
                   unitFactor: resolvedFactor,
                   quantity: 1,
-                  price: resolvedPrice,
-                  originalPrice: resolvedPrice,
+                  price: activePrice,
+                  originalPrice: baseCashPrice,
+                  cashPrice: baseCashPrice,
                   priceType: "PUBLICO",
                 }
               ]
@@ -1091,8 +1157,9 @@ export function POS() {
             unitType: resolvedUnit,
             unitFactor: resolvedFactor,
             quantity: 1,
-            price: resolvedPrice,
-            originalPrice: resolvedPrice,
+            price: activePrice,
+            originalPrice: baseCashPrice,
+            cashPrice: baseCashPrice,
             priceType: "PUBLICO",
           }
         ]
@@ -1109,19 +1176,23 @@ export function POS() {
   const addUniversalToCart = (nombre: string, medida: string, cantidad: number, precio: number, costo: number) => {
     if (!universalProduct) return;
 
+    const baseCashPrice = precio;
+    const { activePrice } = resolveItemPriceByPayment(baseCashPrice, selectedPayment, false);
+
     const newSelection: CartUnitSelection = {
       id: Math.random().toString(36).substring(2, 9),
       unitType: medida,
       unitFactor: 1,
       quantity: cantidad,
-      price: precio,
-      originalPrice: precio,
+      price: activePrice,
+      originalPrice: baseCashPrice,
+      cashPrice: baseCashPrice,
       priceType: "PUBLICO",
       customName: nombre,
-        unitCost: costo,
-      };
+      unitCost: costo,
+    };
 
-      setCart((prev) => {
+    setCart((prev) => {
       const existing = prev.find((i) => i.id === universalProduct.id);
       if (existing) {
         return prev.map((i) =>
@@ -1172,8 +1243,12 @@ export function POS() {
           selections: item.selections.map((s) => {
             if (s.id === selectionId) {
               const val = newPrice === undefined || isNaN(newPrice) ? 0 : newPrice;
-              const calcPrice = val <= 0 ? s.originalPrice : val;
-              return { ...s, price: val };
+              const isCard = selectedPayment === "TARJETA";
+              return {
+                ...s,
+                price: val,
+                cashPrice: (!isCard || !isCardFeeActive) ? val : (s.cashPrice ?? val),
+              };
             }
             return s;
           })
@@ -1200,14 +1275,17 @@ export function POS() {
     if (!item) return;
 
     let newFactor = 1;
-    let newPrice = item.price; // product base price
+    let baseCashPrice = item.price; // product base price
 
     if (newUnitType !== item.unit) {
       const u = item.units?.find((x) => x.unit === newUnitType);
       if (!u) return;
       newFactor = u.factor;
-      newPrice = u.priceDetalle || (item.price * u.factor);
+      baseCashPrice = u.priceDetalle || (item.price * u.factor);
     }
+
+    const isService = isServiceProduct(item);
+    const { activePrice } = resolveItemPriceByPayment(baseCashPrice, selectedPayment, isService);
 
     const existingSel = item.selections.find((s) => s.unitType === newUnitType && s.id !== selectionId);
     const targetSel = item.selections.find((s) => s.id === selectionId);
@@ -1234,8 +1312,9 @@ export function POS() {
                   return {
                     ...s,
                     quantity: combinedQty,
-                    price: newPrice,
-                    originalPrice: newPrice
+                    price: activePrice,
+                    originalPrice: baseCashPrice,
+                    cashPrice: baseCashPrice,
                   };
                 }
                 return s;
@@ -1256,8 +1335,9 @@ export function POS() {
                     ...s,
                     unitType: newUnitType,
                     unitFactor: newFactor,
-                    price: newPrice,
-                    originalPrice: newPrice,
+                    price: activePrice,
+                    originalPrice: baseCashPrice,
+                    cashPrice: baseCashPrice,
                   }
                 : s
             )
@@ -1277,6 +1357,10 @@ export function POS() {
       toast.warning("Unidades adicionales superan la existencia disponible", { id: `row-stock-warn-${productId}` });
     }
 
+    const isService = isServiceProduct(item);
+    const baseCashPrice = item.price;
+    const { activePrice } = resolveItemPriceByPayment(baseCashPrice, selectedPayment, isService);
+
     setCart(cart.map((i) => {
       if (i.id === productId) {
         return {
@@ -1288,8 +1372,9 @@ export function POS() {
               unitType: i.unit,
               unitFactor: 1,
               quantity: 1,
-              price: i.price,
-              originalPrice: i.price,
+              price: activePrice,
+              originalPrice: baseCashPrice,
+              cashPrice: baseCashPrice,
               priceType: "PUBLICO",
             }
           ]
@@ -1309,13 +1394,16 @@ export function POS() {
     const targetSel = item.selections.find((s) => s.id === selectionId);
     if (!targetSel) return;
 
-    let newPrice = option.price;
+    let baseCashPrice = option.price;
     if (targetSel.unitType !== item.unit) {
       const u = item.units?.find((x) => x.unit === targetSel.unitType);
       if (u) {
-        newPrice = newPriceType === "PUBLICO" && u.priceDetalle ? u.priceDetalle : option.price * u.factor;
+        baseCashPrice = newPriceType === "PUBLICO" && u.priceDetalle ? u.priceDetalle : option.price * u.factor;
       }
     }
+
+    const isService = isServiceProduct(item);
+    const { activePrice } = resolveItemPriceByPayment(baseCashPrice, selectedPayment, isService);
 
     setCart(cart.map((i) => {
       if (i.id === productId) {
@@ -1323,7 +1411,13 @@ export function POS() {
           ...i,
           selections: i.selections.map((s) =>
             s.id === selectionId
-              ? { ...s, priceType: newPriceType, price: newPrice, originalPrice: newPrice }
+              ? {
+                  ...s,
+                  priceType: newPriceType,
+                  price: activePrice,
+                  originalPrice: baseCashPrice,
+                  cashPrice: baseCashPrice,
+                }
               : s
           )
         };
@@ -2243,21 +2337,24 @@ ${paymentConditionHtml}
                       )}
                     >
                       <div className="p-2.5 flex flex-col flex-1 items-center">
-                        <div className="w-full flex items-start justify-between mb-2">
+                        <div className="w-full flex items-center justify-between gap-1 mb-2 min-w-0">
                           {product.category?.name !== 'Sin categoría' ? (
-                            <span className="text-[9px] font-bold uppercase text-[var(--text-sec)] bg-[var(--bg)] px-1.5 py-0.5 rounded border border-[var(--border)]">
+                            <span
+                              className="text-[9px] font-bold uppercase text-[var(--text-sec)] bg-[var(--bg)] px-1.5 py-0.5 rounded border border-[var(--border)] truncate min-w-0 max-w-[80px] shrink"
+                              title={product.category.name}
+                            >
                               {product.category.name}
                             </span>
                           ) : (
-                            <span />
+                            <span className="shrink-0" />
                           )}
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1 shrink-0 ml-auto">
                             <Popover onOpenChange={(open) => open && handleOpenCostSummary(product.id)}>
                               <PopoverTrigger asChild>
                                 <button
                                   type="button"
                                   onClick={(e) => e.stopPropagation()}
-                                  className="size-5 rounded flex items-center justify-center text-[var(--text-sec)] hover:text-[var(--primary)] hover:bg-[var(--bg)] border border-[var(--border)]"
+                                  className="size-5 rounded flex items-center justify-center text-[var(--text-sec)] hover:text-[var(--primary)] hover:bg-[var(--bg)] border border-[var(--border)] shrink-0"
                                   title="Ver costo por lote"
                                 >
                                   <Layers size={11} />
@@ -2288,11 +2385,11 @@ ${paymentConditionHtml}
                                 )}
                               </PopoverContent>
                             </Popover>
-                            <ProductDescriptionPopover product={product} />
+                            <ProductDescriptionPopover product={product} className="shrink-0" />
                             <Badge
                               variant={product.stock <= 0 ? "outline" : product.stock < 10 ? "destructive" : "secondary"}
                               className={cn(
-                                "text-[9px] px-1.5 py-0",
+                                "text-[9px] px-1.5 py-0.5 tracking-normal whitespace-nowrap shrink-0",
                                 product.stock <= 0 && "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 font-bold"
                               )}
                             >
@@ -2618,6 +2715,11 @@ ${paymentConditionHtml}
                               />
                             </div>
                             <span className="text-[9px] font-bold text-[var(--text-sec)]">Sub: ${(sel.quantity * sel.price).toFixed(4)}</span>
+                            {selectedPayment === "TARJETA" && isCardFeeActive && sel.cashPrice !== undefined && Math.abs(sel.price - sel.cashPrice) > 0.001 && (
+                              <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400" title="Precio preferencial con descuento en efectivo">
+                                Contado: ${sel.cashPrice.toFixed(2)}
+                              </span>
+                            )}
                           </div>
                           
                           <Button
@@ -2703,7 +2805,7 @@ ${paymentConditionHtml}
                         }
                         if (!isCheckoutSubmittingGlobal) handleCheckoutClick();
                       } else {
-                        setSelectedPayment(method as any);
+                        handlePaymentMethodChange(method as any);
                       }
                     }}
                   >
@@ -2711,6 +2813,24 @@ ${paymentConditionHtml}
                   </Button>
                 ))}
             </div>
+
+            {/* Indicador visual comercial según método de pago */}
+            {selectedPayment === "TARJETA" && isCardFeeActive && (
+              <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/30 flex items-center justify-between text-[11px] text-blue-700 dark:text-blue-300">
+                <span className="flex items-center gap-1.5 font-bold">
+                  💳 Tarifa Tarjeta (+{(Number(sysConfig?.cardFeePercentage) * 100).toFixed(2)}%)
+                </span>
+                <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium">Redondeo comercial</span>
+              </div>
+            )}
+            {selectedPayment === "EFECTIVO" && isCardFeeActive && (
+              <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-[11px] text-emerald-700 dark:text-emerald-300">
+                <span className="flex items-center gap-1.5 font-bold">
+                  💵 Descuento por pago en efectivo
+                </span>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Precio de contado</span>
+              </div>
+            )}
 
             {selectedPayment === "CREDITO" && (
               <div className="flex items-center justify-between gap-2 p-2 bg-[var(--bg)] border border-[var(--border)] rounded-lg">

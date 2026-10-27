@@ -6,7 +6,7 @@ import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { apiRequest } from "../config/api";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, Save, ArrowLeft, Package } from "lucide-react";
+import { Settings as SettingsIcon, Save, ArrowLeft, Package, CreditCard } from "lucide-react";
 import { useNavigate } from "react-router";
 
 export interface SystemConfigData {
@@ -26,6 +26,9 @@ export interface SystemConfigData {
   blockOnOverdueDays: number;
   blockOnOverLimit: boolean;
   allowNegativeStock?: boolean;
+  enableCardFeeCalculation?: boolean;
+  cardFeePercentage?: number | null;
+  cardFeeRoundingTargets?: string;
   updatedAt: string;
 }
 
@@ -64,6 +67,11 @@ export function SystemConfig() {
       allowCreditSales: formData.get("allowCreditSales") === "true",
       blockOnOverdueDays: parseInt(formData.get("blockOnOverdueDays") as string, 10),
       allowNegativeStock: formData.get("allowNegativeStock") === "true",
+      enableCardFeeCalculation: formData.get("enableCardFeeCalculation") === "true",
+      cardFeePercentage: formData.get("cardFeePercentage") !== "" && formData.get("cardFeePercentage") != null
+        ? parseFloat(formData.get("cardFeePercentage") as string) / 100
+        : null,
+      cardFeeRoundingTargets: (formData.get("cardFeeRoundingTargets") as string)?.trim() || "0.00,0.50,0.75,0.80,0.95,0.99",
     };
 
     try {
@@ -224,6 +232,96 @@ export function SystemConfig() {
               <p className="text-[11px] text-[var(--text-sec)]">
                 Define si al vender un producto sin stock disponible en el Punto de Venta el saldo de inventario baja a números negativos (ej. -2) para compensarse automáticamente al recibir compras del proveedor, o si se mantiene en 0.
               </p>
+            </div>
+
+            {/* Tarjeta y Ajuste de Precios */}
+            <div className="space-y-4 md:col-span-2 p-5 rounded-2xl border border-[var(--border)] bg-[var(--bg)]/50">
+              <div className="flex items-center gap-2 border-b border-[var(--border)] pb-2">
+                <CreditCard size={18} className="text-[var(--primary)]" />
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-widest text-[var(--text-main)]">
+                    Comisión y Precios Automáticos por Pago con Tarjeta
+                  </h3>
+                  <p className="text-[11px] text-[var(--text-sec)]">
+                    Recalcula automáticamente los precios en el POS para compensar la comisión bancaria y aplicar redondeo comercial.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] uppercase font-black opacity-60 tracking-widest">
+                    Estado de la Función
+                  </Label>
+                  <Select
+                    name="enableCardFeeCalculation"
+                    defaultValue={config?.enableCardFeeCalculation !== false ? "true" : "false"}
+                  >
+                    <SelectTrigger className="bg-[var(--card)] border-[var(--border)] font-bold text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[var(--card)] border-[var(--border)]">
+                      <SelectItem value="true" className="font-bold text-emerald-600">
+                        Habilitado en POS
+                      </SelectItem>
+                      <SelectItem value="false" className="font-bold text-amber-500">
+                        Deshabilitado (Precio idéntico a efectivo)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] uppercase font-black opacity-60 tracking-widest">
+                    Comisión del Banco / Terminal (%)
+                  </Label>
+                  <Input
+                    name="cardFeePercentage"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    defaultValue={
+                      config?.cardFeePercentage != null && Number(config.cardFeePercentage) > 0
+                        ? (Number(config.cardFeePercentage) * 100).toFixed(2).replace(/\.?0+$/, "")
+                        : ""
+                    }
+                    placeholder="Ej. 5.0 (Vacío = Sin recálculo)"
+                    className="bg-[var(--card)] border-[var(--border)] font-bold font-mono"
+                  />
+                  <p className="text-[10px] text-[var(--text-sec)]">
+                    Si está vacío o en 0, no se alterará ningún precio.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] uppercase font-black opacity-60 tracking-widest">
+                    Terminaciones Comerciales
+                  </Label>
+                  <Input
+                    name="cardFeeRoundingTargets"
+                    type="text"
+                    defaultValue={config?.cardFeeRoundingTargets || "0.00,0.50,0.75,0.80,0.95,0.99"}
+                    placeholder="0.00,0.50,0.75,0.80,0.95,0.99"
+                    className="bg-[var(--card)] border-[var(--border)] font-bold font-mono text-xs"
+                  />
+                  <p className="text-[10px] text-[var(--text-sec)]">
+                    Separadas por coma. Redondea hacia arriba para centavos comerciales.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3 bg-[var(--card)] border border-[var(--border)] rounded-xl text-xs space-y-1">
+                <p className="font-bold text-[var(--text-main)]">
+                  💡 Fórmula de ingreso neto garantizado:
+                </p>
+                <p className="text-[var(--text-sec)] text-[11px]">
+                  <code className="bg-[var(--bg)] px-1 py-0.5 rounded text-[var(--primary)] font-mono font-bold">
+                    Precio Tarjeta = Precio Efectivo / (1 - comisión)
+                  </code>
+                  {" "}seguido de aproximación a la siguiente terminación comercial autorizada.
+                </p>
+              </div>
             </div>
           </div>
 

@@ -109,17 +109,17 @@ export function Quotes() {
   // Modales
   const [selectedQuote, setSelectedQuote] = useState<QuoteResponse | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
-  // Costos y márgenes: visibles por defecto para roles autorizados; para otros roles requieren autorización
+  // Costos y márgenes: ocultos por defecto al abrir cualquier cotización; se revelan al pulsar el botón
   const [costAccess, setCostAccess] = useState<CostAccessResponse | null>(null);
   const [costDialogOpen, setCostDialogOpen] = useState(false);
-  const [marginHiddenManually, setMarginHiddenManually] = useState(false);
-  const showMargin = !marginHiddenManually && (canSeeCosts || costAccess !== null);
+  const [showCostsExplicitly, setShowCostsExplicitly] = useState(false);
+  const showMargin = showCostsExplicitly && (canSeeCosts || costAccess !== null);
   const hideCosts = () => {
     setCostAccess(null);
-    setMarginHiddenManually(true);
+    setShowCostsExplicitly(false);
   };
   const showCosts = () => {
-    setMarginHiddenManually(false);
+    setShowCostsExplicitly(true);
   };
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [cancelingId, setCancelingId] = useState<number | null>(null);
@@ -494,7 +494,7 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
     try {
       const fullQuote = await quotesService.getQuoteDetail(quote.id);
       setCostAccess(null);
-      setMarginHiddenManually(false);
+      setShowCostsExplicitly(false);
       setSelectedQuote(fullQuote);
       setDetailModalOpen(true);
     } catch (e) {
@@ -2288,7 +2288,10 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
         open={costDialogOpen}
         onOpenChange={setCostDialogOpen}
         quoteId={selectedQuote?.id ?? null}
-        onGranted={setCostAccess}
+        onGranted={(access) => {
+          setCostAccess(access);
+          setShowCostsExplicitly(true);
+        }}
       />
 
       <CancelQuoteDialog
