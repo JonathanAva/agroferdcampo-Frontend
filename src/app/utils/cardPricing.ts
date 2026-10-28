@@ -69,21 +69,22 @@ export function calculateCardPrice(
   feePercentage?: number | null,
   targetsStr?: string | null,
 ): number {
-  if (isNaN(cashPrice) || cashPrice <= 0) return 0;
+  const numericCashPrice = Number(cashPrice);
+  if (isNaN(numericCashPrice) || numericCashPrice <= 0) return 0;
 
   // Si no hay porcentaje configurado o es 0, no se modifica el precio
   if (feePercentage == null || isNaN(Number(feePercentage)) || Number(feePercentage) <= 0) {
-    return cashPrice;
+    return numericCashPrice;
   }
 
   // Normalizar: si viene como 5 o 4.75, convertir a 0.05 o 0.0475
   const rawFee = Number(feePercentage);
   const feeRate = rawFee > 1 ? rawFee / 100 : rawFee;
 
-  if (feeRate >= 1) return cashPrice; // Evitar división por cero o negativo
+  if (feeRate >= 1) return numericCashPrice; // Evitar división por cero o negativo
 
   // Fórmula sugerida: Precio Tarjeta = Precio Efectivo / (1 - comisión)
-  const rawCardPrice = cashPrice / (1 - feeRate);
+  const rawCardPrice = numericCashPrice / (1 - feeRate);
 
   const targets = parseRoundingTargets(targetsStr);
   return roundToCommercialTarget(rawCardPrice, targets);
@@ -93,11 +94,12 @@ export function calculateCardPrice(
  * Calcula el ingreso neto real recibido por el comercio después de la deducción bancaria.
  */
 export function calculateNetMerchantIncome(cardPrice: number, feePercentage?: number | null): number {
-  if (isNaN(cardPrice) || cardPrice <= 0) return 0;
+  const numericCardPrice = Number(cardPrice);
+  if (isNaN(numericCardPrice) || numericCardPrice <= 0) return 0;
   if (feePercentage == null || isNaN(Number(feePercentage)) || Number(feePercentage) <= 0) {
-    return cardPrice;
+    return numericCardPrice;
   }
   const rawFee = Number(feePercentage);
   const feeRate = rawFee > 1 ? rawFee / 100 : rawFee;
-  return Number((cardPrice * (1 - feeRate)).toFixed(2));
+  return Number((numericCardPrice * (1 - feeRate)).toFixed(2));
 }

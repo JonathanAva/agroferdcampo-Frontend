@@ -488,13 +488,13 @@ export function POS() {
     isService: boolean = false
   ) => {
     if (isService) {
-      return { activePrice: baseCashPrice, cashPrice: baseCashPrice };
+      return { activePrice: Number(baseCashPrice) || 0, cashPrice: Number(baseCashPrice) || 0 };
     }
     const isCard = paymentMethod === "TARJETA";
     const activePrice = (isCard && isCardFeeActive)
-      ? calculateCardPrice(baseCashPrice, sysConfig?.cardFeePercentage, sysConfig?.cardFeeRoundingTargets)
-      : baseCashPrice;
-    return { activePrice, cashPrice: baseCashPrice };
+      ? calculateCardPrice(Number(baseCashPrice) || 0, sysConfig?.cardFeePercentage, sysConfig?.cardFeeRoundingTargets)
+      : Number(baseCashPrice) || 0;
+    return { activePrice, cashPrice: Number(baseCashPrice) || 0 };
   };
 
   const applyPaymentMethodToCart = (
@@ -509,15 +509,15 @@ export function POS() {
       return {
         ...item,
         selections: item.selections.map((s) => {
-          const baseCashPrice = s.cashPrice ?? s.originalPrice ?? s.price;
+          const baseCashPrice = Number(s.cashPrice ?? s.originalPrice ?? s.price) || 0;
           const targetPrice = (isCard && isCardFeeActive)
-            ? calculateCardPrice(baseCashPrice, sysConfig?.cardFeePercentage, sysConfig?.cardFeeRoundingTargets)
-            : baseCashPrice;
+            ? calculateCardPrice(Number(baseCashPrice) || 0, sysConfig?.cardFeePercentage, sysConfig?.cardFeeRoundingTargets)
+            : Number(baseCashPrice) || 0;
 
           return {
             ...s,
             cashPrice: baseCashPrice,
-            originalPrice: s.originalPrice ?? baseCashPrice,
+            originalPrice: Number(s.originalPrice ?? baseCashPrice) || 0,
             price: targetPrice,
           };
         }),
@@ -1039,7 +1039,7 @@ export function POS() {
           expirationDate: p.nearestExpirationDate || null,
           imageUrl: p.imageUrl || null,
           unit: p.unit,
-          units: p.units || [],
+          units: Array.isArray(p.units) ? p.units.map((u: any) => ({ ...u, factor: Number(u.factor) || 1, priceDetalle: u.priceDetalle != null ? Number(u.priceDetalle) : undefined, priceMayorista: u.priceMayorista != null ? Number(u.priceMayorista) : undefined })) : [],
         };
       });
       setProducts(mapped);
@@ -1247,7 +1247,7 @@ export function POS() {
               return {
                 ...s,
                 price: val,
-                cashPrice: (!isCard || !isCardFeeActive) ? val : (s.cashPrice ?? val),
+                cashPrice: (!isCard || !isCardFeeActive) ? val : (s.cashPrice !== undefined ? Number(s.cashPrice) : val),
               };
             }
             return s;
@@ -1280,8 +1280,8 @@ export function POS() {
     if (newUnitType !== item.unit) {
       const u = item.units?.find((x) => x.unit === newUnitType);
       if (!u) return;
-      newFactor = u.factor;
-      baseCashPrice = u.priceDetalle || (item.price * u.factor);
+      newFactor = Number(u.factor) || 1;
+      baseCashPrice = Number(u.priceDetalle) || (Number(item.price) * newFactor);
     }
 
     const isService = isServiceProduct(item);
@@ -1398,7 +1398,7 @@ export function POS() {
     if (targetSel.unitType !== item.unit) {
       const u = item.units?.find((x) => x.unit === targetSel.unitType);
       if (u) {
-        baseCashPrice = newPriceType === "PUBLICO" && u.priceDetalle ? u.priceDetalle : option.price * u.factor;
+        baseCashPrice = newPriceType === "PUBLICO" && Number(u.priceDetalle) ? Number(u.priceDetalle) : newPriceType === "MAYOREO" && Number(u.priceMayorista) ? Number(u.priceMayorista) : Number(option.price) * (Number(u.factor) || 1);
       }
     }
 
@@ -2715,9 +2715,9 @@ ${paymentConditionHtml}
                               />
                             </div>
                             <span className="text-[9px] font-bold text-[var(--text-sec)]">Sub: ${(sel.quantity * sel.price).toFixed(4)}</span>
-                            {selectedPayment === "TARJETA" && isCardFeeActive && sel.cashPrice !== undefined && Math.abs(sel.price - sel.cashPrice) > 0.001 && (
+                            {selectedPayment === "TARJETA" && isCardFeeActive && sel.cashPrice !== undefined && Math.abs(Number(sel.price) - Number(sel.cashPrice)) > 0.001 && (
                               <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400" title="Precio preferencial con descuento en efectivo">
-                                Contado: ${sel.cashPrice.toFixed(2)}
+                                Contado: ${Number(sel.cashPrice).toFixed(2)}
                               </span>
                             )}
                           </div>
