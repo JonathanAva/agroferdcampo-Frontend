@@ -14,7 +14,8 @@ import { toast } from 'sonner';
 import { User, Building2, UserCheck, ShieldCheck } from 'lucide-react';
 import { cn } from '../ui/utils';
 import { useAuth } from '../../context/AuthContext';
-import { departments, zones as municipalities, districts, economicActivities } from '../../types/catalogs';
+import { departments, zones as municipalities, districts } from '../../types/catalogs';
+import { EconomicActivityPicker } from './EconomicActivityPicker';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
 import { UnsavedChangesDialog } from '../ui/unsaved-changes-dialog';
 
@@ -230,25 +231,13 @@ export function CustomerDialog({ open, onOpenChange, customer, onSuccess }: Cust
                 )}
                 <div className="space-y-2 md:col-span-2">
                   <Label>Actividad Económica (MH)</Label>
-                  <Select
+                  <EconomicActivityPicker
                     value={formData.activityCode}
-                    onValueChange={(v) => {
-                      const activity = economicActivities.find(a => a.value === v);
-                      handleChange('activityCode', v);
-                      handleChange('activityDescription', activity ? activity.label : '');
+                    onChange={(code, description) => {
+                      handleChange('activityCode', code);
+                      handleChange('activityDescription', description);
                     }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccione la actividad económica" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {economicActivities.map((act) => (
-                        <SelectItem key={act.value} value={act.value}>
-                          {act.value} - {act.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                 </div>
               </div>
             </div>

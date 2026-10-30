@@ -140,6 +140,20 @@ export function sendCreditoFiscal(saleId: number): Promise<DteResponse> {
   return apiRequest<DteResponse>(`${BASE}/${saleId}/send-dte-03`, { method: 'POST' });
 }
 
+/** Paso 2c — Emitir Factura de Sujeto Excluido (DTE14) */
+export function sendSujetoExcluido(saleId: number): Promise<DteResponse> {
+  return apiRequest<DteResponse>(`${BASE}/${saleId}/send-dte-14`, { method: 'POST' });
+}
+
+export type DteKind = 'CONSUMIDOR_FINAL' | 'CREDITO_FISCAL' | 'SUJETO_EXCLUIDO';
+
+/** Emite el DTE de una venta según el tipo de documento elegido */
+export function emitSaleDte(saleId: number, kind: DteKind): Promise<DteResponse> {
+  if (kind === 'CREDITO_FISCAL') return sendCreditoFiscal(saleId);
+  if (kind === 'SUJETO_EXCLUIDO') return sendSujetoExcluido(saleId);
+  return sendFacturaConsumidor(saleId);
+}
+
 /** Emitir Nota de Crédito (DTE05) */
 export function sendNotaCredito(saleId: number, payload: AdjustSaleDto): Promise<DteResponse> {
   return apiRequest<DteResponse>(`${BASE}/${saleId}/send-dte-05`, {

@@ -33,8 +33,8 @@ import {
   sendNotaCredito,
   sendNotaDebito,
   requestMonthlyReport,
-  sendFacturaConsumidor,
-  sendCreditoFiscal,
+  emitSaleDte,
+  DteKind,
   getSaleDetail,
 } from "../services/sales.service";
 import {
@@ -837,17 +837,23 @@ export function SalesHistory() {
     }
   };
 
-  const handleEmitDte = async (sale: SaleResponse) => {
+  const DTE_LABELS: Record<DteKind, string> = {
+    CONSUMIDOR_FINAL: "Factura Consumidor Final",
+    CREDITO_FISCAL: "Crédito Fiscal",
+    SUJETO_EXCLUIDO: "Factura Sujeto Excluido",
+  };
+
+  const handleEmitDte = async (sale: SaleResponse, kind: DteKind) => {
+    // Crédito Fiscal y Sujeto Excluido necesitan un cliente con datos fiscales
+    if (kind !== "CONSUMIDOR_FINAL" && !sale.customer) {
+      toast.error(`${DTE_LABELS[kind]} requiere una venta con cliente registrado`);
+      return;
+    }
     setEmittingDteId(sale.id);
     try {
-      const isCreditFiscal = sale.customer?.customerType === "CONTRIBUYENTE";
-      if (isCreditFiscal) {
-        await sendCreditoFiscal(sale.id);
-      } else {
-        await sendFacturaConsumidor(sale.id);
-      }
-      toast.success("DTE emitido exitosamente");
-      fetchSales();
+      await emitSaleDte(sale.id, kind);
+      toast.success(`DTE emitido: ${DTE_LABELS[kind]}`);
+      await fetchSales();
     } catch (error: any) {
       toast.error(error.message || "Error al emitir el DTE en Hacienda");
     } finally {
@@ -1290,7 +1296,12 @@ export function SalesHistory() {
                           )}
                         </TableCell>
                         <TableCell className="text-center">
-                          {!sale.dteResponse ? (
+                          {emittingDteId === sale.id ? (
+                            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-[var(--primary)]">
+                              <RefreshCcw size={12} className="animate-spin" />
+                              Procesando...
+                            </span>
+                          ) : !sale.dteResponse ? (
                             <span className="text-[10px] font-bold text-gray-400">
                               Sin DTE
                             </span>
@@ -1344,9 +1355,11 @@ export function SalesHistory() {
                               )}
 
                               {sale.status === "COMPLETADA" &&
-                                sale.dteResponse?.estado !== "PROCESADO" && (
+                                sale.dteResponse?.estado !== "PROCESADO" &&
+                                (["CONSUMIDOR_FINAL", "CREDITO_FISCAL", "SUJETO_EXCLUIDO"] as DteKind[]).map((kind) => (
                                   <DropdownMenuItem
-                                    onClick={() => handleEmitDte(sale)}
+                                    key={kind}
+                                    onClick={() => handleEmitDte(sale, kind)}
                                     disabled={emittingDteId === sale.id}
                                     className={`font-bold cursor-pointer focus:text-emerald-700 ${
                                       sale.dteResponse
@@ -1359,14 +1372,17 @@ export function SalesHistory() {
                                         size={14}
                                         className="mr-2 animate-spin"
                                       />
-                                    ) : (
+                                    ) : kind === "CONSUMIDOR_FINAL" ? (
                                       <Send size={14} className="mr-2" />
+                                    ) : kind === "CREDITO_FISCAL" ? (
+                                      <Building2 size={14} className="mr-2" />
+                                    ) : (
+                                      <FileText size={14} className="mr-2" />
                                     )}
-                                    {sale.dteResponse
-                                      ? "Reenviar DTE a Hacienda"
-                                      : "Emitir DTE a Hacienda"}
+                                    {sale.dteResponse ? "Reenviar " : "Emitir "}
+                                    {DTE_LABELS[kind]}
                                   </DropdownMenuItem>
-                                )}
+                                ))}
 
                               {sale.dteResponse?.estado === "PROCESADO" &&
                                 sale.status === "COMPLETADA" && (
