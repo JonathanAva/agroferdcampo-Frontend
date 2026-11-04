@@ -216,7 +216,7 @@ export async function printSaleInvoiceLetter(saleOrPartial: SaleResponse, sysCon
     customer: {
       name: customer.name || 'Consumidor Final',
       doc: isContribuyente
-        ? [customer.nit && `NIT ${customer.nit}`, customer.documentNumber && `NRC ${customer.documentNumber}`].filter(Boolean).join(' · ')
+        ? [customer.nit && `NIT ${customer.nit}`, (customer.nrc || customer.documentNumber) && `NRC ${customer.nrc || customer.documentNumber}`].filter(Boolean).join(' · ')
         : customer.documentNumber || customer.dui || '',
       phone: customer.phone || '',
       email: customer.email || '',

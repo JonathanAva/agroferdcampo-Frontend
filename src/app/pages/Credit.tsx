@@ -2016,7 +2016,7 @@ export function Credit() {
                           </div>
                           <div>
                             <p className="text-[10px] font-bold text-[var(--text-sec)] uppercase tracking-wider mb-1">NRC</p>
-                            <p className="font-medium text-[var(--text-main)] text-sm">{specificSaleDetail?.customer?.customerType === 'CONTRIBUYENTE' ? 'S/N' : 'S/N'}</p>
+                            <p className="font-medium text-[var(--text-main)] text-sm">{specificSaleDetail?.customer?.nrc || 'S/N'}</p>
                           </div>
                         </div>
                       </div>

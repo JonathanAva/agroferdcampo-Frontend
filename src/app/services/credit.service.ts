@@ -49,6 +49,7 @@ export interface CreditSale {
     id: number;
     totalAmount: string;
     createdAt: string;
+    invoiceNumber?: string;
   };
   payments?: CreditPayment[];
 }

@@ -72,6 +72,7 @@ export interface SaleResponse {
     customerType: string;
     email?: string;
     nit?: string;
+    nrc?: string;
     documentNumber?: string;
   };
   user?: { id: number; fullName: string };

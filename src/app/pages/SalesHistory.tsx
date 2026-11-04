@@ -1064,7 +1064,7 @@ export function SalesHistory() {
           </div>
           <div class="info-item">
             <span class="info-label">${isCreditFiscal ? 'NIT / NRC' : 'Documento'}</span>
-            <span class="info-value">${isCreditFiscal ? `${sale.customer?.nit || ''} / ${sale.customer?.documentNumber || ''}` : (sale.customer?.documentNumber || 'N/A')}</span>
+            <span class="info-value">${isCreditFiscal ? `${sale.customer?.nit || ''} / ${sale.customer?.nrc || sale.customer?.documentNumber || ''}` : (sale.customer?.documentNumber || 'N/A')}</span>
           </div>
         </div>
 
@@ -2005,10 +2005,7 @@ export function SalesHistory() {
                                 NRC
                               </p>
                               <p className="font-medium text-[var(--text-main)] text-sm">
-                                {selectedSale.customer?.customerType ===
-                                "CONTRIBUYENTE"
-                                  ? "S/N"
-                                  : "S/N"}
+                                {selectedSale.customer?.nrc || "S/N"}
                               </p>
                             </div>
                           </div>

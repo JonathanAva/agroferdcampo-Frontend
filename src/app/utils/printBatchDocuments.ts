@@ -522,7 +522,7 @@ export async function printSequentialFacturaSheets(sales: SaleResponse[]): Promi
             </div>
             <div class="info-item">
               <span class="info-label">${isCreditFiscal ? 'NIT / NRC' : 'Documento'}</span>
-              <span class="info-value">${isCreditFiscal ? `${sale.customer?.nit || ''} / ${sale.customer?.documentNumber || ''}` : (sale.customer?.documentNumber || 'N/A')}</span>
+              <span class="info-value">${isCreditFiscal ? `${sale.customer?.nit || ''} / ${sale.customer?.nrc || sale.customer?.documentNumber || ''}` : (sale.customer?.documentNumber || 'N/A')}</span>
             </div>
           </div>
 
