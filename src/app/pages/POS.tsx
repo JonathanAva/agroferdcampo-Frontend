@@ -60,7 +60,7 @@ import { ScrollArea } from "../components/ui/scroll-area";
 import { Label } from "../components/ui/label";
 import { SystemConfigData } from "./SystemConfig";
 import { calculateCardPrice } from "../utils/cardPricing";
-import { TransportSelector, TransportData } from "../components/transport/TransportSelector";
+import { TransportSelector, TransportData, validateTransport } from "../components/transport/TransportSelector";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
 import { ProductDescriptionPopover } from "../components/products/ProductDescriptionPopover";
@@ -864,6 +864,13 @@ export function POS() {
       toast.error("Ingrese una validez en días correcta");
       return;
     }
+    if (transportData?.requiresTransport) {
+      const err = validateTransport(transportData);
+      if (err) {
+        toast.error(err);
+        return;
+      }
+    }
 
     // Bloquear el botón a nivel DOM ANTES de cualquier código asíncrono
     isQuoteSubmittingGlobal = true;
@@ -894,6 +901,7 @@ export function POS() {
           vehicleId: transportData.vehicleId,
           driverId: transportData.driverId,
           deliveryAddress: transportData.deliveryAddress,
+          deliveryAddressData: transportData.deliveryAddressData,
           scheduledAt: transportData.scheduledDeliveryAt,
         } : {})
       });
@@ -1455,6 +1463,14 @@ export function POS() {
   const handleCheckoutClick = () => {
     if (cart.length === 0) return;
 
+    if (transportData?.requiresTransport) {
+      const err = validateTransport(transportData);
+      if (err) {
+        toast.error(err);
+        return;
+      }
+    }
+
     if (selectedPayment === "CREDITO") {
       if (!selectedCustomer) {
         toast.error("Debe seleccionar un cliente para ventas al crédito.");
@@ -1532,6 +1548,7 @@ export function POS() {
           vehicleId: transportData.vehicleId,
           driverId: transportData.driverId,
           deliveryAddress: transportData.deliveryAddress,
+          deliveryAddressData: transportData.deliveryAddressData,
           scheduledDeliveryAt: transportData.scheduledDeliveryAt,
         } : {})
       });

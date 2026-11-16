@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  MapPin, Plus, Search, Filter, Truck, User, Play, CheckCircle2, XCircle, Printer, Eye, Trash2, PackageCheck, CalendarIcon
+  MapPin, Plus, Search, Filter, Truck, User, Play, CheckCircle2, XCircle, Printer, Eye, Trash2, PackageCheck, CalendarIcon, ExternalLink
 } from 'lucide-react';
+import { addressMapLink } from '../components/transport/mapUtils';
 import { useSearchParams } from 'react-router';
 import { format } from 'date-fns';
 import logoUrl from '../../assets/logo.png';
@@ -854,8 +855,23 @@ export default function DeliveryRoutes({ hideTitle }: { hideTitle?: boolean } = 
                               <User size={14} className="text-[var(--text-sec)]" /> 
                               {note.customer?.name || note.toBranch?.name || 'Cliente sin nombre'}
                             </p>
-                            <p className="text-xs text-[var(--text-sec)] flex items-center gap-1 mt-1">
-                              <MapPin size={12} /> {note.deliveryAddress || 'Retiro en tienda / Sin dirección'}
+                            <p className="text-xs text-[var(--text-sec)] flex items-center gap-1 mt-1 flex-wrap">
+                              <MapPin size={12} className="shrink-0" /> {note.deliveryAddress || 'Retiro en tienda / Sin dirección'}
+                              {(() => {
+                                const link = addressMapLink((note as any).deliveryAddressRef);
+                                if (!link) return null;
+                                return (
+                                  <a
+                                    href={link}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="ml-2 inline-flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-bold"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    Ver en mapa <ExternalLink size={10} />
+                                  </a>
+                                );
+                              })()}
                             </p>
                           </div>
                           

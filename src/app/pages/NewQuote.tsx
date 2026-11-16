@@ -19,7 +19,7 @@ import { cn } from "../components/ui/utils";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Label } from "../components/ui/label";
 import { Switch } from "../components/ui/switch";
-import { TransportSelector, TransportData } from "../components/transport/TransportSelector";
+import { TransportSelector, TransportData, addressRefToData, validateTransport } from "../components/transport/TransportSelector";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
 import { UNIVERSAL_PRODUCT_UNITS } from "../utils/universalProduct";
@@ -155,6 +155,7 @@ export function NewQuote() {
             vehicleId: quote.vehicleId || undefined,
             driverId: quote.driverId || undefined,
             deliveryAddress: quote.deliveryAddress || "",
+            deliveryAddressData: addressRefToData((quote as any).deliveryAddressRef),
             scheduledDeliveryAt: undefined // o extraer si existe
           });
         }
@@ -958,6 +959,13 @@ export function NewQuote() {
       toast.error("Días de validez requeridos");
       return;
     }
+    if (transportData?.requiresTransport) {
+      const err = validateTransport(transportData);
+      if (err) {
+        toast.error(err);
+        return;
+      }
+    }
 
     setSavingQuote(true);
     try {
@@ -969,6 +977,7 @@ export function NewQuote() {
         vehicleId: transportData?.requiresTransport ? (transportData as any).vehicleId : undefined,
         driverId: transportData?.requiresTransport ? (transportData as any).driverId : undefined,
         deliveryAddress: transportData?.requiresTransport ? (transportData as any).deliveryAddress : undefined,
+        deliveryAddressData: transportData?.requiresTransport ? transportData.deliveryAddressData : undefined,
         scheduledAt: transportData?.requiresTransport ? (transportData as any).scheduledDeliveryAt : undefined,
         items: cart.map(i => ({
           productId: i.id,

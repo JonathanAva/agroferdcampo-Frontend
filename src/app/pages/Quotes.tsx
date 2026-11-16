@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import logo from '../../assets/logo.png';
 import {
   Search, FileText, Eye, EyeOff, CheckCircle2, AlertCircle, Calendar as CalendarIcon, RefreshCcw, Filter, X,
-  Mail, UserCog, Clock, Send, Plus, Banknote, CreditCard, Smartphone, Trash2, Truck as TruckIcon, Printer, PackageCheck, Edit3, Copy
+  Mail, UserCog, Clock, Send, Plus, Banknote, CreditCard, Smartphone, Trash2, Truck as TruckIcon, Printer, PackageCheck, Edit3, Copy, MapPin
 , Store, Layers, Loader2, Lock, Ban, AlertTriangle
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
@@ -24,7 +24,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Label } from '../components/ui/label';
 import { Switch } from '../components/ui/switch';
 import { apiRequest } from '../config/api';
-import { TransportSelector, TransportData } from '../components/transport/TransportSelector';
+import { TransportSelector, TransportData, addressRefToData, validateTransport } from '../components/transport/TransportSelector';
+import { addressMapLink } from '../components/transport/mapUtils';
 import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
 import { useAuth } from '../context/AuthContext';
 import { ProductDescriptionPopover } from '../components/products/ProductDescriptionPopover';
@@ -517,6 +518,7 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
     setTransportData(fullQuote.requiresTransport ? {
       requiresTransport: true,
       deliveryAddress: fullQuote.deliveryAddress || (fullQuote.customer as any)?.address || '',
+      deliveryAddressData: addressRefToData((fullQuote as any)?.deliveryAddressRef),
       vehicleId: fullQuote.vehicleId || undefined,
       driverId: undefined
     } : null);
@@ -539,6 +541,13 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
       toast.error('Selecciona la caja a la que se registrará el ingreso');
       return;
     }
+    if (transportData?.requiresTransport) {
+      const err = validateTransport(transportData);
+      if (err) {
+        toast.error(err);
+        return;
+      }
+    }
     setConfirmingId(quoteToConfirm.id);
     try {
       await quotesService.confirmQuote(quoteToConfirm.id, {
@@ -550,6 +559,7 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
           vehicleId: transportData.vehicleId,
           driverId: transportData.driverId,
           deliveryAddress: transportData.deliveryAddress,
+          deliveryAddressData: transportData.deliveryAddressData,
           scheduledAt: transportData.scheduledDeliveryAt,
         } : {})
       });
@@ -565,6 +575,13 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
 
   
   const handlePreConfirmQuote = () => {
+    if (transportData?.requiresTransport) {
+      const err = validateTransport(transportData);
+      if (err) {
+        toast.error(err);
+        return;
+      }
+    }
     if (!transportData?.requiresTransport && !quoteToConfirm?.requiresTransport) {
       setDeliveryWarningOpen(true);
     } else {
@@ -574,7 +591,11 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
 
   const handleConfirmWithDelivery = () => {
     setDeliveryWarningOpen(false);
-    setTransportData({ requiresTransport: true, deliveryAddress: (quoteToConfirm?.customer as any)?.address || '' });
+    setTransportData({
+      requiresTransport: true,
+      deliveryAddress: (quoteToConfirm?.customer as any)?.address || '',
+      deliveryAddressData: addressRefToData((quoteToConfirm as any)?.deliveryAddressRef),
+    });
     toast.info("Por favor, complete la dirección de entrega antes de confirmar la venta.");
   };
 
@@ -606,6 +627,16 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
       toast.error('Agrega al menos un producto a la cotización');
       return;
     }
+    if (newQuote.requiresTransport) {
+      const err = validateTransport({
+        requiresTransport: true,
+        deliveryAddressData: (newQuote as any).deliveryAddressData,
+      });
+      if (err) {
+        toast.error(err);
+        return;
+      }
+    }
     setSavingQuote(true);
     try {
       await quotesService.createQuote({
@@ -615,6 +646,7 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
         requiresTransport: newQuote.requiresTransport,
         vehicleId: newQuote.requiresTransport ? newQuote.vehicleId : undefined,
         deliveryAddress: newQuote.requiresTransport ? newQuote.deliveryAddress : undefined,
+        deliveryAddressData: newQuote.requiresTransport ? (newQuote as any).deliveryAddressData : undefined,
         items: newQuote.items.map(i => ({
           productId: i.productId,
           quantity: i.quantity,
@@ -1108,16 +1140,32 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
                 </div>
 
                 {selectedQuote.requiresTransport && (
-                  <div className="bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-200 dark:border-blue-800/30 flex flex-col md:flex-row md:items-center gap-4">
-                    <div className="size-10 rounded-full bg-blue-100 dark:bg-blue-800/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                      <TruckIcon size={20} />
+                  <div className="bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-200 dark:border-blue-800/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="size-10 rounded-full bg-blue-100 dark:bg-blue-800/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                        <TruckIcon size={20} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-blue-900 dark:text-blue-300">Entrega a Domicilio Solicitada</p>
+                        <p className="text-xs text-blue-700 dark:text-blue-400 mt-0.5">
+                          <span className="font-semibold">Dirección:</span> {selectedQuote.deliveryAddress || 'No especificada'}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-bold text-blue-900 dark:text-blue-300">Entrega a Domicilio Solicitada</p>
-                      <p className="text-xs text-blue-700 dark:text-blue-400 mt-0.5">
-                        <span className="font-semibold">Dirección:</span> {selectedQuote.deliveryAddress || 'No especificada'}
-                      </p>
-                    </div>
+                    {(() => {
+                      const link = addressMapLink((selectedQuote as any).deliveryAddressRef);
+                      if (!link) return null;
+                      return (
+                        <a
+                          href={link}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shrink-0"
+                        >
+                          <MapPin size={13} /> Ver en mapa
+                        </a>
+                      );
+                    })()}
                   </div>
                 )}
 
@@ -2091,33 +2139,23 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
             </div>
 
             {/* Fila 2: Transporte + Notas */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Sección de Transporte */}
-              <Card className="p-4 border-l-4 border-l-[var(--primary)] border-[var(--border)] bg-[var(--card)]">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <TruckIcon size={18} className="text-[var(--primary)]" />
-                    <Label className="font-bold">¿Requiere entrega a domicilio?</Label>
-                  </div>
-                  <Switch
-                    checked={newQuote.requiresTransport}
-                    onCheckedChange={c => setNewQuote(prev => ({ ...prev, requiresTransport: c }))}
-                  />
-                </div>
-                {newQuote.requiresTransport && (
-                  <div className="mt-4 pt-4 border-t border-[var(--border)] space-y-3 animate-in fade-in">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold uppercase text-[var(--text-sec)]">Dirección de Entrega</Label>
-                      <Input
-                        placeholder="Dirección exacta de entrega..."
-                        value={newQuote.deliveryAddress}
-                        onChange={e => setNewQuote(prev => ({ ...prev, deliveryAddress: e.target.value }))}
-                        className="bg-[var(--bg)]"
-                      />
-                    </div>
-                  </div>
-                )}
-              </Card>
+            <div className="space-y-4">
+              <TransportSelector
+                customerId={selectedCustomerCreate?.id}
+                value={newQuote.requiresTransport ? {
+                  requiresTransport: true,
+                  deliveryAddress: newQuote.deliveryAddress,
+                  deliveryAddressData: (newQuote as any).deliveryAddressData,
+                } : null}
+                onChange={val => {
+                  setNewQuote(prev => ({
+                    ...prev,
+                    requiresTransport: !!val?.requiresTransport,
+                    deliveryAddress: val?.deliveryAddress || '',
+                    deliveryAddressData: val?.deliveryAddressData,
+                  } as any));
+                }}
+              />
 
               {/* Notas */}
               <div className="space-y-2">

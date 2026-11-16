@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, Eye, Filter, Calendar as CalendarIcon, 
-  TruckIcon, CheckCircle2, Trash2, X, PackageCheck, Plus, Mail, MapPin, PenTool, BarChart3, Camera, Ban, Copy
+  TruckIcon, CheckCircle2, Trash2, X, PackageCheck, Plus, Mail, MapPin, PenTool, BarChart3, Camera, Ban, Copy, ExternalLink
 } from 'lucide-react';
+import { addressMapLink } from '../components/transport/mapUtils';
 import { toast } from 'sonner';
 import { useSearchParams } from 'react-router';
 import { Printer } from 'lucide-react';
@@ -1113,7 +1114,25 @@ function DeliveryNotesList() {
                       <div><span className="text-[var(--text-sec)]">Ruta:</span> <span className="font-bold">{selectedNote.route?.name || 'Sin ruta'}</span></div>
                       <div><span className="text-[var(--text-sec)]">Fecha Prog.:</span> <span className="font-bold">{selectedNote.scheduledAt ? new Date(selectedNote.scheduledAt).toLocaleDateString() : '-'}</span></div>
                       <div><span className="text-[var(--text-sec)]">Despacho:</span> <span className="font-bold">{selectedNote.dispatchType}</span></div>
-                      <div className="col-span-2"><span className="text-[var(--text-sec)]">Dirección:</span> <span className="font-bold">{selectedNote.deliveryAddress}</span></div>
+                      <div className="col-span-2 flex items-center justify-between gap-2 flex-wrap">
+                        <div>
+                          <span className="text-[var(--text-sec)]">Dirección:</span> <span className="font-bold">{selectedNote.deliveryAddress}</span>
+                        </div>
+                        {(() => {
+                          const link = addressMapLink((selectedNote as any).deliveryAddressRef);
+                          if (!link) return null;
+                          return (
+                            <a
+                              href={link}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline font-bold"
+                            >
+                              <MapPin size={12} /> Ver en mapa <ExternalLink size={11} />
+                            </a>
+                          );
+                        })()}
+                      </div>
                       {selectedNote.clientSignedBy && (
                         <div className="col-span-2 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 rounded-xl mt-2">
                           <p className="text-emerald-800 dark:text-emerald-300 font-bold">Firma de Recibido:</p>

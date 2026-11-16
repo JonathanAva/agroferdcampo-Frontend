@@ -35,6 +35,7 @@ export interface CreateQuoteDto {
   vehicleId?: number;
   driverId?: number;
   deliveryAddress?: string;
+  deliveryAddressData?: any;
   scheduledAt?: string;
 }
 
@@ -54,6 +55,10 @@ export interface QuoteResponse {
   vehicleId?: number;
   driverId?: number;
   deliveryAddress?: string;
+  deliveryAddressId?: number;
+  deliveryAddressRef?: any;
+  saleId?: number;
+  clientName?: string;
   customer?: {
     id: number;
     name: string;
@@ -156,6 +161,10 @@ export const quotesService = {
     return await apiRequest<QuoteResponse>(`${BASE}/${id}`);
   },
 
+  getQuoteById: async (id: number): Promise<QuoteResponse> => {
+    return await apiRequest<QuoteResponse>(`${BASE}/${id}`);
+  },
+
   /**
    * Autoriza la vista de costos y márgenes (contraseña propia o de un administrador). El acceso
    * queda registrado en auditoría. Con quoteId devuelve los costos de esa cotización.
@@ -182,6 +191,7 @@ export const quotesService = {
     vehicleId?: number;
     driverId?: number;
     deliveryAddress?: string;
+    deliveryAddressData?: any;
     scheduledAt?: string;
     allowNegativeStock?: boolean;
   }): Promise<any> => {
