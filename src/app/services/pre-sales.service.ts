@@ -8,6 +8,7 @@ export interface PreSaleItemDto {
   unitPrice: number;
   unitType?: string;
   unitFactor?: number;
+  customName?: string;
 }
 
 export interface CreatePreSaleDto {
@@ -41,6 +42,7 @@ export interface PreSaleItem {
   totalPrice: number;
   unitType?: string;
   unitFactor?: number;
+  customName?: string;
   product: { id: number; name: string; internalCode?: string; unit: string };
 }
 

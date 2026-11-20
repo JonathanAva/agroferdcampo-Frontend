@@ -1665,6 +1665,7 @@ export function POS() {
             unitPrice: Number(s.price),
             unitType: s.unitType,
             unitFactor: Number(s.unitFactor),
+            ...(s.customName ? { customName: s.customName } : {}),
           }))
         ),
       });
@@ -4229,7 +4230,7 @@ ${paymentConditionHtml}
             <div className="bg-[var(--bg)] rounded-xl border border-[var(--border)] p-3 text-left space-y-1">
               {createdTicket?.items?.map((item: any) => (
                 <div key={item.id} className="flex justify-between text-sm">
-                  <span>{item.product?.name} x{Number(item.quantity)}</span>
+                  <span>{item.customName || item.product?.name} x{Number(item.quantity)}</span>
                   <span className="font-bold">${Number(item.totalPrice).toFixed(2)}</span>
                 </div>
               ))}

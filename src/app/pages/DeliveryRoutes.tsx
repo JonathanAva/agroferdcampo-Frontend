@@ -329,7 +329,7 @@ export default function DeliveryRoutes({ hideTitle }: { hideTitle?: boolean } = 
               ${(items || []).map((item: any) => `
                 <tr>
                   <td class="text-sm text-gray">${item.product?.id || '-'}</td>
-                  <td class="font-bold">${item.product?.name || 'Producto Desconocido'}</td>
+                  <td class="font-bold">${item.customName || item.product?.name || 'Producto Desconocido'}</td>
                   <td class="center font-black text-lg">${Number(item.quantity)}</td>
                   ${isSale ? `<td class="right">${formatMoney(item.unitPrice)}</td>` : ''}
                   ${isSale ? `<td class="right font-bold">${formatMoney(item.totalPrice)}</td>` : ''}
@@ -901,7 +901,7 @@ export default function DeliveryRoutes({ hideTitle }: { hideTitle?: boolean } = 
                               {itemsToShow?.map((item: any, idx: number) => (
                                 <TableRow key={idx} className="hover:bg-transparent">
                                   <TableCell className="py-2 text-xs text-[var(--text-sec)]">{item.product?.id}</TableCell>
-                                  <TableCell className="py-2 text-sm font-medium">{item.product?.name}</TableCell>
+                                  <TableCell className="py-2 text-sm font-medium">{item.customName || item.product?.name}</TableCell>
                                   <TableCell className="py-2 text-sm text-center font-bold">{Number(item.quantity)}</TableCell>
                                   {isSale && (
                                     <TableCell className="py-2 text-sm text-right text-[var(--text-sec)]">

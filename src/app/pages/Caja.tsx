@@ -481,7 +481,7 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
                   {ticket.items.map((item) => (
                     <div key={item.id} className="flex justify-between text-xs">
                       <span className="text-[var(--text-main)]">
-                        {item.product?.name} <span className="text-[var(--text-sec)]">×{Number(item.quantity)}</span>
+                        {item.customName || item.product?.name} <span className="text-[var(--text-sec)]">×{Number(item.quantity)}</span>
                       </span>
                       <span className="font-bold">${Number(item.totalPrice).toFixed(2)}</span>
                     </div>
@@ -562,7 +562,7 @@ ${companyPhone ? `<div class="center">Tel: ${companyPhone}</div>` : ""}
                   return (
                     <div key={item.id} className="flex justify-between items-center text-sm">
                       <div className="flex items-center gap-1.5 truncate pr-2">
-                        <span>{item.product?.name} ×{Number(item.quantity)}</span>
+                        <span>{item.customName || item.product?.name} ×{Number(item.quantity)}</span>
                         {isOutOfStock && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold border border-amber-500/30">
                             Sin stock ({currentStock})

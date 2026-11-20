@@ -444,7 +444,7 @@ export function SalesHistory() {
           return {
             saleItemId: item.id,
             quantity: 0,
-            productName: item.product?.name || "Producto Desconocido",
+            productName: item.customName || item.product?.name || "Producto Desconocido",
             maxQuantity: maxQty,
             unitPrice: Number(item.unitPrice),
             quantityPurchased: Number(item.quantity),
@@ -659,7 +659,7 @@ export function SalesHistory() {
           return {
             saleItemId: item.id,
             quantity: 0,
-            productName: item.product?.name || "Producto Desconocido",
+            productName: item.customName || item.product?.name || "Producto Desconocido",
             maxQuantity: maxQty,
             unitPrice: Number(item.unitPrice),
             quantityPurchased: Number(item.quantity),
@@ -1093,7 +1093,7 @@ export function SalesHistory() {
             ${items.map((item) => `
               <tr>
                 <td class="text-sm text-gray">${item.product?.id || '-'}</td>
-                <td class="font-bold">${item.product?.name || 'Producto Desconocido'}</td>
+                <td class="font-bold">${item.customName || item.product?.name || 'Producto Desconocido'}</td>
                 <td class="center font-black text-lg">${Number(item.quantity)}</td>
                 <td class="right">${formatMoney(item.unitPrice)}</td>
                 <td class="right font-bold">${formatMoney(item.totalPrice)}</td>
@@ -2021,7 +2021,7 @@ export function SalesHistory() {
                                 <TableCell>
                                   <div className="flex items-center gap-2">
                                     <p className="font-bold text-[var(--text-main)] uppercase">
-                                      {item.product?.name}
+                                      {item.customName || item.product?.name}
                                     </p>
                                     {(item as any).soldWithoutStock && (
                                       <Badge
@@ -2379,7 +2379,7 @@ export function SalesHistory() {
                 {noteItems.map((item, index) => (
                   <TableRow key={item.id || index}>
                     <TableCell className="font-bold">
-                      {item.product?.name}
+                      {item.customName || item.product?.name}
                     </TableCell>
                     <TableCell className="text-center">
                       {item.quantity}
@@ -2897,7 +2897,7 @@ export function SalesHistory() {
                       {selectedReturn.items.map((item) => (
                         <TableRow key={item.id}>
                           <TableCell className="font-bold text-sm text-[var(--text-main)]">
-                            {item.product?.name || "Producto Desconocido"}
+                            {item.saleItem?.customName || item.product?.name || "Producto Desconocido"}
                           </TableCell>
                           <TableCell className="text-center text-sm font-semibold text-[var(--text-main)]">
                             {item.quantity}

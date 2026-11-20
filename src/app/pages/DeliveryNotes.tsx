@@ -600,7 +600,7 @@ function DeliveryNotesList() {
             ${(items || []).map((item: any) => `
               <tr>
                 <td class="text-sm text-gray">${item.product?.id || '-'}</td>
-                <td class="font-bold">${item.product?.name || 'Producto Desconocido'}</td>
+                <td class="font-bold">${item.customName || item.product?.name || 'Producto Desconocido'}</td>
                 <td class="center font-black text-lg">${Number(item.quantity)}</td>
                 ${isSale ? `<td class="right">${formatMoney(item.unitPrice)}</td>` : ''}
                 ${isSale ? `<td class="right font-bold">${formatMoney(item.totalPrice)}</td>` : ''}
@@ -1198,13 +1198,15 @@ function DeliveryNotesList() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {selectedNote.items?.map((item: any) => (
+                    {selectedNote.items?.map((item: any) => {
+                      const saleItem = selectedNote.sale?.items?.find((si: any) => si.productId === item.productId);
+                      return (
                       <TableRow key={item.id}>
-                        <TableCell className="font-bold">{item.product?.name}</TableCell>
+                        <TableCell className="font-bold">{saleItem?.customName || item.customName || item.product?.name}</TableCell>
                         <TableCell className="text-center font-bold text-[var(--primary)]">{item.quantity}</TableCell>
                         <TableCell className="text-center text-emerald-600 font-bold">{selectedNote.status === 'EMITIDO' ? '-' : item.receivedQty}</TableCell>
                       </TableRow>
-                    ))}
+                    );})}
                   </TableBody>
                 </Table>
               </div>
@@ -1273,7 +1275,7 @@ function DeliveryNotesList() {
                             return (
                               <TableRow key={item.id} className={`border-[var(--border)] transition-colors ${isDiff ? 'bg-amber-500/5 dark:bg-amber-500/10' : 'hover:bg-[var(--bg)]/50'}`}>
                                 <TableCell className="font-semibold text-[var(--text-main)] py-4">
-                                  {item.product?.name}
+                                  {saleItem?.customName || item.customName || item.product?.name}
                                 </TableCell>
                                 <TableCell className="text-center text-xs font-bold text-[var(--text-muted)] tracking-wider uppercase py-4">
                                   {unitDisplay}

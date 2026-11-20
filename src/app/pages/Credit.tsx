@@ -2045,7 +2045,7 @@ export function Credit() {
                             <TableRow key={item.id} className="border-b border-[var(--border)]/50 hover:bg-transparent">
                               <TableCell className="font-bold text-[var(--text-main)]">{item.quantity}</TableCell>
                               <TableCell>
-                                <p className="font-bold text-[var(--text-main)] uppercase">{item.product?.name}</p>
+                                <p className="font-bold text-[var(--text-main)] uppercase">{item.customName || item.product?.name}</p>
                                 <p className="text-[10px] text-[var(--text-sec)] uppercase">Cód: {item.product?.id}</p>
                               </TableCell>
                               <TableCell className="text-right text-[var(--text-sec)] font-medium">${Number(item.unitPrice).toFixed(4)}</TableCell>

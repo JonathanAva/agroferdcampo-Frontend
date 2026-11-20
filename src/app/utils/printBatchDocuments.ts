@@ -541,7 +541,7 @@ export async function printSequentialFacturaSheets(sales: SaleResponse[]): Promi
               ${items.map((item) => `
                 <tr>
                   <td class="text-sm text-gray">${item.product?.id || '-'}</td>
-                  <td class="font-bold">${item.product?.name || 'Producto Desconocido'}</td>
+                  <td class="font-bold">${item.customName || item.product?.name || 'Producto Desconocido'}</td>
                   <td class="center font-black text-lg">${Number(item.quantity)}</td>
                   <td class="right">${formatMoney(item.unitPrice)}</td>
                   <td class="right font-bold">${formatMoney(item.totalPrice)}</td>
@@ -843,7 +843,7 @@ export async function printSequentialDeliveryNotes(notes: DeliveryNoteResponse[]
               ${(items || []).map((item: any) => `
                 <tr>
                   <td class="text-sm text-gray">${item.product?.id || '-'}</td>
-                  <td class="font-bold">${item.product?.name || 'Producto Desconocido'}</td>
+                  <td class="font-bold">${item.customName || item.product?.name || 'Producto Desconocido'}</td>
                   <td class="center font-black text-lg">${Number(item.quantity)}</td>
                   ${isSale ? `<td class="right">${formatMoney(item.unitPrice)}</td>` : ''}
                   ${isSale ? `<td class="right font-bold">${formatMoney(item.totalPrice)}</td>` : ''}
@@ -1226,7 +1226,7 @@ export async function printSequentialPurchaseOrders(purchases: PurchaseResponse[
               ${items.map((item: any) => `
                 <tr>
                   <td class="text-sm text-gray">${item.product?.id || item.productId || '-'}</td>
-                  <td class="font-bold">${item.product?.name || 'Producto Desconocido'}</td>
+                  <td class="font-bold">${item.customName || item.product?.name || 'Producto Desconocido'}</td>
                   <td class="center font-black text-lg">${Number(item.quantity)}</td>
                   <td class="right">${formatMoney(item.unitCost)}</td>
                   <td class="right font-bold">${formatMoney(item.totalCost)}</td>
