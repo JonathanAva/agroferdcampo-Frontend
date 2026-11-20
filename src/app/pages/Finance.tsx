@@ -11,6 +11,8 @@ import { VoidRecordDialog } from '../components/common/VoidRecordDialog';
 import { SafeBoxPanel } from '../components/safe/SafeBoxPanel';
 import { SafeTransferDialog } from '../components/safe/SafeTransferDialog';
 import { printSafePackageTicket } from '../utils/printSafeTicket';
+import { CashCycleManager } from '../components/cash/CashCycleManager';
+import { cashCyclesService, CashCycle, ActiveCycleInfo } from '../services/cash-cycles.service';
 import { pettyCashService, PettyCashStatus, PettyCashMovement, PettyCashReplenishment } from '../services/petty-cash.service';
 import { cashShiftsService } from '../services/cash-shifts.service';
 import { reportsService } from '../services/reports.service';
@@ -57,6 +59,32 @@ export function Finance() {
   }, []);
   const [safeTransferOpen, setSafeTransferOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('general');
+
+  // --- CASH CYCLES STATE ---
+  const [cycles, setCycles] = useState<CashCycle[]>([]);
+  const [activeCycleInfo, setActiveCycleInfo] = useState<ActiveCycleInfo | null>(null);
+  const [selectedCycleId, setSelectedCycleId] = useState<string>('current');
+  const [selectedCycle, setSelectedCycle] = useState<CashCycle | null>(null);
+  const [cyclesLoading, setCyclesLoading] = useState(true);
+
+  const fetchCycles = async () => {
+    try {
+      setCyclesLoading(true);
+      const [cycRes, activeRes] = await Promise.all([
+        cashCyclesService.getCycles({ limit: 50 }),
+        cashCyclesService.getActiveInfo(),
+      ]);
+      setCycles(cycRes.data);
+      setActiveCycleInfo(activeRes);
+    } catch (e) {
+    } finally {
+      setCyclesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCycles();
+  }, []);
 
   // --- SHIFT STATE ---
   const [hasActiveShift, setHasActiveShift] = useState(false);
@@ -153,6 +181,7 @@ export function Finance() {
   const [adminSafeDrop, setAdminSafeDrop] = useState<number | undefined>(undefined);
 
   useEffect(() => {
+    if (cyclesLoading) return;
     if (activeTab === 'general' || activeTab.startsWith('register_')) {
       fetchGeneralCash();
     } else if (activeTab === 'petty') {
@@ -160,7 +189,21 @@ export function Finance() {
     } else if (activeTab === 'shifts') {
       fetchShiftsHistory();
     }
-  }, [activeTab, generalFilters.page, generalFilters.category, typeFilter, categoryFilter, startDateFilter, endDateFilter, shiftsPagination.page, pettyPagination.page]);
+  }, [
+    activeTab,
+    generalFilters.page,
+    generalFilters.category,
+    typeFilter,
+    categoryFilter,
+    startDateFilter,
+    endDateFilter,
+    shiftsPagination.page,
+    pettyPagination.page,
+    selectedCycleId,
+    selectedCycle,
+    cyclesLoading,
+    activeCycleInfo?.activeSince
+  ]);
 
   // Al cambiar de pestaña o de filtros, regresamos a la página 1 para no quedar
   // "atrapados" en una página que ya no tiene resultados con el nuevo filtro.
@@ -207,9 +250,22 @@ export function Finance() {
     setGeneralLoading(true);
     try {
       const registerIdParam = activeTab === 'general' ? 'null' : activeTab.startsWith('register_') ? activeTab.replace('register_', '') : undefined;
+      
+      let startD = startDateFilter || undefined;
+      let endD = endDateFilter || undefined;
+
+      if (selectedCycle) {
+        startD = selectedCycle.startDate;
+        endD = selectedCycle.closedAt;
+      } else if (selectedCycleId === 'current' && activeCycleInfo?.activeSince) {
+        // El ciclo nuevo inicia inmediatamente después del corte del ciclo anterior (+1 segundo)
+        const afterPreviousClose = new Date(new Date(activeCycleInfo.activeSince).getTime() + 1000).toISOString();
+        startD = startDateFilter || afterPreviousClose;
+      }
+
       const summary = await generalCashService.getSummary(
-        startDateFilter || undefined, 
-        endDateFilter || undefined,
+        startD, 
+        endD,
         registerIdParam
       );
       setGeneralSummary(summary);
@@ -219,8 +275,8 @@ export function Finance() {
       const filters: any = { page: generalFilters.page, limit: generalFilters.limit };
       if (typeFilter !== 'all') filters.type = typeFilter;
       if (categoryFilter !== 'all') filters.category = categoryFilter;
-      if (startDateFilter) filters.startDate = startDateFilter;
-      if (endDateFilter) filters.endDate = endDateFilter;
+      if (startD) filters.startDate = startD;
+      if (endD) filters.endDate = endD;
       if (activeTab === 'general') {
         filters.cashRegisterId = 'null';
       } else if (activeTab.startsWith('register_')) {
@@ -324,7 +380,16 @@ export function Finance() {
   const fetchShiftsHistory = async () => {
     setShiftsLoading(true);
     try {
-      const res = await reportsService.getCashShiftsHistory(shiftsPagination.page, shiftsPagination.limit);
+      let startD = startDateFilter || undefined;
+      let endD = endDateFilter || undefined;
+      if (selectedCycle) {
+        startD = selectedCycle.startDate;
+        endD = selectedCycle.closedAt;
+      } else if (selectedCycleId === 'current' && activeCycleInfo?.activeSince) {
+        const afterPreviousClose = new Date(new Date(activeCycleInfo.activeSince).getTime() + 1000).toISOString();
+        startD = startDateFilter || afterPreviousClose;
+      }
+      const res = await reportsService.getCashShiftsHistory(shiftsPagination.page, shiftsPagination.limit, startD, endD);
       setShiftsHistory(res.data);
       setShiftsPagination(prev => ({ ...prev, total: res.total, totalPages: res.totalPages }));
     } catch (error: any) {
@@ -574,6 +639,30 @@ export function Finance() {
         <p className="text-[var(--text-sec)]">Control de Caja General y Caja Chica de la sucursal.</p>
       </div>
 
+      {/* COMPONENTE DE GESTIÓN Y FILTRO DE CICLOS */}
+      <CashCycleManager
+        canManage={canVoidRecords}
+        activeCycleInfo={activeCycleInfo}
+        cycles={cycles}
+        selectedCycleId={selectedCycleId}
+        onSelectCycle={(id, c) => {
+          setSelectedCycleId(id);
+          setSelectedCycle(c);
+        }}
+        onCycleClosed={() => {
+          fetchCycles();
+          if (activeTab === 'general' || activeTab.startsWith('register_')) fetchGeneralCash();
+          else if (activeTab === 'petty') fetchPettyCash();
+          else if (activeTab === 'shifts') fetchShiftsHistory();
+        }}
+        cashRegisters={cashRegisters}
+        currentTabScope={{
+          type: activeTab === 'general' ? 'general' : activeTab === 'petty' ? 'petty' : activeTab === 'shifts' ? 'shifts' : 'register',
+          registerId: activeTab.startsWith('register_') ? Number(activeTab.replace('register_', '')) : undefined,
+          registerName: activeTab.startsWith('register_') ? cashRegisters.find(r => `register_${r.id}` === activeTab)?.name : undefined,
+        }}
+      />
+
       {/* TABS */}
       <div className="flex border-b border-[var(--border)] -mb-2">
         <button
@@ -630,8 +719,31 @@ export function Finance() {
                 <h3 className="text-sm font-bold text-[var(--text-sec)]">{activeTab === 'general' ? 'Saldo Caja General' : cashRegisters.find(r => r.id.toString() === activeTab.replace('register_', ''))?.name || 'Saldo'}</h3>
               </div>
               {(() => {
-                const saldo = generalSummary?.currentCashBalance ?? generalSummary?.balance ?? 0;
+                const isHistoricalCycle = !!selectedCycle;
                 const register = cashRegisters.find(r => `register_${r.id}` === activeTab);
+                const regId = register?.id;
+
+                let saldo = 0;
+                let subtitle = "Efectivo físico actual (mismo saldo que usa el POS)";
+
+                if (isHistoricalCycle) {
+                  if (activeTab === 'general') {
+                    saldo = Number(selectedCycle.finalBalances?.general ?? generalSummary?.balance ?? 0);
+                  } else if (regId) {
+                    const regSnap = selectedCycle.finalBalances?.registers?.find((r: any) => r.id === regId);
+                    saldo = regSnap ? Number(regSnap.balance) : Number(generalSummary?.balance ?? 0);
+                  }
+                  subtitle = `Saldo al cierre de ${selectedCycle.code} (Snapshot auditado)`;
+                } else if (selectedCycleId === 'all') {
+                  saldo = Number(generalSummary?.balance ?? 0);
+                  subtitle = "Balance neto acumulado (Histórico total)";
+                } else {
+                  saldo = Number(generalSummary?.currentCashBalance ?? 0);
+                  subtitle = activeTab === 'general'
+                    ? "Efectivo físico actual (mismo saldo que usa el POS)"
+                    : "Efectivo físico actual en esta caja";
+                }
+
                 const openShift = register?.shifts?.[0];
                 const nonCash = (generalSummary?.byPaymentMethod || []).filter(m => m.paymentMethod !== 'EFECTIVO' && m.net !== 0);
                 return (
@@ -639,7 +751,7 @@ export function Finance() {
                     <p className={`text-3xl font-black ${saldo >= 0 ? 'text-[var(--primary)]' : 'text-red-500'}`}>
                       ${Number(saldo).toFixed(4)}
                     </p>
-                    <p className="text-xs text-[var(--text-sec)] mt-1">Efectivo físico actual (mismo saldo que usa el POS)</p>
+                    <p className="text-xs text-[var(--text-sec)] mt-1">{subtitle}</p>
                     {register && (
                       <p className="text-xs mt-1 font-semibold">
                         {openShift
@@ -834,7 +946,14 @@ export function Finance() {
           ) : (
             <>
               {/* Caja fuerte por paquetes de efectivo */}
-              <SafeBoxPanel sysConfig={sysConfig} canManage={canVoidRecords} onChanged={fetchPettyCash} />
+              <SafeBoxPanel
+                sysConfig={sysConfig}
+                canManage={canVoidRecords}
+                onChanged={fetchPettyCash}
+                selectedCycle={selectedCycle}
+                selectedCycleId={selectedCycleId}
+                activeSince={activeCycleInfo?.activeSince}
+              />
 
               <div className="flex flex-wrap items-center gap-3">
                 {isPettyLow && <span className="text-xs text-amber-600 font-bold">Saldo bajo el mínimo configurado (${Number(pettyStatus.minBalance).toFixed(2)})</span>}

@@ -131,4 +131,19 @@ export const safeService = {
 
   createCount: (data: { countedAmount: number; notes?: string }) =>
     apiRequest<SafeCount>(`${BASE}/counts`, { method: 'POST', body: JSON.stringify(data) }),
+
+  resetCycle: (data: {
+    reason: string;
+    newInitialBalance?: number;
+    resetGeneralCash?: boolean;
+    requestId: string;
+  }) =>
+    apiRequest<{
+      success: boolean;
+      message: string;
+      liquidatedPackagesCount: number;
+      liquidatedAmount: number;
+      previousBalance: number;
+      newBalance: number;
+    }>(`${BASE}/cycle-reset`, { method: 'POST', body: JSON.stringify(data) }),
 };
