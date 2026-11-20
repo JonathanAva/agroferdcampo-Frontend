@@ -6,6 +6,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { BulkAssignModal } from "../components/ui/BulkAssignModal";
+import { PaginationBar } from "../components/ui/pagination";
 import {
   Table,
   TableBody,
@@ -168,31 +169,15 @@ export function BrandsManager() {
             />
           </div>
           {filteredBrands.length > 0 && (
-            <div className="flex items-center gap-4 text-[var(--text-sec)]">
-              <div className="text-sm font-medium">
-                Mostrando {paginatedBrands.length} de {filteredBrands.length} (Página {currentPage})
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  className="border-[var(--border)] hover:bg-[var(--hover)] text-[var(--text-main)]"
-                >
-                  Anterior
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  className="border-[var(--border)] hover:bg-[var(--hover)] text-[var(--text-main)]"
-                >
-                  Siguiente
-                </Button>
-              </div>
-            </div>
+            <PaginationBar
+              page={currentPage}
+              totalPages={totalPages}
+              total={filteredBrands.length}
+              itemName="marcas"
+              showItemCount={false}
+              className="p-0 border-0"
+              onPageChange={(newPage) => setCurrentPage(newPage)}
+            />
           )}
         </div>
         <div className="overflow-x-auto">
@@ -306,6 +291,15 @@ export function BrandsManager() {
             </TableBody>
           </Table>
         </div>
+        {(
+          <PaginationBar
+            page={currentPage}
+            totalPages={totalPages}
+            total={filteredBrands.length}
+            itemName="marcas"
+            onPageChange={(newPage) => setCurrentPage(newPage)}
+          />
+        )}
       </div>
 
       <BulkAssignModal

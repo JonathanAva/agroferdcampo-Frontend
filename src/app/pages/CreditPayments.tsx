@@ -11,6 +11,7 @@ import { Badge } from '../components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
 import { cn } from '../components/ui/utils';
+import { PaginationBar } from '../components/ui/pagination';
 
 const paymentsFilters: FilterConfig[] = [
   { id: 'search', label: 'Buscar cliente...', type: 'text', placeholder: 'Nombre del cliente...' },
@@ -197,29 +198,15 @@ export function CreditPayments() {
           </Table>
         </div>
 
-        {pagination.totalPages > 1 && (
-          <div className="p-4 border-t border-[var(--border)] flex items-center justify-between bg-[var(--bg)]/5">
-            <p className="text-xs font-bold text-[var(--text-sec)]">
-              Página {pagination.page} de {pagination.totalPages} ({pagination.total} registros)
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="outline" size="sm"
-                disabled={pagination.page === 1}
-                onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
-              >
-                Anterior
-              </Button>
-              <Button
-                variant="outline" size="sm"
-                disabled={pagination.page === pagination.totalPages}
-                onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
-              >
-                Siguiente
-              </Button>
-            </div>
-          </div>
-        )}
+        <PaginationBar
+          page={pagination.page}
+          totalPages={pagination.totalPages || 1}
+          total={pagination.total}
+          itemName="registros"
+          onPageChange={(newPage) =>
+            setPagination((p) => ({ ...p, page: newPage }))
+          }
+        />
       </div>
 
       <VoidRecordDialog

@@ -11,6 +11,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
+import { PaginationBar } from '../ui/pagination';
 import {
   Table,
   TableBody,
@@ -667,35 +668,14 @@ export function ProductSalesHistoryDialog({
             </div>
 
             {/* Pagination Controls */}
-            {data && data.pagination.totalPages > 1 && (
-              <div className="p-3.5 border-t border-[var(--border)] flex items-center justify-between bg-muted/20 text-sm">
-                <span className="text-[var(--text-sec)]">
-                  Página <strong className="text-[var(--text-main)]">{data.pagination.page}</strong> de{' '}
-                  <strong className="text-[var(--text-main)]">{data.pagination.totalPages}</strong> ({data.pagination.total} ventas registradas)
-                </span>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 px-3 text-xs sm:text-sm gap-1"
-                    disabled={data.pagination.page <= 1 || loading}
-                    onClick={() => fetchHistory(data.pagination.page - 1)}
-                  >
-                    <ChevronLeft size={15} />
-                    Anterior
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 px-3 text-xs sm:text-sm gap-1"
-                    disabled={data.pagination.page >= data.pagination.totalPages || loading}
-                    onClick={() => fetchHistory(data.pagination.page + 1)}
-                  >
-                    Siguiente
-                    <ChevronRight size={15} />
-                  </Button>
-                </div>
-              </div>
+            {data && (
+              <PaginationBar
+                page={data.pagination.page}
+                totalPages={data.pagination.totalPages || 1}
+                total={data.pagination.total}
+                itemName="ventas"
+                onPageChange={(newPage) => fetchHistory(newPage)}
+              />
             )}
           </div>
         </div>

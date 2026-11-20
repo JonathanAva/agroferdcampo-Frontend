@@ -18,6 +18,7 @@ import { NumberInput } from '../components/ui/number-input';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { UnsavedChangesDialog } from '../components/ui/unsaved-changes-dialog';
 import { PaymentConfirmationDialog, PaymentConfirmationDetails } from '../components/ui/PaymentConfirmationDialog';
+import { PaginationBar } from '../components/ui/pagination';
 
 export function Payables() {
   const [purchases, setPurchases] = useState<PurchaseResponse[]>([]);
@@ -128,7 +129,9 @@ export function Payables() {
     const supplierName = selectedPurchase.supplier?.name || 'Proveedor';
     const docRef = selectedPurchase.invoiceNumber
       ? `Factura #${selectedPurchase.invoiceNumber}`
-      : `Orden #${selectedPurchase.purchaseNumber}`;
+      : selectedPurchase.referenceDoc
+        ? `Ref: ${selectedPurchase.referenceDoc} (OC-${selectedPurchase.id.toString().padStart(6, '0')})`
+        : `OC-${(selectedPurchase.purchaseNumber || selectedPurchase.id).toString().padStart(6, '0')}`;
     const cashAccount = paymentForm.cashSource === 'CAJA_GENERAL' ? 'Caja General' : 'Caja Sucursal';
 
     setConfirmPaymentProps({
@@ -266,29 +269,15 @@ export function Payables() {
           </Table>
         </div>
 
-        {pagination.totalPages > 1 && (
-          <div className="p-4 border-t border-[var(--border)] flex items-center justify-between bg-[var(--bg)]/5">
-            <p className="text-xs font-bold text-[var(--text-sec)]">
-              Página {pagination.page} de {pagination.totalPages} ({pagination.total} registros)
-            </p>
-            <div className="flex gap-2">
-              <Button 
-                variant="outline" size="sm" 
-                disabled={pagination.page === 1}
-                onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
-              >
-                Anterior
-              </Button>
-              <Button 
-                variant="outline" size="sm" 
-                disabled={pagination.page === pagination.totalPages}
-                onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
-              >
-                Siguiente
-              </Button>
-            </div>
-          </div>
-        )}
+        <PaginationBar
+          page={pagination.page}
+          totalPages={pagination.totalPages || 1}
+          total={pagination.total}
+          itemName="registros"
+          onPageChange={(newPage) =>
+            setPagination((p) => ({ ...p, page: newPage }))
+          }
+        />
       </div>
 
       {/* REGISTRAR PAGO */}

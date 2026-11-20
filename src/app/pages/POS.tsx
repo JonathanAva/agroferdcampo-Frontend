@@ -48,6 +48,7 @@ import { getLotCostSummary, LotCostSummary } from "../services/purchases.service
 import { toast } from "sonner";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import { PaginationBar } from "../components/ui/pagination";
 import { Input } from "../components/ui/input";
 import { NumberInput } from "../components/ui/number-input";
 import { SafeTransferDialog } from "../components/safe/SafeTransferDialog";
@@ -2532,30 +2533,14 @@ ${paymentConditionHtml}
           </div>
 
           {/* Paginación (solo aplica cuando se navega el catálogo completo, no en búsqueda por texto) */}
-          {!searchTerm && totalPages > 1 && (
-            <div className="flex items-center justify-center gap-3 p-2 border-t border-[var(--border)] bg-[var(--bg)]/50">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8"
-                disabled={page <= 1 || loading}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Anterior
-              </Button>
-              <span className="text-xs font-bold text-[var(--text-sec)]">
-                Página {page} de {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8"
-                disabled={page >= totalPages || loading}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                Siguiente
-              </Button>
-            </div>
+          {!searchTerm && (
+            <PaginationBar
+              page={page}
+              totalPages={totalPages || 1}
+              itemName="productos"
+              className="p-2 border-t border-[var(--border)] bg-[var(--bg)]/50"
+              onPageChange={(newPage) => setPage(newPage)}
+            />
           )}
         </div>
 

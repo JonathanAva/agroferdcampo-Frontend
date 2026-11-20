@@ -32,6 +32,7 @@ import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { UnsavedChangesDialog } from '../components/ui/unsaved-changes-dialog';
 import { PaymentConfirmationDialog, PaymentConfirmationDetails } from '../components/ui/PaymentConfirmationDialog';
+import { PaginationBar } from '../components/ui/pagination';
 
 const financeFilters: FilterConfig[] = [
   { id: 'type', label: 'Tipo', type: 'category', options: [
@@ -901,29 +902,15 @@ export function Finance() {
               </TableBody>
             </Table>
 
-            {generalPagination.totalPages > 1 && (
-              <div className="p-4 border-t border-[var(--border)] flex justify-between items-center text-sm font-bold">
-                <span className="text-[var(--text-sec)]">
-                  Página {generalFilters.page} de {generalPagination.totalPages} ({generalPagination.total} movimientos)
-                </span>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    disabled={generalFilters.page === 1}
-                    onClick={() => setGeneralFilters(p => ({ ...p, page: p.page - 1 }))}
-                  >
-                    Anterior
-                  </Button>
-                  <Button
-                    variant="outline"
-                    disabled={generalFilters.page === generalPagination.totalPages}
-                    onClick={() => setGeneralFilters(p => ({ ...p, page: p.page + 1 }))}
-                  >
-                    Siguiente
-                  </Button>
-                </div>
-              </div>
-            )}
+            <PaginationBar
+              page={generalFilters.page}
+              totalPages={generalPagination.totalPages || 1}
+              total={generalPagination.total}
+              itemName="movimientos"
+              onPageChange={(newPage) =>
+                setGeneralFilters((p) => ({ ...p, page: newPage }))
+              }
+            />
           </Card>
         </div>
       )}
@@ -1008,29 +995,15 @@ export function Finance() {
                       </TableBody>
                     </Table>
 
-                    {pettyPagination.totalPages > 1 && (
-                      <div className="p-4 border-t border-[var(--border)] flex justify-between items-center text-sm font-bold">
-                        <span className="text-[var(--text-sec)]">
-                          Página {pettyPagination.page} de {pettyPagination.totalPages} ({pettyPagination.total} movimientos)
-                        </span>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            disabled={pettyPagination.page === 1}
-                            onClick={() => setPettyPagination(p => ({ ...p, page: p.page - 1 }))}
-                          >
-                            Anterior
-                          </Button>
-                          <Button
-                            variant="outline"
-                            disabled={pettyPagination.page === pettyPagination.totalPages}
-                            onClick={() => setPettyPagination(p => ({ ...p, page: p.page + 1 }))}
-                          >
-                            Siguiente
-                          </Button>
-                        </div>
-                      </div>
-                    )}
+                    <PaginationBar
+                      page={pettyPagination.page}
+                      totalPages={pettyPagination.totalPages || 1}
+                      total={pettyPagination.total}
+                      itemName="movimientos"
+                      onPageChange={(newPage) =>
+                        setPettyPagination((p) => ({ ...p, page: newPage }))
+                      }
+                    />
                   </div>
                 </Card>
 
@@ -1162,29 +1135,15 @@ export function Finance() {
             </div>
             
             {/* Pagination */}
-            {shiftsPagination.totalPages > 1 && (
-              <div className="p-4 border-t border-[var(--border)] flex justify-between items-center text-sm font-bold">
-                <span className="text-[var(--text-sec)]">
-                  Página {shiftsPagination.page} de {shiftsPagination.totalPages} ({shiftsPagination.total} turnos)
-                </span>
-                <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    disabled={shiftsPagination.page === 1}
-                    onClick={() => setShiftsPagination(p => ({ ...p, page: p.page - 1 }))}
-                  >
-                    Anterior
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    disabled={shiftsPagination.page === shiftsPagination.totalPages}
-                    onClick={() => setShiftsPagination(p => ({ ...p, page: p.page + 1 }))}
-                  >
-                    Siguiente
-                  </Button>
-                </div>
-              </div>
-            )}
+            <PaginationBar
+              page={shiftsPagination.page}
+              totalPages={shiftsPagination.totalPages || 1}
+              total={shiftsPagination.total}
+              itemName="turnos"
+              onPageChange={(newPage) =>
+                setShiftsPagination((p) => ({ ...p, page: newPage }))
+              }
+            />
           </Card>
         </div>
       )}

@@ -985,17 +985,15 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
           </Table>
         </div>
 
-        {pagination.totalPages > 1 && (
-          <PaginationBar
-            page={pagination.page}
-            totalPages={pagination.totalPages}
-            total={pagination.total}
-            itemName="cotizaciones"
-            onPageChange={(newPage) =>
-              setPagination((p) => ({ ...p, page: newPage }))
-            }
-          />
-        )}
+        <PaginationBar
+          page={pagination.page}
+          totalPages={pagination.totalPages || 1}
+          total={pagination.total}
+          itemName="cotizaciones"
+          onPageChange={(newPage) =>
+            setPagination((p) => ({ ...p, page: newPage }))
+          }
+        />
       </div>
 
       {/* Barra de Acciones Globales Flotante */}

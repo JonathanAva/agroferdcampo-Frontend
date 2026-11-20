@@ -6,6 +6,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { BulkAssignModal } from "../components/ui/BulkAssignModal";
+import { PaginationBar } from "../components/ui/pagination";
 import {
   Table,
   TableBody,
@@ -168,31 +169,15 @@ export function CategoriesManager() {
             />
           </div>
           {filteredCategories.length > 0 && (
-            <div className="flex items-center gap-4 text-[var(--text-sec)]">
-              <div className="text-sm font-medium">
-                Mostrando {paginatedCategories.length} de {filteredCategories.length} (Página {currentPage})
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  className="border-[var(--border)] hover:bg-[var(--hover)] text-[var(--text-main)]"
-                >
-                  Anterior
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  className="border-[var(--border)] hover:bg-[var(--hover)] text-[var(--text-main)]"
-                >
-                  Siguiente
-                </Button>
-              </div>
-            </div>
+            <PaginationBar
+              page={currentPage}
+              totalPages={totalPages}
+              total={filteredCategories.length}
+              itemName="categorías"
+              showItemCount={false}
+              className="p-0 border-0"
+              onPageChange={(newPage) => setCurrentPage(newPage)}
+            />
           )}
         </div>
         <Table>
@@ -304,6 +289,15 @@ export function CategoriesManager() {
           </TableBody>
         </Table>
       </div>
+        {(
+          <PaginationBar
+            page={currentPage}
+            totalPages={totalPages}
+            total={filteredCategories.length}
+            itemName="categorías"
+            onPageChange={(newPage) => setCurrentPage(newPage)}
+          />
+        )}
 
       <BulkAssignModal
         isOpen={assignModalOpen}

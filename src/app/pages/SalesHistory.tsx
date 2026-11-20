@@ -1474,17 +1474,15 @@ export function SalesHistory() {
               </Table>
             </div>
 
-            {pagination.totalPages > 1 && (
-              <PaginationBar
-                page={pagination.page}
-                totalPages={pagination.totalPages}
-                total={pagination.total}
-                itemName="ventas"
-                onPageChange={(newPage) =>
-                  setPagination((p) => ({ ...p, page: newPage }))
-                }
-              />
-            )}
+            <PaginationBar
+              page={pagination.page}
+              totalPages={pagination.totalPages || 1}
+              total={pagination.total}
+              itemName="ventas"
+              onPageChange={(newPage) =>
+                setPagination((p) => ({ ...p, page: newPage }))
+              }
+            />
           </div>
 
           {/* Barra de Acciones Globales Flotante */}
@@ -1770,17 +1768,15 @@ export function SalesHistory() {
               </Table>
             </div>
 
-            {returnsPagination.totalPages > 1 && (
-              <PaginationBar
-                page={returnsPagination.page}
-                totalPages={returnsPagination.totalPages}
-                total={returnsPagination.total}
-                itemName="devoluciones"
-                onPageChange={(newPage) =>
-                  setReturnsPagination((p) => ({ ...p, page: newPage }))
-                }
-              />
-            )}
+            <PaginationBar
+              page={returnsPagination.page}
+              totalPages={returnsPagination.totalPages || 1}
+              total={returnsPagination.total}
+              itemName="devoluciones"
+              onPageChange={(newPage) =>
+                setReturnsPagination((p) => ({ ...p, page: newPage }))
+              }
+            />
           </div>
         </>
       )}

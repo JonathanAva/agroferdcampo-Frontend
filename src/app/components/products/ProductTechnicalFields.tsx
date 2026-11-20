@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Wrench,
   Package,
@@ -13,6 +13,7 @@ import {
   Briefcase,
   Layers,
   ChevronDown,
+  Search,
 } from "lucide-react";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -28,7 +29,32 @@ interface TechnicalOptions {
   veterinaryTypes: string[];
   activeIngredients: string[];
   targetSpecies: string[];
+  formulations?: string[];
 }
+
+const DEFAULT_FORMULATIONS = [
+  "SC - Suspensión Concentrada",
+  "EC / CE - Concentrado Emulsionable",
+  "WG / GD - Gránulos Dispersables",
+  "WP / PM - Polvo Mojable",
+  "SL - Concentrado Soluble",
+  "SP - Polvo Soluble",
+  "GR - Gránulos",
+  "DP - Polvo Seco",
+  "CS - Suspensión en Cápsulas",
+  "OD - Dispersión en Aceite",
+  "EW - Emulsión de Aceite en Agua",
+  "FS - Suspensión para Semillas",
+  "ME - Microemulsión",
+  "Líquido Soluble",
+  "Pellet / Cebo",
+  "Gel",
+  "CE 25%",
+  "SC 500 g/L",
+  "WG 70%",
+  "WP 80%",
+  "SL 480 g/L",
+];
 
 const DEFAULT_OPTIONS: TechnicalOptions = {
   agrochemicalTypes: [
@@ -41,6 +67,11 @@ const DEFAULT_OPTIONS: TechnicalOptions = {
     "Bactericida",
     "Coadyuvante / Adherente",
     "Fertilizante / Nutrición",
+    "Regulador de Crecimiento",
+    "Bioestimulante",
+    "Inoculante",
+    "Molusquicida",
+    "Desinfectante de Suelos",
   ],
   chemicalFamilies: [
     "Piretroides",
@@ -52,6 +83,13 @@ const DEFAULT_OPTIONS: TechnicalOptions = {
     "Ditiocarbamatos",
     "Bipiridilos",
     "Derivados de Glicina",
+    "Benzimidazoles",
+    "Diamidas",
+    "Avermectinas",
+    "Fenilpirazoles",
+    "Sulfonilureas",
+    "Cúpricos / Derivados de Cobre",
+    "Inorgánicos / Cúpricos",
   ],
   veterinaryTypes: [
     "Antibiótico",
@@ -62,6 +100,8 @@ const DEFAULT_OPTIONS: TechnicalOptions = {
     "Analgésico / Antiinflamatorio",
     "Hormonal",
     "Suplemento Nutricional",
+    "Desinfectante / Antiséptico",
+    "Anestésico / Sedante",
   ],
   activeIngredients: [
     "Permetrina",
@@ -75,6 +115,10 @@ const DEFAULT_OPTIONS: TechnicalOptions = {
     "Azoxistrobina",
     "Imidacloprid",
     "Abamectina",
+    "Atrazina",
+    "2,4-D",
+    "Metomil",
+    "Carbendazim",
     "Ivermectina",
     "Oxitetraciclina",
     "Penicilina",
@@ -88,6 +132,7 @@ const DEFAULT_OPTIONS: TechnicalOptions = {
     "Felinos",
     "Ovinos / Caprinos",
   ],
+  formulations: DEFAULT_FORMULATIONS,
 };
 
 interface ProductTechnicalFieldsProps {
@@ -143,6 +188,7 @@ export function ProductTechnicalFields({
             veterinaryTypes: data.veterinaryTypes?.length ? data.veterinaryTypes : DEFAULT_OPTIONS.veterinaryTypes,
             activeIngredients: data.activeIngredients?.length ? data.activeIngredients : DEFAULT_OPTIONS.activeIngredients,
             targetSpecies: data.targetSpecies?.length ? data.targetSpecies : DEFAULT_OPTIONS.targetSpecies,
+            formulations: data.formulations?.length ? data.formulations : DEFAULT_FORMULATIONS,
           });
         }
       })
@@ -159,13 +205,61 @@ export function ProductTechnicalFields({
     if (!str) return [];
     try {
       const parsed = JSON.parse(str);
-      if (Array.isArray(parsed)) return parsed.map(s => String(s).trim()).filter(Boolean);
+      if (Array.isArray(parsed)) return parsed.map((s) => String(s).trim()).filter(Boolean);
     } catch {}
     return str.split(",").map((s) => s.trim()).filter(Boolean);
   };
 
+  const currentAgroTypes = parseList(agrochemicalType);
+  const currentFamilies = parseList(chemicalFamily);
+  const currentFormulations = parseList(formulation);
+  const currentVetTypes = parseList(veterinaryType);
   const currentIngredients = parseList(activeIngredients);
   const currentSpecies = parseList(targetSpecies);
+
+  const handleToggleAgroType = (item: string) => {
+    const list = [...currentAgroTypes];
+    const idx = list.findIndex((x) => x.toLowerCase() === item.toLowerCase());
+    if (idx >= 0) {
+      list.splice(idx, 1);
+    } else {
+      list.push(item);
+    }
+    onChangeTechnical("agrochemicalType", list.join(", "));
+  };
+
+  const handleToggleFamily = (item: string) => {
+    const list = [...currentFamilies];
+    const idx = list.findIndex((x) => x.toLowerCase() === item.toLowerCase());
+    if (idx >= 0) {
+      list.splice(idx, 1);
+    } else {
+      list.push(item);
+    }
+    onChangeTechnical("chemicalFamily", list.join(", "));
+  };
+
+  const handleToggleFormulation = (item: string) => {
+    const list = [...currentFormulations];
+    const idx = list.findIndex((x) => x.toLowerCase() === item.toLowerCase());
+    if (idx >= 0) {
+      list.splice(idx, 1);
+    } else {
+      list.push(item);
+    }
+    onChangeTechnical("formulation", list.join(", "));
+  };
+
+  const handleToggleVetType = (item: string) => {
+    const list = [...currentVetTypes];
+    const idx = list.findIndex((x) => x.toLowerCase() === item.toLowerCase());
+    if (idx >= 0) {
+      list.splice(idx, 1);
+    } else {
+      list.push(item);
+    }
+    onChangeTechnical("veterinaryType", list.join(", "));
+  };
 
   const handleToggleIngredient = (item: string) => {
     const list = [...currentIngredients];
@@ -455,44 +549,41 @@ export function ProductTechnicalFields({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
-            {/* Tipo de Agroquímico (Combobox / Select con opción de nuevo) */}
-            <DynamicCombobox
+            {/* Tipo de Agroquímico (Combobox con búsqueda y selección múltiple) */}
+            <SearchableMultiCombobox
               label="Tipo de Producto Agroquímico"
-              placeholder="Ej. Insecticida, Fungicida..."
-              value={agrochemicalType}
-              onChange={(val) => onChangeTechnical("agrochemicalType", val)}
+              placeholder="Buscar o agregar tipo (Ej. Insecticida)..."
+              selected={currentAgroTypes}
+              onToggle={handleToggleAgroType}
               options={options.agrochemicalTypes}
               disabled={readOnly}
-              helper="Clasificación por acción o función principal"
+              color="emerald"
+              helper="Permite múltiples tipos (Ej. Insecticida, Acaricida)"
             />
 
-            {/* Familia o Grupo Químico */}
-            <DynamicCombobox
+            {/* Familia o Grupo Químico (Combobox con búsqueda y selección múltiple) */}
+            <SearchableMultiCombobox
               label="Familia o Grupo Químico"
-              placeholder="Ej. Piretroides, Triazoles..."
-              value={chemicalFamily}
-              onChange={(val) => onChangeTechnical("chemicalFamily", val)}
+              placeholder="Buscar o agregar familia (Ej. Piretroides)..."
+              selected={currentFamilies}
+              onToggle={handleToggleFamily}
               options={options.chemicalFamilies}
               disabled={readOnly}
-              helper="Grupo químico para rotación agronómica"
+              color="emerald"
+              helper="Permite múltiples grupos químicos para rotación o mezclas"
             />
 
-            {/* Formulación o Concentración */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-[var(--text-main)]">
-                Formulación / Concentración
-              </Label>
-              <Input
-                value={formulation}
-                onChange={(e) => onChangeTechnical("formulation", e.target.value)}
-                placeholder="Ej. CE 25%, SC 500 g/L, WG"
-                className="h-10 rounded-xl bg-[var(--card)]"
-                disabled={readOnly}
-              />
-              <p className="text-[10px] text-[var(--text-sec)]">
-                Presentación física y porcentaje del activo
-              </p>
-            </div>
+            {/* Formulación o Concentración (Combobox con búsqueda y selección múltiple) */}
+            <SearchableMultiCombobox
+              label="Formulación / Concentración"
+              placeholder="Buscar o agregar formulación (Ej. SC, CE 25%)..."
+              selected={currentFormulations}
+              onToggle={handleToggleFormulation}
+              options={options.formulations || DEFAULT_FORMULATIONS}
+              disabled={readOnly}
+              color="emerald"
+              helper="Permite seleccionar múltiples o escribir cualquier concentración"
+            />
           </div>
 
           {/* Ingredientes Activos (Tag selector múltiple) */}
@@ -564,14 +655,15 @@ export function ProductTechnicalFields({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
             {/* Tipo de Medicamento / Producto Veterinario */}
-            <DynamicCombobox
+            <SearchableMultiCombobox
               label="Tipo de Medicamento / Producto"
-              placeholder="Ej. Antibiótico, Antiparasitario, Vitamina..."
-              value={veterinaryType}
-              onChange={(val) => onChangeTechnical("veterinaryType", val)}
+              placeholder="Buscar o agregar tipo (Ej. Antibiótico)..."
+              selected={currentVetTypes}
+              onToggle={handleToggleVetType}
               options={options.veterinaryTypes}
               disabled={readOnly}
-              helper="Acción terapéutica o categoría médica"
+              color="purple"
+              helper="Permite seleccionar múltiples categorías médicas"
             />
 
             {/* Dosificación y Vía */}
@@ -639,132 +731,286 @@ export function ProductTechnicalFields({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// COMPONENTES AUXILIARES PARA AUTOCOMPLETADO Y AGREGADO RÁPIDO
+// COMPONENTE: SEARCHABLE MULTI-SELECT COMBOBOX
+// Permite escribir para filtrar opciones en tiempo real, seleccionar múltiples
+// elementos con checkmarks, agregar valores personalizados y eliminarlos con un clic.
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface DynamicComboboxProps {
+interface SearchableMultiComboboxProps {
   label: string;
   placeholder: string;
-  value: string;
-  onChange: (val: string) => void;
+  selected: string[];
+  onToggle: (item: string) => void;
   options: string[];
   disabled?: boolean;
+  color?: "emerald" | "purple";
   helper?: string;
 }
 
-function DynamicCombobox({
+function SearchableMultiCombobox({
   label,
   placeholder,
-  value,
-  onChange,
+  selected,
+  onToggle,
   options,
   disabled,
+  color = "emerald",
   helper,
-}: DynamicComboboxProps) {
-  const [customMode, setCustomMode] = useState(false);
-  const [customText, setCustomText] = useState("");
+}: SearchableMultiComboboxProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const isPredefined = options.some((o) => o.toLowerCase() === (value || "").toLowerCase());
+  // Cerrar al hacer clic fuera del componente
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
-  const handleSelect = (v: string) => {
-    if (v === "__ADD_NEW__") {
-      setCustomMode(true);
-      setCustomText("");
-    } else {
-      onChange(v);
-    }
+  const badgeTheme =
+    color === "emerald"
+      ? "bg-emerald-600/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/40"
+      : "bg-purple-600/15 text-purple-800 dark:text-purple-300 border-purple-500/40";
+
+  const activeOptionTheme =
+    color === "emerald"
+      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold"
+      : "bg-purple-500/15 text-purple-700 dark:text-purple-300 font-bold";
+
+  const checkColor = color === "emerald" ? "text-emerald-500" : "text-purple-500";
+
+  // Opciones limpias y únicas
+  const uniqueOptions = Array.from(new Set(options.map((o) => o.trim()).filter(Boolean)));
+
+  const cleanSearch = searchTerm.trim().toLowerCase();
+  const filteredOptions = uniqueOptions.filter((opt) =>
+    opt.toLowerCase().includes(cleanSearch)
+  );
+
+  const exactMatchExists = uniqueOptions.some(
+    (opt) => opt.toLowerCase() === cleanSearch
+  );
+
+  const handleAddCustom = (textToAdd?: string) => {
+    const raw = textToAdd !== undefined ? textToAdd : searchTerm;
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+
+    // Soporta pegar o escribir varios valores separados por coma
+    const parts = trimmed.split(",").map((s) => s.trim()).filter(Boolean);
+    parts.forEach((p) => {
+      const alreadySelected = selected.some((s) => s.toLowerCase() === p.toLowerCase());
+      if (!alreadySelected) {
+        onToggle(p);
+      }
+    });
+    setSearchTerm("");
   };
 
-  const handleApplyCustom = () => {
-    if (customText.trim()) {
-      onChange(customText.trim());
-      setCustomMode(false);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (filteredOptions.length === 1 && !exactMatchExists) {
+        onToggle(filteredOptions[0]);
+        setSearchTerm("");
+      } else {
+        handleAddCustom();
+      }
+    } else if (e.key === "Escape") {
+      setIsOpen(false);
     }
   };
 
   return (
-    <div className="space-y-1.5">
+    <div ref={containerRef} className="relative space-y-1.5 text-left">
+      {/* Etiqueta y contador */}
       <div className="flex items-center justify-between">
         <Label className="text-xs font-bold text-[var(--text-main)]">{label}</Label>
-        {!customMode && (
+        {selected.length > 0 && (
+          <span className="text-[10px] font-bold text-[var(--primary)] bg-[var(--primary)]/10 px-1.5 py-0.5 rounded-md">
+            {selected.length} selec.
+          </span>
+        )}
+      </div>
+
+      {/* Input de búsqueda / Activador del menú */}
+      <div
+        onClick={() => {
+          if (!disabled) {
+            setIsOpen(true);
+            inputRef.current?.focus();
+          }
+        }}
+        className={cn(
+          "min-h-[40px] px-2.5 py-1.5 rounded-xl border bg-[var(--card)] transition-all flex items-center gap-2 cursor-text",
+          isOpen
+            ? "border-[var(--primary)] ring-1 ring-[var(--primary)]/50 shadow-sm"
+            : "border-[var(--border)] hover:border-[var(--primary)]/50",
+          disabled && "opacity-50 cursor-not-allowed"
+        )}
+      >
+        <Search size={14} className="text-[var(--text-sec)] shrink-0" />
+        <input
+          ref={inputRef}
+          type="text"
+          value={searchTerm}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            if (!isOpen) setIsOpen(true);
+          }}
+          onFocus={() => setIsOpen(true)}
+          onKeyDown={handleKeyDown}
+          placeholder={selected.length === 0 ? placeholder : "Escribe para buscar o agregar más..."}
+          disabled={disabled}
+          className="w-full bg-transparent text-xs text-[var(--text-main)] placeholder:text-[var(--text-sec)] focus:outline-hidden"
+        />
+        {searchTerm ? (
           <button
             type="button"
-            onClick={() => {
-              setCustomMode(true);
-              setCustomText(value || "");
+            onClick={(e) => {
+              e.stopPropagation();
+              setSearchTerm("");
+              inputRef.current?.focus();
             }}
-            className="text-[11px] text-[var(--primary)] hover:underline font-medium"
+            className="size-4 rounded-full hover:bg-[var(--bg)] text-[var(--text-sec)] flex items-center justify-center shrink-0"
+          >
+            <X size={12} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!disabled) setIsOpen(!isOpen);
+            }}
+            className="size-5 rounded-full hover:bg-[var(--bg)] text-[var(--text-sec)] flex items-center justify-center shrink-0"
             disabled={disabled}
           >
-            + Escribir otro
+            <ChevronDown
+              size={14}
+              className={cn("transition-transform duration-200", isOpen && "rotate-180")}
+            />
           </button>
         )}
       </div>
 
-      {customMode ? (
-        <div className="flex items-center gap-1.5">
-          <Input
-            value={customText}
-            onChange={(e) => setCustomText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleApplyCustom();
-              }
-            }}
-            placeholder={placeholder}
-            className="h-10 rounded-xl bg-[var(--card)] text-xs flex-1"
-            disabled={disabled}
-            autoFocus
-          />
-          <button
-            type="button"
-            onClick={handleApplyCustom}
-            className="h-10 px-3 rounded-xl bg-[var(--primary)] text-white text-xs font-bold shrink-0 hover:opacity-90"
-            disabled={disabled || !customText.trim()}
-          >
-            Guardar
-          </button>
-          <button
-            type="button"
-            onClick={() => setCustomMode(false)}
-            className="h-10 px-2 rounded-xl border border-[var(--border)] text-xs text-[var(--text-sec)] hover:bg-[var(--bg)] shrink-0"
-            disabled={disabled}
-          >
-            <X size={14} />
-          </button>
+      {/* Badges de elementos seleccionados */}
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 pt-0.5">
+          {selected.map((item) => (
+            <span
+              key={item}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold border shadow-2xs transition-all animate-in zoom-in-95",
+                badgeTheme
+              )}
+            >
+              <span>{item}</span>
+              {!disabled && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggle(item);
+                  }}
+                  className="size-3.5 rounded-full hover:bg-black/20 dark:hover:bg-white/20 flex items-center justify-center transition-colors"
+                  title="Eliminar"
+                >
+                  <X size={10} className="stroke-[3]" />
+                </button>
+              )}
+            </span>
+          ))}
         </div>
-      ) : (
-        <Select
-          value={value || undefined}
-          onValueChange={handleSelect}
-          disabled={disabled}
-        >
-          <SelectTrigger className="h-10 rounded-xl bg-[var(--card)]">
-            <SelectValue placeholder={placeholder} />
-          </SelectTrigger>
-          <SelectContent className="max-h-60">
-            {value && !isPredefined && (
-              <SelectItem value={value} className="font-bold text-[var(--primary)]">
-                {value} (Personalizado)
-              </SelectItem>
+      )}
+
+      {/* Menú desplegable flotante con búsqueda en tiempo real */}
+      {isOpen && !disabled && (
+        <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden py-1 animate-in fade-in-50 zoom-in-95">
+          {/* Opción para agregar valor personalizado escrito */}
+          {cleanSearch && !exactMatchExists && (
+            <div
+              onClick={() => handleAddCustom()}
+              className="px-3 py-2 bg-[var(--primary)]/10 hover:bg-[var(--primary)]/20 text-[var(--primary)] font-bold text-xs flex items-center gap-2 cursor-pointer border-b border-[var(--border)] transition-colors"
+            >
+              <Plus size={14} className="stroke-[3]" />
+              <span>Agregar "{searchTerm.trim()}" (Personalizado)</span>
+            </div>
+          )}
+
+          {/* Lista de opciones filtradas */}
+          <div className="max-h-52 overflow-y-auto">
+            {filteredOptions.length === 0 ? (
+              <div className="px-3 py-4 text-center">
+                <p className="text-xs text-[var(--text-sec)]">
+                  No se encontró "{searchTerm}".
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleAddCustom()}
+                  className="mt-1 text-xs text-[var(--primary)] font-bold hover:underline"
+                >
+                  + Agregar como nuevo valor
+                </button>
+              </div>
+            ) : (
+              filteredOptions.map((opt) => {
+                const isSelected = selected.some((s) => s.toLowerCase() === opt.toLowerCase());
+                return (
+                  <div
+                    key={opt}
+                    onClick={() => onToggle(opt)}
+                    className={cn(
+                      "px-3 py-2 text-xs flex items-center justify-between cursor-pointer transition-colors select-none",
+                      isSelected
+                        ? activeOptionTheme
+                        : "hover:bg-[var(--bg)]/80 text-[var(--text-main)]"
+                    )}
+                  >
+                    <span>{opt}</span>
+                    {isSelected ? (
+                      <span className={cn("flex items-center gap-1 text-[11px] font-bold", checkColor)}>
+                        <Check size={13} className="stroke-[3]" /> Seleccionado
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-[var(--text-sec)] opacity-40 hover:opacity-100">
+                        + Seleccionar
+                      </span>
+                    )}
+                  </div>
+                );
+              })
             )}
-            {options.map((opt) => (
-              <SelectItem key={opt} value={opt}>
-                {opt}
-              </SelectItem>
-            ))}
-            <SelectItem value="__ADD_NEW__" className="text-[var(--primary)] font-bold">
-              + Escribir nuevo valor...
-            </SelectItem>
-          </SelectContent>
-        </Select>
+          </div>
+
+          {/* Pie del menú */}
+          <div className="px-3 py-1.5 bg-[var(--bg)]/50 border-t border-[var(--border)] flex items-center justify-between text-[11px] text-[var(--text-sec)]">
+            <span>Puedes seleccionar más de 1</span>
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              className="text-[var(--primary)] font-bold hover:underline"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
       )}
 
       {helper && <p className="text-[10px] text-[var(--text-sec)]">{helper}</p>}
     </div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPONENTE: MULTI-BADGE SELECTOR CON BÚSQUEDA FILTRADA
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface MultiBadgeSelectorProps {
   label: string;
@@ -807,6 +1053,14 @@ function MultiBadgeSelector({
       ? "hover:border-emerald-500 hover:text-emerald-600"
       : "hover:border-purple-500 hover:text-purple-600";
 
+  // Filtrar sugerencias en tiempo real mientras el usuario escribe
+  const cleanTyped = typed.trim().toLowerCase();
+  const filteredSuggestions = cleanTyped
+    ? suggestions.filter((sug) => sug.toLowerCase().includes(cleanTyped))
+    : showAllSuggestions
+      ? suggestions
+      : suggestions.slice(0, 10);
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
@@ -845,18 +1099,21 @@ function MultiBadgeSelector({
       {/* Input para agregar o buscar */}
       {!disabled && (
         <div className="flex items-center gap-2">
-          <Input
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleAddTyped();
-              }
-            }}
-            placeholder={placeholder}
-            className="h-9 text-xs rounded-xl bg-[var(--card)] flex-1"
-          />
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-sec)]" />
+            <Input
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAddTyped();
+                }
+              }}
+              placeholder={placeholder}
+              className="h-9 pl-8 text-xs rounded-xl bg-[var(--card)]"
+            />
+          </div>
           <button
             type="button"
             onClick={handleAddTyped}
@@ -869,13 +1126,13 @@ function MultiBadgeSelector({
         </div>
       )}
 
-      {/* Sugerencias en chips para clic rápido */}
+      {/* Sugerencias en chips para clic rápido (filtradas dinámicamente) */}
       <div className="space-y-1">
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-sec)]">
-            Valores frecuentes (clic para seleccionar):
+            {cleanTyped ? `Coincidencias encontradas (${filteredSuggestions.length}):` : "Valores frecuentes (clic para seleccionar):"}
           </span>
-          {suggestions.length > 8 && (
+          {!cleanTyped && suggestions.length > 8 && (
             <button
               type="button"
               onClick={() => setShowAllSuggestions(!showAllSuggestions)}
@@ -886,26 +1143,32 @@ function MultiBadgeSelector({
           )}
         </div>
         <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
-          {(showAllSuggestions ? suggestions : suggestions.slice(0, 10)).map((sug) => {
-            const isSelected = selected.some((x) => x.toLowerCase() === sug.toLowerCase());
-            return (
-              <button
-                type="button"
-                key={sug}
-                onClick={() => onToggle(sug)}
-                disabled={disabled}
-                className={cn(
-                  "px-2 py-0.5 rounded-lg text-[11px] font-semibold border transition-all flex items-center gap-1",
-                  isSelected
-                    ? badgeColorClass
-                    : cn("bg-[var(--bg)]/70 border-[var(--border)] text-[var(--text-sec)]", chipHoverClass)
-                )}
-              >
-                {isSelected && <Check size={10} className="stroke-[3]" />}
-                {sug}
-              </button>
-            );
-          })}
+          {filteredSuggestions.length === 0 ? (
+            <span className="text-[11px] text-[var(--text-sec)] italic">
+              No hay coincidencias en la lista frecuente. Presiona "Agregar" para ingresarlo.
+            </span>
+          ) : (
+            filteredSuggestions.map((sug) => {
+              const isSelected = selected.some((x) => x.toLowerCase() === sug.toLowerCase());
+              return (
+                <button
+                  type="button"
+                  key={sug}
+                  onClick={() => onToggle(sug)}
+                  disabled={disabled}
+                  className={cn(
+                    "px-2 py-0.5 rounded-lg text-[11px] font-semibold border transition-all flex items-center gap-1",
+                    isSelected
+                      ? badgeColorClass
+                      : cn("bg-[var(--bg)]/70 border-[var(--border)] text-[var(--text-sec)]", chipHoverClass)
+                  )}
+                >
+                  {isSelected && <Check size={10} className="stroke-[3]" />}
+                  {sug}
+                </button>
+              );
+            })
+          )}
         </div>
       </div>
 

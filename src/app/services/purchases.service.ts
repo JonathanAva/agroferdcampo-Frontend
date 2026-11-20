@@ -11,6 +11,8 @@ export interface PurchaseItemDto {
 export interface CreatePurchaseDto {
   supplierId: number;
   referenceDoc?: string;
+  invoiceNumber?: string;
+  purchaseNumber?: string | number;
   expectedDate?: string;
   notes?: string;
   applyrent?: boolean;
@@ -108,6 +110,8 @@ export interface PurchaseResponse {
   userId: number;
   supplierId: number;
   referenceDoc?: string;
+  invoiceNumber?: string;
+  purchaseNumber?: string | number;
   status: 'BORRADOR' | 'CONFIRMADA' | 'RECIBIDA' | 'CANCELADA';
   paymentStatus: 'PENDIENTE' | 'PARCIAL' | 'PAGADO';
   totalAmount: string | number;

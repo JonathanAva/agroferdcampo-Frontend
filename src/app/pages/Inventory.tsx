@@ -32,6 +32,7 @@ import { cn } from "../components/ui/utils";
 import { Button } from "../components/ui/button";
 import { StateCards } from "../components/ui/state-cards";
 import { SmartFilter, FilterConfig } from "../components/ui/smart-filter";
+import { PaginationBar } from "../components/ui/pagination";
 
 import { Badge } from "../components/ui/badge";
 import { Input } from "../components/ui/input";
@@ -814,31 +815,19 @@ function InventoryList() {
         style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
       >
         {/* Pagination Controls */}
-        <div className="flex items-center justify-between p-4 border-b border-[var(--border)] text-[var(--text-sec)] bg-muted/20">
-          <div className="text-sm font-medium">
-            Mostrando {inventory.length} de {total} productos (Página {page})
-          </div>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={page === 1}
-              onClick={() => setSearchParams(prev => { prev.set('page', String(page - 1)); return prev; })}
-              className="border-[var(--border)] hover:bg-[var(--hover)] text-[var(--text-main)]"
-            >
-              Anterior
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={page * limit >= total}
-              onClick={() => setSearchParams(prev => { prev.set('page', String(page + 1)); return prev; })}
-              className="border-[var(--border)] hover:bg-[var(--hover)] text-[var(--text-main)]"
-            >
-              Siguiente
-            </Button>
-          </div>
-        </div>
+        <PaginationBar
+          page={page}
+          totalPages={Math.ceil(total / limit) || 1}
+          total={total}
+          itemName="productos"
+          className="border-b border-t-0 bg-muted/20"
+          onPageChange={(newPage) =>
+            setSearchParams((prev) => {
+              prev.set("page", String(newPage));
+              return prev;
+            })
+          }
+        />
 
         <div className="overflow-x-auto">
           <Table>
@@ -1031,6 +1020,19 @@ function InventoryList() {
             </div>
           )}
         </div>
+
+        <PaginationBar
+          page={page}
+          totalPages={Math.ceil(total / limit) || 1}
+          total={total}
+          itemName="productos"
+          onPageChange={(newPage) =>
+            setSearchParams((prev) => {
+              prev.set("page", String(newPage));
+              return prev;
+            })
+          }
+        />
       </div>
 
       {/* Modal Ajustar Stock */}

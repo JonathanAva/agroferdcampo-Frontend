@@ -34,6 +34,7 @@ import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { UnsavedChangesDialog } from '../components/ui/unsaved-changes-dialog';
 
 import { Checkbox } from '../components/ui/checkbox';
+import { PaginationBar } from '../components/ui/pagination';
 import { printSequentialPurchaseOrders, printSequentialPurchasePaymentReceipts } from '../utils/printBatchDocuments';
 
 function AuditComparison({ previous, modified }: { previous: any; modified: any }) {
@@ -1250,29 +1251,15 @@ export function Purchases() {
           </Table>
         </div>
 
-        {pagination.totalPages > 1 && (
-          <div className="p-4 border-t border-[var(--border)] flex items-center justify-between bg-[var(--bg)]/5">
-            <p className="text-xs font-bold text-[var(--text-sec)]">
-              Página {pagination.page} de {pagination.totalPages} ({pagination.total} órdenes)
-            </p>
-            <div className="flex gap-2">
-              <Button 
-                variant="outline" size="sm" 
-                disabled={pagination.page === 1}
-                onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
-              >
-                Anterior
-              </Button>
-              <Button 
-                variant="outline" size="sm" 
-                disabled={pagination.page === pagination.totalPages}
-                onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
-              >
-                Siguiente
-              </Button>
-            </div>
-          </div>
-        )}
+        <PaginationBar
+          page={pagination.page}
+          totalPages={pagination.totalPages || 1}
+          total={pagination.total}
+          itemName="órdenes"
+          onPageChange={(newPage) =>
+            setPagination((p) => ({ ...p, page: newPage }))
+          }
+        />
       </div>
 
       {/* BARRA FLOTANTE DE ACCIONES MASIVAS */}

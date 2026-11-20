@@ -27,6 +27,7 @@ import { cn } from '../components/ui/utils';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { UnsavedChangesDialog } from '../components/ui/unsaved-changes-dialog';
 import { PaymentConfirmationDialog, PaymentConfirmationDetails } from '../components/ui/PaymentConfirmationDialog';
+import { PaginationBar } from '../components/ui/pagination';
 
 const creditFilters: FilterConfig[] = [
   { id: 'search', label: 'Buscar cliente...', type: 'text', placeholder: 'Nombre del cliente...' },
@@ -1095,29 +1096,15 @@ export function Credit() {
           </Table>
         </div>
 
-        {pagination.totalPages > 1 && (
-          <div className="p-4 border-t border-[var(--border)] flex items-center justify-between bg-[var(--bg)]/5">
-            <p className="text-xs font-bold text-[var(--text-sec)]">
-              Página {pagination.page} de {pagination.totalPages} ({pagination.total} registros)
-            </p>
-            <div className="flex gap-2">
-              <Button 
-                variant="outline" size="sm" 
-                disabled={pagination.page === 1}
-                onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
-              >
-                Anterior
-              </Button>
-              <Button 
-                variant="outline" size="sm" 
-                disabled={pagination.page === pagination.totalPages}
-                onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
-              >
-                Siguiente
-              </Button>
-            </div>
-          </div>
-        )}
+        <PaginationBar
+          page={pagination.page}
+          totalPages={pagination.totalPages || 1}
+          total={pagination.total}
+          itemName="registros"
+          onPageChange={(newPage) =>
+            setPagination((p) => ({ ...p, page: newPage }))
+          }
+        />
       </div>
 
       {/* DETALLE DEL CLIENTE Y FACTURAS */}
@@ -1918,28 +1905,14 @@ export function Credit() {
                         )}
                       </TableBody>
                     </Table>
-                    {specificPaymentsTotalPages > 1 && (
-                      <div className="p-4 border-t border-[var(--border)] flex items-center justify-between bg-[var(--bg)]/5">
-                        <p className="text-xs font-bold text-[var(--text-sec)]">
-                          Página {specificPaymentsPage} de {specificPaymentsTotalPages} ({specificPayments.length} abonos)
-                        </p>
-                        <div className="flex gap-2">
-                          <Button 
-                            variant="outline" size="sm" 
-                            disabled={specificPaymentsPage === 1}
-                            onClick={() => setSpecificPaymentsPage(p => p - 1)}
-                          >
-                            Anterior
-                          </Button>
-                          <Button 
-                            variant="outline" size="sm" 
-                            disabled={specificPaymentsPage === specificPaymentsTotalPages}
-                            onClick={() => setSpecificPaymentsPage(p => p + 1)}
-                          >
-                            Siguiente
-                          </Button>
-                        </div>
-                      </div>
+                    {specificPayments.length > 0 && (
+                      <PaginationBar
+                        page={specificPaymentsPage}
+                        totalPages={specificPaymentsTotalPages || 1}
+                        total={specificPayments.length}
+                        itemName="abonos"
+                        onPageChange={(newPage) => setSpecificPaymentsPage(newPage)}
+                      />
                     )}
                   </div>
                 ) : (

@@ -21,6 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Badge as UIBadge } from '../components/ui/badge';
 import { InlinePills } from '../components/ui/inline-pills';
 import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
+import { PaginationBar } from '../components/ui/pagination';
 
 const customerFilters: FilterConfig[] = [
   { id: 'search', label: 'Buscar clientes...', type: 'text', placeholder: 'Nombre, NIT o NRC...' },
@@ -325,33 +326,13 @@ export function Customers() {
         </div>
         
         {/* Pagination */}
-        {pagination && pagination.totalPages > 1 && (
-          <div className="p-4 border-t border-[var(--border)] flex items-center justify-between bg-[var(--bg)]/5">
-            <p className="text-xs font-bold text-[var(--text-sec)]">
-              Mostrando página {currentPage} de {pagination.totalPages} ({pagination.total} clientes)
-            </p>
-            <div className="flex gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage(p => p - 1)}
-                className="h-8 rounded-lg font-bold"
-              >
-                Anterior
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                disabled={currentPage === pagination.totalPages}
-                onClick={() => setCurrentPage(p => p + 1)}
-                className="h-8 rounded-lg font-bold"
-              >
-                Siguiente
-              </Button>
-            </div>
-          </div>
-        )}
+        <PaginationBar
+          page={currentPage}
+          totalPages={pagination?.totalPages || 1}
+          total={pagination?.total}
+          itemName="clientes"
+          onPageChange={(newPage) => setCurrentPage(newPage)}
+        />
       </div>
 
       <CustomerDialog 

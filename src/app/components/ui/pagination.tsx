@@ -149,24 +149,24 @@ export interface PaginationBarProps {
 }
 
 export function PaginationBar({
-  page,
-  totalPages,
+  page = 1,
+  totalPages = 1,
   total,
   itemName = "registros",
   onPageChange,
   className,
   showItemCount = true,
 }: PaginationBarProps) {
-  if (totalPages <= 0) return null;
-
-  const range = getPaginationRange(page, totalPages);
+  const safeTotalPages = Math.max(1, Number(totalPages) || 1);
+  const safePage = Math.max(1, Math.min(Number(page) || 1, safeTotalPages));
+  const range = getPaginationRange(safePage, safeTotalPages);
 
   return (
     <div className={cn("flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t border-[var(--border)]", className)}>
       {showItemCount && (
         <p className="text-xs sm:text-sm text-[var(--text-sec)]">
-          Página <strong className="text-[var(--text-main)] font-bold">{page}</strong> de{" "}
-          <strong className="text-[var(--text-main)] font-bold">{totalPages}</strong>
+          Página <strong className="text-[var(--text-main)] font-bold">{safePage}</strong> de{" "}
+          <strong className="text-[var(--text-main)] font-bold">{safeTotalPages}</strong>
           {total !== undefined && (
             <span> ({total} {itemName})</span>
           )}
@@ -178,8 +178,8 @@ export function PaginationBar({
           variant="outline"
           size="sm"
           className="h-8 px-2.5 text-xs font-semibold rounded-lg gap-1 border-[var(--border)] hover:bg-[var(--bg)] cursor-pointer"
-          disabled={page <= 1}
-          onClick={() => onPageChange(page - 1)}
+          disabled={safePage <= 1}
+          onClick={() => onPageChange(safePage - 1)}
         >
           <ChevronLeftIcon className="size-3.5" />
           <span>Anterior</span>
@@ -188,7 +188,7 @@ export function PaginationBar({
         {range.map((p, idx) => {
           if (p === "...") {
             const isLeftEllipsis = idx === 1;
-            const targetPage = isLeftEllipsis ? Math.max(1, page - 5) : Math.min(totalPages, page + 5);
+            const targetPage = isLeftEllipsis ? Math.max(1, safePage - 5) : Math.min(safeTotalPages, safePage + 5);
             return (
               <button
                 key={`ellipsis-${idx}`}
@@ -202,7 +202,7 @@ export function PaginationBar({
             );
           }
 
-          const isActive = p === page;
+          const isActive = p === safePage;
           return (
             <button
               key={`page-${p}`}
@@ -224,8 +224,8 @@ export function PaginationBar({
           variant="outline"
           size="sm"
           className="h-8 px-2.5 text-xs font-semibold rounded-lg gap-1 border-[var(--border)] hover:bg-[var(--bg)] cursor-pointer"
-          disabled={page >= totalPages}
-          onClick={() => onPageChange(page + 1)}
+          disabled={safePage >= safeTotalPages}
+          onClick={() => onPageChange(safePage + 1)}
         >
           <span>Siguiente</span>
           <ChevronRightIcon className="size-3.5" />

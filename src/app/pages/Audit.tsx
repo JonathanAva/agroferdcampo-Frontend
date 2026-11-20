@@ -24,6 +24,7 @@ import { useAuth } from "../context/AuthContext";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { InlinePills } from "../components/ui/inline-pills";
+import { PaginationBar } from "../components/ui/pagination";
 import { useSearchParams } from "react-router";
 import { SmartFilter, FilterConfig } from "../components/ui/smart-filter";
 import { toast } from "sonner";
@@ -421,19 +422,13 @@ export function Audit() {
         </div>
 
         {/* Pagination */}
-        <div className="p-4 border-t border-[var(--border)] flex items-center justify-between bg-[var(--bg)]/30">
-          <span className="text-xs font-medium text-[var(--text-sec)]">
-            Página {meta.page} de {meta.totalPages || 1} · {meta.total} registros
-          </span>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={meta.page <= 1 || loading} onClick={() => handlePageChange(meta.page - 1)} className="bg-[var(--card)] text-xs">
-              Anterior
-            </Button>
-            <Button variant="outline" size="sm" disabled={meta.page >= meta.totalPages || loading} onClick={() => handlePageChange(meta.page + 1)} className="bg-[var(--card)] text-xs">
-              Siguiente
-            </Button>
-          </div>
-        </div>
+        <PaginationBar
+          page={meta.page}
+          totalPages={meta.totalPages || 1}
+          total={meta.total}
+          itemName="registros"
+          onPageChange={(newPage) => handlePageChange(newPage)}
+        />
       </Card>
 
       {/* Detail Modal */}
