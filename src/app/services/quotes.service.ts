@@ -32,6 +32,11 @@ export interface CreateQuoteDto {
   notes?: string;
   items: QuoteItemDto[];
   requiresTransport?: boolean;
+  isUrgent?: boolean;
+  recipientName?: string;
+  recipientPhone?: string;
+  requiresUrbaneo?: boolean;
+  urbaneoNotes?: string;
   vehicleId?: number;
   driverId?: number;
   deliveryAddress?: string;
@@ -188,6 +193,11 @@ export const quotesService = {
     paymentMethod?: string;
     cashRegisterId?: number;
     requiresTransport?: boolean;
+    isUrgent?: boolean;
+    recipientName?: string;
+    recipientPhone?: string;
+    requiresUrbaneo?: boolean;
+    urbaneoNotes?: string;
     vehicleId?: number;
     driverId?: number;
     deliveryAddress?: string;

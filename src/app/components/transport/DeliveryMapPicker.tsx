@@ -72,10 +72,15 @@ export function DeliveryMapPicker({ lat, lng, onChange, disabled, height = 220 }
     // El mapa vive dentro de diálogos con animación: recalcular tamaño
     const t1 = setTimeout(() => map.invalidateSize(), 150);
     const t2 = setTimeout(() => map.invalidateSize(), 500);
+    const ro = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(() => map.invalidateSize())
+      : null;
+    if (ro && containerRef.current) ro.observe(containerRef.current);
 
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
+      ro?.disconnect();
       map.remove();
       mapRef.current = null;
       markerRef.current = null;

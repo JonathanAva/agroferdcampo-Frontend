@@ -87,6 +87,7 @@ import { Label } from "../components/ui/label";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { NumberInput } from "../components/ui/number-input";
 import { SmartFilter, FilterConfig } from "../components/ui/smart-filter";
+import { PaginationBar } from "../components/ui/pagination";
 import logoUrl from '../../assets/logo.png';
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "../components/ui/unsaved-changes-dialog";
@@ -332,6 +333,15 @@ export function SalesHistory() {
       noteItems.some((i) => Number(i.adjustQuantity) !== Number(i.quantity))) ||
     (reportModalOpen && !!reportForm.email.trim());
   const { confirmExit, isOpen: exitDialogOpen, handleConfirm: confirmDiscard, handleCancel: cancelDiscard } = useUnsavedChangesGuard(isDirty);
+
+  // Resetear a página 1 cuando el usuario busca o filtra
+  useEffect(() => {
+    setPagination((p) => (p.page === 1 ? p : { ...p, page: 1 }));
+  }, [statusFilter, paymentFilter, dateFilter, searchTerm]);
+
+  useEffect(() => {
+    setReturnsPagination((p) => (p.page === 1 ? p : { ...p, page: 1 }));
+  }, [retStatusFilter, retSaleIdFilter, retStartDateFilter, retEndDateFilter]);
 
   useEffect(() => {
     if (activeTab === "history") {
@@ -1465,34 +1475,15 @@ export function SalesHistory() {
             </div>
 
             {pagination.totalPages > 1 && (
-              <div className="p-4 border-t border-[var(--border)] flex items-center justify-between bg-[var(--bg)]/5">
-                <p className="text-xs font-bold text-[var(--text-sec)]">
-                  Página {pagination.page} de {pagination.totalPages} (
-                  {pagination.total} ventas)
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={pagination.page === 1}
-                    onClick={() =>
-                      setPagination((p) => ({ ...p, page: p.page - 1 }))
-                    }
-                  >
-                    Anterior
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={pagination.page === pagination.totalPages}
-                    onClick={() =>
-                      setPagination((p) => ({ ...p, page: p.page + 1 }))
-                    }
-                  >
-                    Siguiente
-                  </Button>
-                </div>
-              </div>
+              <PaginationBar
+                page={pagination.page}
+                totalPages={pagination.totalPages}
+                total={pagination.total}
+                itemName="ventas"
+                onPageChange={(newPage) =>
+                  setPagination((p) => ({ ...p, page: newPage }))
+                }
+              />
             )}
           </div>
 
@@ -1780,37 +1771,15 @@ export function SalesHistory() {
             </div>
 
             {returnsPagination.totalPages > 1 && (
-              <div className="p-4 border-t border-[var(--border)] flex items-center justify-between bg-[var(--bg)]/5">
-                <p className="text-xs font-bold text-[var(--text-sec)]">
-                  Página {returnsPagination.page} de{" "}
-                  {returnsPagination.totalPages} ({returnsPagination.total}{" "}
-                  registros)
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={returnsPagination.page === 1}
-                    onClick={() =>
-                      setReturnsPagination((p) => ({ ...p, page: p.page - 1 }))
-                    }
-                  >
-                    Anterior
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={
-                      returnsPagination.page === returnsPagination.totalPages
-                    }
-                    onClick={() =>
-                      setReturnsPagination((p) => ({ ...p, page: p.page + 1 }))
-                    }
-                  >
-                    Siguiente
-                  </Button>
-                </div>
-              </div>
+              <PaginationBar
+                page={returnsPagination.page}
+                totalPages={returnsPagination.totalPages}
+                total={returnsPagination.total}
+                itemName="devoluciones"
+                onPageChange={(newPage) =>
+                  setReturnsPagination((p) => ({ ...p, page: newPage }))
+                }
+              />
             )}
           </div>
         </>

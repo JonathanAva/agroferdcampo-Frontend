@@ -27,6 +27,7 @@ import { apiRequest } from '../config/api';
 import { TransportSelector, TransportData, addressRefToData, validateTransport } from '../components/transport/TransportSelector';
 import { addressMapLink } from '../components/transport/mapUtils';
 import { SmartFilter, FilterConfig } from '../components/ui/smart-filter';
+import { PaginationBar } from '../components/ui/pagination';
 import { useAuth } from '../context/AuthContext';
 import { ProductDescriptionPopover } from '../components/products/ProductDescriptionPopover';
 import {
@@ -133,7 +134,6 @@ export function Quotes() {
   };
 
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [deliveryWarningOpen, setDeliveryWarningOpen] = useState(false);
   const [quoteToConfirm, setQuoteToConfirm] = useState<QuoteResponse | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('EFECTIVO');
   const [cashRegisters, setCashRegisters] = useState<CashRegister[]>([]);
@@ -558,10 +558,17 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
           requiresTransport: true,
           vehicleId: transportData.vehicleId,
           driverId: transportData.driverId,
+          isUrgent: transportData.isUrgent,
+          recipientName: transportData.recipientName,
+          recipientPhone: transportData.recipientPhone,
+          requiresUrbaneo: transportData.requiresUrbaneo,
+          urbaneoNotes: transportData.urbaneoNotes,
           deliveryAddress: transportData.deliveryAddress,
           deliveryAddressData: transportData.deliveryAddressData,
           scheduledAt: transportData.scheduledDeliveryAt,
-        } : {})
+        } : {
+          requiresTransport: false,
+        })
       });
       toast.success('Cotización confirmada y venta generada');
       fetchQuotes();
@@ -573,36 +580,6 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
     }
   };
 
-  
-  const handlePreConfirmQuote = () => {
-    if (transportData?.requiresTransport) {
-      const err = validateTransport(transportData);
-      if (err) {
-        toast.error(err);
-        return;
-      }
-    }
-    if (!transportData?.requiresTransport && !quoteToConfirm?.requiresTransport) {
-      setDeliveryWarningOpen(true);
-    } else {
-      handleConfirmQuote();
-    }
-  };
-
-  const handleConfirmWithDelivery = () => {
-    setDeliveryWarningOpen(false);
-    setTransportData({
-      requiresTransport: true,
-      deliveryAddress: (quoteToConfirm?.customer as any)?.address || '',
-      deliveryAddressData: addressRefToData((quoteToConfirm as any)?.deliveryAddressRef),
-    });
-    toast.info("Por favor, complete la dirección de entrega antes de confirmar la venta.");
-  };
-
-  const handleConfirmStorePickup = () => {
-    setDeliveryWarningOpen(false);
-    handleConfirmQuote();
-  };
   const handleCancelQuote = (quote: QuoteResponse) => {
     handleOpenCancelModal(quote);
   };
@@ -630,6 +607,7 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
     if (newQuote.requiresTransport) {
       const err = validateTransport({
         requiresTransport: true,
+        recipientPhone: (newQuote as any).recipientPhone || (newQuote as any).deliveryAddressData?.recipientPhone,
         deliveryAddressData: (newQuote as any).deliveryAddressData,
       });
       if (err) {
@@ -644,6 +622,11 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
         validDays: newQuote.validDays || 7,
         notes: newQuote.notes || undefined,
         requiresTransport: newQuote.requiresTransport,
+        isUrgent: newQuote.requiresTransport ? (newQuote as any).isUrgent : undefined,
+        recipientName: newQuote.requiresTransport ? (newQuote as any).recipientName : undefined,
+        recipientPhone: newQuote.requiresTransport ? (newQuote as any).recipientPhone : undefined,
+        requiresUrbaneo: newQuote.requiresTransport ? (newQuote as any).requiresUrbaneo : undefined,
+        urbaneoNotes: newQuote.requiresTransport ? (newQuote as any).urbaneoNotes : undefined,
         vehicleId: newQuote.requiresTransport ? newQuote.vehicleId : undefined,
         deliveryAddress: newQuote.requiresTransport ? newQuote.deliveryAddress : undefined,
         deliveryAddressData: newQuote.requiresTransport ? (newQuote as any).deliveryAddressData : undefined,
@@ -1003,27 +986,15 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
         </div>
 
         {pagination.totalPages > 1 && (
-          <div className="p-4 border-t border-[var(--border)] flex items-center justify-between bg-[var(--bg)]/5">
-            <p className="text-xs font-bold text-[var(--text-sec)]">
-              Página {pagination.page} de {pagination.totalPages} ({pagination.total} cotizaciones)
-            </p>
-            <div className="flex gap-2">
-              <Button 
-                variant="outline" size="sm" 
-                disabled={pagination.page === 1}
-                onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
-              >
-                Anterior
-              </Button>
-              <Button 
-                variant="outline" size="sm" 
-                disabled={pagination.page === pagination.totalPages}
-                onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
-              >
-                Siguiente
-              </Button>
-            </div>
-          </div>
+          <PaginationBar
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            itemName="cotizaciones"
+            onPageChange={(newPage) =>
+              setPagination((p) => ({ ...p, page: newPage }))
+            }
+          />
         )}
       </div>
 
@@ -1699,45 +1670,12 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
         </DialogContent>
       </Dialog>
 
-      {/* AVISO DE ENTREGA / DOMICILIO */}
-      <Dialog open={deliveryWarningOpen} onOpenChange={setDeliveryWarningOpen}>
-        <DialogContent className="sm:max-w-md bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-amber-500">
-              <AlertCircle size={20} />
-              Aviso de Entrega
-            </DialogTitle>
-            <DialogDescription className="text-base text-[var(--text-main)] font-medium mt-2">
-              Los productos serán retirados en tienda, ¿O le gustaría agregar entrega a domicilio?
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-3 mt-4">
-            <Button
-              onClick={handleConfirmWithDelivery}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold"
-            >
-              <TruckIcon size={16} className="mr-2" /> Confirmar a Domicilio
-            </Button>
-            <Button
-              onClick={handleConfirmStorePickup}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
-            >
-              <Store size={16} className="mr-2" /> Confirmar Retirar en Tienda
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setDeliveryWarningOpen(false)}
-            >
-              Cancelar
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-
       {/* DIALOG CONFIRMAR VENTA Y MÉTODO DE PAGO */}
       <Dialog open={paymentModalOpen} onOpenChange={(o) => o ? setPaymentModalOpen(true) : confirmExit(() => setPaymentModalOpen(false))}>
-        <DialogContent className="sm:max-w-[720px] w-full max-h-[92vh] overflow-y-auto bg-[var(--card)] border-[var(--border)] text-[var(--text-main)] p-6">
+        <DialogContent
+          className="sm:max-w-5xl w-[94vw] max-h-[92vh] overflow-y-auto bg-[var(--card)] border-[var(--border)] text-[var(--text-main)] p-6 sm:p-7"
+          style={{ maxWidth: transportData?.requiresTransport ? "1060px" : "860px", width: "94vw" }}
+        >
           <DialogHeader className="pb-3 border-b border-[var(--border)]">
             <DialogTitle className="flex items-center gap-2.5 text-lg font-bold text-emerald-600">
               <CheckCircle2 size={22} />
@@ -1982,23 +1920,95 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
               );
             })()}
 
-            {quoteToConfirm?.requiresTransport && (
-              <div className="p-3.5 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-xs flex items-center gap-2.5">
-                <TruckIcon size={16} className="text-blue-600 shrink-0" />
-                <span className="text-blue-800 dark:text-blue-300 font-medium">
-                  Esta cotización incluye entrega a domicilio. Se generará un albarán automáticamente al confirmar.
-                </span>
+            {/* SELECTOR INTEGRADO DE TIPO DE DESPACHO */}
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-[var(--text-sec)] uppercase tracking-wider">
+                  Método de Entrega / Despacho
+                </Label>
+                {transportData?.requiresTransport ? (
+                  <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2.5 py-0.5 rounded-full border border-blue-200 dark:border-blue-800 flex items-center gap-1.5">
+                    <TruckIcon size={12} /> Despacho a Domicilio
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5">
+                    <Store size={12} /> Retiro en Tienda
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 p-1.5 bg-[var(--bg)] rounded-xl border border-[var(--border)]">
+                <button
+                  type="button"
+                  onClick={() => setTransportData(null)}
+                  className={cn(
+                    "flex items-center justify-center gap-2.5 py-3 px-4 rounded-lg font-bold text-sm transition-all cursor-pointer",
+                    !transportData?.requiresTransport
+                      ? "bg-emerald-600 text-white shadow-md ring-2 ring-emerald-500/20"
+                      : "text-[var(--text-sec)] hover:text-[var(--text-main)] hover:bg-slate-200/50 dark:hover:bg-slate-800/50"
+                  )}
+                >
+                  <Store size={18} />
+                  <span>Retiro en Tienda</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTransportData({
+                      requiresTransport: true,
+                      deliveryAddress: quoteToConfirm?.deliveryAddress || (quoteToConfirm?.customer as any)?.address || '',
+                      deliveryAddressData: addressRefToData((quoteToConfirm as any)?.deliveryAddressRef),
+                      vehicleId: quoteToConfirm?.vehicleId || undefined,
+                      driverId: quoteToConfirm?.driverId || undefined,
+                    });
+                  }}
+                  className={cn(
+                    "flex items-center justify-center gap-2.5 py-3 px-4 rounded-lg font-bold text-sm transition-all cursor-pointer",
+                    transportData?.requiresTransport
+                      ? "bg-blue-600 text-white shadow-md ring-2 ring-blue-500/20"
+                      : "text-[var(--text-sec)] hover:text-[var(--text-main)] hover:bg-slate-200/50 dark:hover:bg-slate-800/50"
+                  )}
+                >
+                  <TruckIcon size={18} />
+                  <span>Entrega a Domicilio</span>
+                </button>
+              </div>
+
+              {!transportData?.requiresTransport ? (
+                <div className="p-3.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/40 text-xs flex items-center gap-3 text-emerald-800 dark:text-emerald-300">
+                  <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 shrink-0">
+                    <Store size={18} />
+                  </div>
+                  <div>
+                    <p className="font-bold">Retiro en Tienda Seleccionado</p>
+                    <p className="opacity-90 mt-0.5">El cliente retirará los productos directamente en el mostrador de tienda. No se generará albarán de transporte.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-xl bg-blue-50/70 dark:bg-blue-900/20 border border-blue-200/80 dark:border-blue-800/40 text-xs flex items-center gap-3 text-blue-800 dark:text-blue-300">
+                  <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 shrink-0">
+                    <TruckIcon size={18} />
+                  </div>
+                  <div>
+                    <p className="font-bold">Entrega a Domicilio Seleccionada</p>
+                    <p className="opacity-90 mt-0.5">Al confirmar, se generará la venta y automáticamente el albarán de entrega con los datos logísticos y geográficos indicados abajo.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {transportData?.requiresTransport && (
+              <div id="quote-transport-section" className="scroll-mt-4 pt-1">
+                <TransportSelector
+                  customerId={quoteToConfirm?.customerId}
+                  value={transportData}
+                  onChange={setTransportData}
+                  disabled={!!confirmingId}
+                  hideHeaderToggle={true}
+                  wideLayout={true}
+                />
               </div>
             )}
-
-            <div>
-              <TransportSelector
-                customerId={quoteToConfirm?.customerId}
-                value={transportData}
-                onChange={setTransportData}
-                disabled={!!confirmingId}
-              />
-            </div>
           </div>
 
           <DialogFooter className="pt-3 border-t border-[var(--border)] flex sm:justify-end gap-3">
@@ -2006,7 +2016,7 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
               Cancelar
             </Button>
             <Button
-              onClick={handlePreConfirmQuote}
+              onClick={handleConfirmQuote}
               disabled={!!confirmingId || (selectedPaymentMethod !== 'CREDITO' && selectedPaymentMethod !== 'CONTRAENTREGA' && !selectedCashRegisterId)}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-2 px-6"
             >
@@ -2020,44 +2030,12 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
         </DialogContent>
       </Dialog>
 
-      {/* AVISO DE ENTREGA / DOMICILIO */}
-      <Dialog open={deliveryWarningOpen} onOpenChange={setDeliveryWarningOpen}>
-        <DialogContent className="sm:max-w-md bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-amber-500">
-              <AlertCircle size={20} />
-              Aviso de Entrega
-            </DialogTitle>
-            <DialogDescription className="text-base text-[var(--text-main)] font-medium mt-2">
-              Los productos serán retirados en tienda, ¿O le gustaría agregar entrega a domicilio?
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-3 mt-4">
-            <Button
-              onClick={handleConfirmWithDelivery}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold"
-            >
-              <TruckIcon size={16} className="mr-2" /> Confirmar a Domicilio
-            </Button>
-            <Button
-              onClick={handleConfirmStorePickup}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
-            >
-              <Store size={16} className="mr-2" /> Confirmar Retirar en Tienda
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setDeliveryWarningOpen(false)}
-            >
-              Cancelar
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* MODAL CREAR COTIZACIÓN */}
       <Dialog open={createQuoteModalOpen} onOpenChange={setCreateQuoteModalOpen}>
-        <DialogContent className="w-full sm:max-w-4xl md:max-w-5xl max-h-[90vh] flex flex-col p-0 bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]">
+        <DialogContent
+          className="w-[94vw] sm:max-w-5xl max-h-[90vh] flex flex-col p-0 bg-[var(--card)] border-[var(--border)] text-[var(--text-main)]"
+          style={{ maxWidth: "1060px", width: "94vw" }}
+        >
           <DialogHeader className="p-6 border-b border-[var(--border)]">
             <DialogTitle className="flex items-center gap-2 text-2xl text-[var(--primary)]">
               <FileText /> Nueva Cotización
@@ -2142,10 +2120,17 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
             <div className="space-y-4">
               <TransportSelector
                 customerId={selectedCustomerCreate?.id}
+                wideLayout={true}
                 value={newQuote.requiresTransport ? {
                   requiresTransport: true,
                   deliveryAddress: newQuote.deliveryAddress,
                   deliveryAddressData: (newQuote as any).deliveryAddressData,
+                  isUrgent: (newQuote as any).isUrgent,
+                  recipientName: (newQuote as any).recipientName,
+                  recipientPhone: (newQuote as any).recipientPhone,
+                  requiresUrbaneo: (newQuote as any).requiresUrbaneo,
+                  urbaneoNotes: (newQuote as any).urbaneoNotes,
+                  vehicleId: newQuote.vehicleId,
                 } : null}
                 onChange={val => {
                   setNewQuote(prev => ({
@@ -2153,6 +2138,12 @@ ${notes ? `<div class="stitle">Observaciones</div><div style="font-size:10px;mar
                     requiresTransport: !!val?.requiresTransport,
                     deliveryAddress: val?.deliveryAddress || '',
                     deliveryAddressData: val?.deliveryAddressData,
+                    isUrgent: val?.isUrgent,
+                    recipientName: val?.recipientName,
+                    recipientPhone: val?.recipientPhone,
+                    requiresUrbaneo: val?.requiresUrbaneo,
+                    urbaneoNotes: val?.urbaneoNotes,
+                    vehicleId: val?.vehicleId,
                   } as any));
                 }}
               />

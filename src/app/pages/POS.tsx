@@ -898,6 +898,11 @@ export function POS() {
         ),
         ...(transportData && transportData.requiresTransport ? {
           requiresTransport: true,
+          isUrgent: transportData.isUrgent,
+          recipientName: transportData.recipientName,
+          recipientPhone: transportData.recipientPhone,
+          requiresUrbaneo: transportData.requiresUrbaneo,
+          urbaneoNotes: transportData.urbaneoNotes,
           vehicleId: transportData.vehicleId,
           driverId: transportData.driverId,
           deliveryAddress: transportData.deliveryAddress,
@@ -1545,6 +1550,11 @@ export function POS() {
         ),
         ...(transportData && transportData.requiresTransport ? {
           requiresTransport: true,
+          isUrgent: transportData.isUrgent,
+          recipientName: transportData.recipientName,
+          recipientPhone: transportData.recipientPhone,
+          requiresUrbaneo: transportData.requiresUrbaneo,
+          urbaneoNotes: transportData.urbaneoNotes,
           vehicleId: transportData.vehicleId,
           driverId: transportData.driverId,
           deliveryAddress: transportData.deliveryAddress,

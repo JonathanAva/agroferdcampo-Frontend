@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, Eye, Filter, Calendar as CalendarIcon, 
-  TruckIcon, CheckCircle2, Trash2, X, PackageCheck, Plus, Mail, MapPin, PenTool, BarChart3, Camera, Ban, Copy, ExternalLink
+  TruckIcon, CheckCircle2, Trash2, X, PackageCheck, Plus, Mail, MapPin, PenTool, BarChart3, Camera, Ban, Copy, ExternalLink,
+  Phone, AlertTriangle
 } from 'lucide-react';
 import { addressMapLink } from '../components/transport/mapUtils';
 import { toast } from 'sonner';
@@ -941,6 +942,16 @@ function DeliveryNotesList() {
                               Transporte
                             </Badge>
                           )}
+                          {(note as any).isUrgent && (
+                            <Badge className="text-[10px] bg-red-600 hover:bg-red-700 text-white font-bold">
+                              🚨 Urgente
+                            </Badge>
+                          )}
+                          {(note as any).requiresUrbaneo && (
+                            <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-600 dark:text-amber-400 font-semibold bg-amber-500/10">
+                              🦺 Urbaneo
+                            </Badge>
+                          )}
                           {note.type === 'TRASLADO_SUCURSAL' && (
                             <Badge variant="outline" className="text-[10px]">Traslado</Badge>
                           )}
@@ -1133,6 +1144,40 @@ function DeliveryNotesList() {
                           );
                         })()}
                       </div>
+                      {((selectedNote as any).recipientPhone || (selectedNote as any).recipientName) && (
+                        <div className="col-span-2 p-2.5 rounded-lg bg-blue-100/60 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <Phone size={15} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                            <span className="text-xs text-[var(--text-sec)]">Contacto:</span>
+                            <span className="text-xs font-bold text-[var(--text-main)]">
+                              {(selectedNote as any).recipientName ? `${(selectedNote as any).recipientName} ` : ''}
+                              {(selectedNote as any).recipientPhone ? `(${(selectedNote as any).recipientPhone})` : ''}
+                            </span>
+                          </div>
+                          {(selectedNote as any).recipientPhone && (
+                            <a
+                              href={`tel:${(selectedNote as any).recipientPhone}`}
+                              className="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1 shrink-0"
+                            >
+                              <Phone size={11} /> Llamar
+                            </a>
+                          )}
+                        </div>
+                      )}
+                      {((selectedNote as any).isUrgent || (selectedNote as any).requiresUrbaneo) && (
+                        <div className="col-span-2 flex items-center gap-2 flex-wrap pt-1">
+                          {(selectedNote as any).isUrgent && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 border border-red-300">
+                              🚨 Pedido Urgente
+                            </span>
+                          )}
+                          {(selectedNote as any).requiresUrbaneo && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300">
+                              🦺 Requiere Urbaneo {(selectedNote as any).urbaneoNotes ? `— ${(selectedNote as any).urbaneoNotes}` : '(Acarreo manual)'}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       {selectedNote.clientSignedBy && (
                         <div className="col-span-2 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 rounded-xl mt-2">
                           <p className="text-emerald-800 dark:text-emerald-300 font-bold">Firma de Recibido:</p>
