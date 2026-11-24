@@ -24,6 +24,8 @@ import {
   AlertTriangle,
   Check,
   Printer,
+  FileDown,
+  ExternalLink,
 } from "lucide-react";
 import {
   getSalesHistory,
@@ -36,6 +38,9 @@ import {
   emitSaleDte,
   DteKind,
   getSaleDetail,
+  syncDteStatuses,
+  fetchDtePdfBlob,
+  DTE_SYNC_MAX_SALES,
 } from "../services/sales.service";
 import {
   getReturns,
@@ -256,10 +261,16 @@ export function SalesHistory() {
   // Emisión de DTE
   const [emittingDteId, setEmittingDteId] = useState<number | null>(null);
 
+  // Sincronización masiva de estados DTE y PDF oficial
+  const [syncingDte, setSyncingDte] = useState(false);
+  const [pdfLoadingId, setPdfLoadingId] = useState<number | null>(null);
+
   // --- Estados de Devoluciones ---
   const { user } = useAuth();
   // Anular ventas: solo propietario, administrador y supervisor (el servidor también lo valida)
   const canVoidSales = !!user?.roleId && user.roleId <= 3;
+  // El ZIP mensual contiene todos los documentos fiscales: mismos roles (validado también en el servidor)
+  const canRequestFiscalReport = canVoidSales;
   const [returnsList, setReturnsList] = useState<ReturnResponse[]>([]);
   const [returnsLoading, setReturnsLoading] = useState(true);
   const [returnsPagination, setReturnsPagination] = useState({
@@ -723,18 +734,108 @@ export function SalesHistory() {
     }
   };
 
+  const emailInputTrimmed = emailInput.trim();
+  const emailInputInvalid =
+    emailInputTrimmed !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInputTrimmed);
+
+  const openEmailModal = (sale: SaleResponse) => {
+    setSelectedSale(sale);
+    setEmailInput("");
+    setEmailModalOpen(true);
+  };
+
   const handleResendEmail = async () => {
-    if (!selectedSale) return;
+    if (!selectedSale || emailInputInvalid) return;
     setSendingEmail(true);
     try {
-      await resendDteEmail(selectedSale.id, emailInput || undefined);
-      toast.success("Correo enviado correctamente");
+      const result = await resendDteEmail(selectedSale.id, emailInputTrimmed || undefined);
+      toast.success(
+        result?.emailEnviado
+          ? `DTE reenviado a ${result.emailEnviado}`
+          : result?.message || "Correo enviado correctamente",
+      );
       setEmailModalOpen(false);
       setEmailInput("");
     } catch (error: any) {
       toast.error(error.message || "Error al enviar correo");
     } finally {
       setSendingEmail(false);
+    }
+  };
+
+  /** Sincroniza estado/sello con Hacienda. Sin ids: todos los DTE pendientes de la sucursal. */
+  const handleSyncDte = async (saleIds?: number[]) => {
+    if (syncingDte) return;
+    if (saleIds && saleIds.length > DTE_SYNC_MAX_SALES) {
+      toast.error(`Puedes sincronizar como máximo ${DTE_SYNC_MAX_SALES} ventas a la vez`);
+      return;
+    }
+    setSyncingDte(true);
+    const toastId = toast.loading("Consultando estados en Hacienda...");
+    try {
+      const result = await syncDteStatuses(saleIds);
+      if (result.totalSolicitados === 0) {
+        toast.info(
+          saleIds
+            ? "Ninguna de las ventas seleccionadas tiene un DTE emitido"
+            : "No hay DTE pendientes de sincronizar",
+          { id: toastId },
+        );
+        return;
+      }
+
+      const details = [
+        `${result.totalEncontrados} encontrado(s)`,
+        result.totalNoEncontrados > 0 && `${result.totalNoEncontrados} no encontrado(s) en FelSystem`,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
+      const message =
+        result.totalActualizados > 0
+          ? `${result.totalActualizados} de ${result.totalSolicitados} DTE actualizado(s)`
+          : `${result.totalSolicitados} DTE consultado(s), sin cambios`;
+      (result.totalNoEncontrados > 0 ? toast.warning : toast.success)(message, {
+        id: toastId,
+        description: details,
+      });
+
+      if (result.totalActualizados > 0) await fetchSales();
+    } catch (error: any) {
+      toast.error(error.message || "Error al sincronizar con Hacienda", { id: toastId });
+    } finally {
+      setSyncingDte(false);
+    }
+  };
+
+  /** Abre (view) o descarga (download) el PDF oficial generado por FelSystem. */
+  const handleDtePdf = async (sale: SaleResponse, mode: "view" | "download") => {
+    if (pdfLoadingId !== null) return;
+    // La pestaña se abre sincrónicamente (gesto del usuario) para evitar el bloqueador de popups
+    const popup = mode === "view" ? window.open("", "_blank") : null;
+    setPdfLoadingId(sale.id);
+    const toastId = toast.loading(mode === "view" ? "Abriendo PDF..." : "Descargando PDF...");
+    try {
+      const blob = await fetchDtePdfBlob(sale.id, mode);
+      const blobUrl = URL.createObjectURL(blob);
+      if (mode === "view") {
+        if (popup && !popup.closed) popup.location.href = blobUrl;
+        else window.open(blobUrl, "_blank");
+      } else {
+        const link = document.createElement("a");
+        link.href = blobUrl;
+        link.download = `DTE-${sale.dteResponse?.codigoGeneracion || sale.id}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+      toast.dismiss(toastId);
+    } catch (error: any) {
+      popup?.close();
+      toast.error(error.message || "No se pudo obtener el PDF del DTE", { id: toastId });
+    } finally {
+      setPdfLoadingId(null);
     }
   };
 
@@ -828,7 +929,14 @@ export function SalesHistory() {
     }
   };
 
+  const reportEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reportForm.email.trim());
+  const reportIsFutureMonth =
+    reportForm.year * 12 + reportForm.month >
+    new Date().getFullYear() * 12 + new Date().getMonth() + 1;
+  const reportYearOptions = Array.from({ length: 4 }, (_, i) => new Date().getFullYear() - i);
+
   const handleRequestReport = async () => {
+    if (!reportEmailValid || reportIsFutureMonth) return;
     setRequestingReport(true);
     try {
       await requestMonthlyReport(
@@ -836,9 +944,9 @@ export function SalesHistory() {
         reportForm.month.toString().padStart(2, "0"),
         reportForm.email,
       );
-      toast.success(
-        "Solicitud recibida. Recibirás el ZIP en tu correo en unos minutos.",
-      );
+      toast.success("Solicitud recibida. El reporte se está generando", {
+        description: `Recibirás el enlace de descarga del ZIP en ${reportForm.email.trim()}.`,
+      });
       setReportModalOpen(false);
     } catch (error: any) {
       toast.error(error.message || "Error al solicitar el reporte");
@@ -1148,12 +1256,29 @@ export function SalesHistory() {
           </p>
         </div>
         {activeTab === "history" && (
-          <Button
-            onClick={() => setReportModalOpen(true)}
-            className="font-bold"
-          >
-            <Download size={16} className="mr-2" /> Descargar DTEs (ZIP)
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => handleSyncDte()}
+              disabled={syncingDte}
+              className="font-bold"
+              title="Consulta en Hacienda el estado y sello de los DTE pendientes de esta sucursal"
+            >
+              <RefreshCcw size={16} className={cn("mr-2", syncingDte && "animate-spin")} />
+              {syncingDte ? "Sincronizando..." : "Sincronizar DTE"}
+            </Button>
+            {canRequestFiscalReport && (
+              <Button
+                onClick={() => {
+                  setReportForm((f) => ({ ...f, email: f.email || user?.email || "" }));
+                  setReportModalOpen(true);
+                }}
+                className="font-bold"
+              >
+                <Download size={16} className="mr-2" /> Descargar DTEs (ZIP)
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
@@ -1319,6 +1444,10 @@ export function SalesHistory() {
                             <Badge className="bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-200">
                               PROCESADO
                             </Badge>
+                          ) : sale.dteResponse.estado === "INVALIDO" ? (
+                            <Badge className="bg-slate-500/10 text-slate-600 hover:bg-slate-500/20 border-slate-200">
+                              INVALIDADO
+                            </Badge>
                           ) : (
                             <Badge
                               variant="destructive"
@@ -1364,6 +1493,45 @@ export function SalesHistory() {
                                 </DropdownMenuItem>
                               )}
 
+                              {sale.dteResponse?.codigoGeneracion &&
+                                (sale.dteResponse.estado === "PROCESADO" ||
+                                  sale.dteResponse.estado === "INVALIDO") && (
+                                  <>
+                                    <DropdownMenuItem
+                                      onClick={() => handleDtePdf(sale, "view")}
+                                      disabled={pdfLoadingId !== null}
+                                      className="font-bold cursor-pointer"
+                                    >
+                                      <ExternalLink size={14} className="mr-2 text-rose-600" />
+                                      Ver PDF Oficial (DTE)
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => handleDtePdf(sale, "download")}
+                                      disabled={pdfLoadingId !== null}
+                                      className="font-bold cursor-pointer"
+                                    >
+                                      <FileDown size={14} className="mr-2 text-rose-600" />
+                                      Descargar PDF Oficial
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+
+                              {sale.dteResponse?.codigoGeneracion &&
+                                (sale.dteResponse.estado !== "PROCESADO" ||
+                                  !sale.dteResponse.selloRecibido) && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleSyncDte([sale.id])}
+                                    disabled={syncingDte}
+                                    className="font-bold cursor-pointer"
+                                  >
+                                    <RefreshCcw
+                                      size={14}
+                                      className={cn("mr-2 text-sky-600", syncingDte && "animate-spin")}
+                                    />
+                                    Consultar Estado en Hacienda
+                                  </DropdownMenuItem>
+                                )}
+
                               {sale.status === "COMPLETADA" &&
                                 sale.dteResponse?.estado !== "PROCESADO" &&
                                 (["CONSUMIDOR_FINAL", "CREDITO_FISCAL", "SUJETO_EXCLUIDO"] as DteKind[]).map((kind) => (
@@ -1398,10 +1566,7 @@ export function SalesHistory() {
                                 sale.status === "COMPLETADA" && (
                                   <>
                                     <DropdownMenuItem
-                                      onClick={() => {
-                                        setSelectedSale(sale);
-                                        setEmailModalOpen(true);
-                                      }}
+                                      onClick={() => openEmailModal(sale)}
                                       className="font-bold cursor-pointer"
                                     >
                                       <Mail
@@ -1526,6 +1691,20 @@ export function SalesHistory() {
                 >
                   <FileText size={15} className="mr-1.5 text-blue-600" />
                   Imprimir Facturas DTE (Carta) ({selectedSaleIds.length})
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleSyncDte(selectedSaleIds)}
+                  disabled={syncingDte}
+                  className="font-bold border-[var(--border)] hover:bg-[var(--bg)]/50 text-[var(--text-main)]"
+                >
+                  <RefreshCcw
+                    size={15}
+                    className={cn("mr-1.5 text-sky-600", syncingDte && "animate-spin")}
+                  />
+                  Sincronizar DTE ({selectedSaleIds.length})
                 </Button>
 
                 <Button
@@ -2090,6 +2269,22 @@ export function SalesHistory() {
                     IMPRIMIR TICKET
                   </Button>
                 )}
+                {selectedSale.dteResponse?.codigoGeneracion &&
+                  (selectedSale.dteResponse.estado === "PROCESADO" ||
+                    selectedSale.dteResponse.estado === "INVALIDO") && (
+                    <Button
+                      onClick={() => handleDtePdf(selectedSale, "view")}
+                      disabled={pdfLoadingId !== null}
+                      className="font-bold px-8 gap-2 bg-rose-600 hover:bg-rose-700 text-white"
+                    >
+                      {pdfLoadingId === selectedSale.id ? (
+                        <RefreshCcw size={18} className="animate-spin" />
+                      ) : (
+                        <ExternalLink size={18} />
+                      )}
+                      PDF OFICIAL
+                    </Button>
+                  )}
                 <Button
                   onClick={() => printFacturaSheet(selectedSale)}
                   className="font-bold px-8 gap-2 bg-amber-600 hover:bg-amber-700 text-white"
@@ -2314,7 +2509,7 @@ export function SalesHistory() {
           <DialogHeader>
             <DialogTitle>Reenviar DTE</DialogTitle>
             <DialogDescription>
-              Envíe una copia del PDF y JSON al correo del cliente.
+              Se reenviará el DTE con su PDF y Sello de Recepción.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -2322,17 +2517,24 @@ export function SalesHistory() {
               <Label>Correo electrónico (opcional)</Label>
               <Input
                 type="email"
-                placeholder="Si está vacío se usará el original"
+                placeholder={selectedSale?.customer?.email || "Correo registrado en el DTE"}
                 value={emailInput}
                 onChange={(e) => setEmailInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleResendEmail()}
+                aria-invalid={emailInputInvalid}
               />
+              <p className={cn("text-xs", emailInputInvalid ? "text-destructive" : "text-[var(--text-sec)]")}>
+                {emailInputInvalid
+                  ? "Ingresa un correo válido"
+                  : "Si lo dejas vacío se usará el correo del receptor registrado en el DTE. Un correo distinto solo aplica a este reenvío."}
+              </p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEmailModalOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleResendEmail} disabled={sendingEmail}>
+            <Button onClick={handleResendEmail} disabled={sendingEmail || emailInputInvalid}>
               {sendingEmail ? "Enviando..." : "Enviar Correo"}
             </Button>
           </DialogFooter>
@@ -2470,7 +2672,7 @@ export function SalesHistory() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {[2024, 2025, 2026, 2027].map((y) => (
+                    {reportYearOptions.map((y) => (
                       <SelectItem key={y} value={y.toString()}>
                         {y}
                       </SelectItem>
@@ -2491,7 +2693,16 @@ export function SalesHistory() {
                   setReportForm({ ...reportForm, email: e.target.value })
                 }
               />
+              <p className="text-xs text-[var(--text-sec)]">
+                La generación puede tardar según el volumen de documentos. Recibirás un enlace seguro de descarga en este correo.
+              </p>
             </div>
+
+            {reportIsFutureMonth && (
+              <p className="text-xs font-medium text-destructive">
+                No se puede solicitar el reporte de un mes futuro.
+              </p>
+            )}
           </div>
 
           <DialogFooter>
@@ -2500,7 +2711,7 @@ export function SalesHistory() {
             </Button>
             <Button
               onClick={handleRequestReport}
-              disabled={requestingReport || !reportForm.email}
+              disabled={requestingReport || !reportEmailValid || reportIsFutureMonth}
             >
               {requestingReport ? "Enviando..." : "Solicitar Reporte"}
             </Button>
